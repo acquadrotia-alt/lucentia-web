@@ -103,6 +103,21 @@ function applyLoadToCatalog(catalog, items) {
 const loadKey = (key, fallback) => { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch (e) { return fallback; } };
 const saveKey = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {} };
 
+// --- Strato dati: legge/salva sul server (database D1) invece che nel localStorage ---
+// Login e licenze restano in locale e invariati; qui passano solo i 5 contenitori dati.
+async function apiLoad(coll, fallback) {
+  try { const r = await fetch(`/api/data/${coll}`); if (!r.ok) return fallback; const j = await r.json(); return (j && j.value != null) ? j.value : fallback; }
+  catch (e) { return fallback; }
+}
+async function apiSave(coll, value) {
+  try { await fetch(`/api/data/${coll}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ value }) }); } catch (e) {}
+}
+const _saveTimers = {};
+function apiSaveDebounced(coll, value, delay = 800) {
+  clearTimeout(_saveTimers[coll]);
+  _saveTimers[coll] = setTimeout(() => apiSave(coll, value), delay);
+}
+
 // --- Sistema licenza cliente (a tempo) ---
 function hashStr(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h.toString(36); }
 const licSig = (code, expiry) => hashStr(`${code}|${expiry}|${LIC_SECRET}`);
@@ -509,12 +524,14 @@ function RescheduleModal({ booking, config, bookings, onClose, onSave }) {
 }
 
 export default function App() {
-  const [config, setConfig] = useState(() => { const c = loadKey(CFG_KEY, null); return c ? { ...DEFAULT_CONFIG, ...c, branding: { ...BRANDING, ...(c.branding || {}) } } : DEFAULT_CONFIG; });
-  const [bookings, setBookings] = useState(() => loadKey(BK_KEY, []));
-  const [clients, setClients] = useState(() => loadKey(CLIENTS_KEY, []));
-  const [catalog, setCatalog] = useState(() => loadKey(PROD_KEY, DEFAULT_CATALOG));
-  const [sales, setSales] = useState(() => loadKey(SALES_KEY, []));
-  const [license, setLicense] = useState(() => loadLicense());
+  const [config, setConfig] = useState(DEFAULT_CONFIG);
+  const [bookings, setBookings] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [catalog, setCatalog] = useState(DEFAULT_CATALOG);
+  const [sales, setSales] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const loadedRef = useRef(false);
+  const [license, setLicense] = useState(() => loadLicense()); // licenza: resta in locale, invariata
   const [session, setSession] = useState(null); // {role:"reseller"|"operator"|"demo"} oppure null
   const [view, setView] = useState("agenda");
   const [demoBanner, setDemoBanner] = useState(false);
@@ -527,16 +544,32 @@ export default function App() {
   const dataRef = useRef(null);
 
   useEffect(() => {
-    if (loadKey(CFG_KEY, null) == null && loadKey(CLIENTS_KEY, null) == null && loadKey(BK_KEY, null) == null && loadKey(SALES_KEY, null) == null) {
-      const s = buildSampleData();
-      setClients(s.clients); setBookings(s.bookings); setSales(s.sales);
-      saveKey(CFG_KEY, DEFAULT_CONFIG); saveKey(CLIENTS_KEY, s.clients); saveKey(BK_KEY, s.bookings); saveKey(SALES_KEY, s.sales); saveKey(PROD_KEY, DEFAULT_CATALOG);
-    } else if (loadKey(CFG_KEY, null) == null) { saveKey(CFG_KEY, DEFAULT_CONFIG); }
+    let alive = true;
+    (async () => {
+      const [cfg, bk, cl, cat, sl] = await Promise.all([
+        apiLoad("config", null), apiLoad("bookings", null), apiLoad("clients", null), apiLoad("catalog", null), apiLoad("sales", null),
+      ]);
+      if (!alive) return;
+      if (cfg == null && bk == null && cl == null && sl == null) {
+        const s = buildSampleData();
+        setConfig(DEFAULT_CONFIG); setBookings(s.bookings); setClients(s.clients); setSales(s.sales); setCatalog(DEFAULT_CATALOG);
+        await Promise.all([ apiSave("config", DEFAULT_CONFIG), apiSave("bookings", s.bookings), apiSave("clients", s.clients), apiSave("sales", s.sales), apiSave("catalog", DEFAULT_CATALOG) ]);
+      } else {
+        setConfig(cfg ? { ...DEFAULT_CONFIG, ...cfg, branding: { ...BRANDING, ...(cfg.branding || {}) } } : DEFAULT_CONFIG);
+        setBookings(Array.isArray(bk) ? bk : []);
+        setClients(Array.isArray(cl) ? cl : []);
+        setCatalog(cat && Array.isArray(cat.products) ? cat : DEFAULT_CATALOG);
+        setSales(Array.isArray(sl) ? sl : []);
+      }
+      loadedRef.current = true;
+      setLoading(false);
+    })();
+    return () => { alive = false; };
   }, []);
-  useEffect(() => { if (demoRef.current) return; saveKey(BK_KEY, bookings); }, [bookings]);
-  useEffect(() => { if (demoRef.current) return; saveKey(CLIENTS_KEY, clients); }, [clients]);
-  useEffect(() => { if (demoRef.current) return; saveKey(PROD_KEY, catalog); }, [catalog]);
-  useEffect(() => { if (demoRef.current) return; saveKey(SALES_KEY, sales); }, [sales]);
+  useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("bookings", bookings); }, [bookings]);
+  useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("clients", clients); }, [clients]);
+  useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("catalog", catalog); }, [catalog]);
+  useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("sales", sales); }, [sales]);
   dataRef.current = { config, bookings, clients, catalog, sales };
   useEffect(() => { loadDirHandle().then((h) => { if (h) { setBackupDir(h); setBackupDirName(h.name || "cartella"); } }); }, []);
   useEffect(() => {
@@ -560,7 +593,7 @@ export default function App() {
     return () => clearInterval(t);
   }, [session]);
 
-  const saveConfig = (next) => { setConfig(next); if (!demoRef.current) saveKey(CFG_KEY, next); };
+  const saveConfig = (next) => { setConfig(next); if (!demoRef.current && loadedRef.current) apiSaveDebounced("config", next); };
   const updateLicense = (lic) => { setLicense(lic); saveLicense(lic); };
   const enterSession = (role, hidePartial) => {
     if (role === "demo") {
@@ -571,12 +604,16 @@ export default function App() {
     setSession({ role, hidePartial: !!hidePartial });
   };
   const logout = () => {
-    if (demoRef.current) {
-      const c = loadKey(CFG_KEY, null);
-      setConfig(c ? { ...DEFAULT_CONFIG, ...c, branding: { ...BRANDING, ...(c.branding || {}) } } : DEFAULT_CONFIG);
-      setBookings(loadKey(BK_KEY, [])); setClients(loadKey(CLIENTS_KEY, [])); setCatalog(loadKey(PROD_KEY, DEFAULT_CATALOG)); setSales(loadKey(SALES_KEY, []));
-    }
+    const wasDemo = demoRef.current;
     setDemoBanner(false); setSession(null);
+    if (wasDemo) (async () => {
+      const [cfg, bk, cl, cat, sl] = await Promise.all([
+        apiLoad("config", null), apiLoad("bookings", null), apiLoad("clients", null), apiLoad("catalog", null), apiLoad("sales", null),
+      ]);
+      setConfig(cfg ? { ...DEFAULT_CONFIG, ...cfg, branding: { ...BRANDING, ...(cfg.branding || {}) } } : DEFAULT_CONFIG);
+      setBookings(Array.isArray(bk) ? bk : []); setClients(Array.isArray(cl) ? cl : []);
+      setCatalog(cat && Array.isArray(cat.products) ? cat : DEFAULT_CATALOG); setSales(Array.isArray(sl) ? sl : []);
+    })();
   };
   const b = config.branding;
   const pickBackupDir = async () => {
