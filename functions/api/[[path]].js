@@ -10,7 +10,7 @@
 //   disattivata, l'azienda non può leggere/salvare i dati.
 // ============================================================================
 
-const COLLEZIONI = ["config", "bookings", "clients", "catalog", "sales"];
+const COLLEZIONI = ["config", "bookings", "clients", "catalog", "sales", "vouchers"];
 const MODULI = ["fidelity", "vendite", "statistiche", "marketing", "allergeni", "pacchetti", "op3", "opinf"];
 const OLD_MAP = { shop: "vendite", stats: "statistiche" };
 function parseModuli(raw) {
