@@ -3,6 +3,7 @@ import { Lock, Mail, LogOut, AlertTriangle, ShieldCheck } from "lucide-react";
 import SalonApp from "./SalonApp.jsx";
 import ResellerPanel from "./ResellerPanel.jsx";
 import OperatorApp from "./OperatorApp.jsx";
+import Landing from "./Landing.jsx";
 
 async function apiGet(path) {
   const r = await fetch("/api" + path, { credentials: "include" });
@@ -17,7 +18,7 @@ async function apiSend(path, method, body) {
   return { ok: r.ok, status: r.status, data: await r.json().catch(() => ({})) };
 }
 
-function Login({ onLogged }) {
+function Login({ onLogged, onBack }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
@@ -48,6 +49,7 @@ function Login({ onLogged }) {
           </div>
           {err ? <p className="text-xs text-red-500 text-center">{err}</p> : null}
           <button onClick={submit} disabled={busy} className="w-full text-white font-medium py-2.5 rounded-lg transition disabled:opacity-50" style={{ background: "#e11d48" }}>{busy ? "Attendere…" : "Entra"}</button>
+          {onBack ? <button onClick={onBack} className="w-full text-xs text-stone-400 hover:text-stone-600 pt-1">← Torna alla home</button> : null}
         </div>
       </div>
     </div>
@@ -72,6 +74,7 @@ function Blocked({ stato, denominazione, onLogout }) {
 export default function App() {
   const [stato, setStato] = useState("loading"); // loading | login | ready
   const [me, setMe] = useState(null);
+  const [showLogin, setShowLogin] = useState(false);
 
   const refresh = useCallback(async () => {
     const r = await apiGet("/me");
@@ -81,12 +84,15 @@ export default function App() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  const logout = async () => { await apiSend("/logout", "POST"); setMe(null); setStato("login"); };
+  const logout = async () => { await apiSend("/logout", "POST"); setMe(null); setShowLogin(false); setStato("login"); };
 
   if (stato === "loading") return (
     <div className="min-h-screen bg-stone-50 flex items-center justify-center text-stone-400 text-sm">Caricamento…</div>
   );
-  if (stato === "login" || !me) return <Login onLogged={refresh} />;
+  if (stato === "login" || !me) {
+    if (showLogin) return <Login onLogged={refresh} onBack={() => setShowLogin(false)} />;
+    return <Landing onLogin={() => setShowLogin(true)} />;
+  }
 
   if (me.user.ruolo === "reseller") {
     if (me.reseller && me.reseller.stato !== "active") return <Blocked stato={me.reseller.stato} denominazione={me.reseller.ragione_sociale || ""} onLogout={logout} />;
