@@ -490,6 +490,77 @@ function CardActions({ branding, name, code }) {
   );
 }
 
+// ===== BUONI REGALO (gift card) =====
+function genVoucherCode(vouchers) {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const exists = (c) => (vouchers || []).some((v) => v.code === c);
+  let c; do { let s = ""; for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)]; c = "BN-" + s; } while (exists(c));
+  return c;
+}
+function voucherServiceName(v, services) { const s = (services || []).find((x) => x.id === v.serviceId); return s ? s.name : "Servizio"; }
+function voucherSubtitle(v, services) {
+  if (v.tipo === "valore") return eur(v.tipo === "valore" ? (v.residuo != null ? v.residuo : v.importo) : 0);
+  return `${v.sedute} sedute · ${voucherServiceName(v, services)}`;
+}
+function paintVoucher(ctx, branding, v, line1, line2, logoImg) {
+  const W = 720, H = 440;
+  let rgb; try { rgb = hexToRgb(branding.primary); } catch (e) { rgb = [225, 29, 72]; }
+  const dark = mix(rgb, [0, 0, 0], 0.2);
+  const g = ctx.createLinearGradient(0, 0, W, H); g.addColorStop(0, rgbStr(rgb)); g.addColorStop(1, rgbStr(dark));
+  roundRect(ctx, 0, 0, W, H, 36); ctx.fillStyle = g; ctx.fill();
+  ctx.save(); roundRect(ctx, 0, 0, W, H, 36); ctx.clip();
+  ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.beginPath(); ctx.arc(W - 30, -10, 130, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,0.10)"; ctx.beginPath(); ctx.arc(W - 10, 130, 90, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  const font = (w, s) => `${w} ${s}px -apple-system, system-ui, Segoe UI, Roboto, sans-serif`;
+  let nameX = 52;
+  if (logoImg) { ctx.save(); roundRect(ctx, 52, 42, 56, 56, 14); ctx.clip(); ctx.drawImage(logoImg, 52, 42, 56, 56); ctx.restore(); nameX = 124; }
+  ctx.fillStyle = "#fff"; ctx.textBaseline = "middle";
+  ctx.font = font("600", 30); ctx.fillText(branding.name || "", nameX, 72);
+  ctx.font = font("600", 22); ctx.textAlign = "right"; ctx.globalAlpha = 0.92; ctx.fillText("★ Buono Regalo", W - 44, 66); ctx.textAlign = "left"; ctx.globalAlpha = 1;
+  ctx.textBaseline = "alphabetic";
+  ctx.globalAlpha = 1; ctx.font = font("700", 52); ctx.fillText(line1 || "", 52, 240);
+  if (line2) { ctx.globalAlpha = 0.92; ctx.font = font("500", 26); ctx.fillText(line2, 52, 286); }
+  ctx.globalAlpha = 0.7; ctx.font = font("600", 20); ctx.fillText("CODICE", 52, 362);
+  ctx.globalAlpha = 1; ctx.font = font("700", 50); ctx.fillText(String(v.code), 52, 414);
+}
+function voucherLines(v, services) {
+  if (v.tipo === "valore") return [eur(v.importo), v.descrizione || "Buono valore"];
+  return [`${v.sedute} sedute`, (v.descrizione ? v.descrizione + " · " : "") + voucherServiceName(v, services)];
+}
+function downloadVoucherImage(branding, v, services) {
+  const [l1, l2] = voucherLines(v, services);
+  const c = document.createElement("canvas"); c.width = 720; c.height = 440; const ctx = c.getContext("2d");
+  const finish = () => { try { const url = c.toDataURL("image/png"); const a = document.createElement("a"); a.href = url; a.download = `buono-${v.code}.png`; document.body.appendChild(a); a.click(); a.remove(); } catch (e) { alert("Impossibile generare l'immagine."); } };
+  if (branding.logo) { const img = new Image(); img.onload = () => { paintVoucher(ctx, branding, v, l1, l2, img); finish(); }; img.onerror = () => { paintVoucher(ctx, branding, v, l1, l2, null); finish(); }; img.src = branding.logo; }
+  else { paintVoucher(ctx, branding, v, l1, l2, null); finish(); }
+}
+function VoucherCard({ branding, v, services }) {
+  const [l1, l2] = voucherLines(v, services);
+  return (
+    <div className="rounded-2xl p-5 text-white shadow-lg relative overflow-hidden" style={{ background: "linear-gradient(135deg, var(--brand), var(--brand-dark))" }}>
+      <div className="absolute right-0 top-0 w-28 h-28 rounded-full" style={{ background: "rgba(255,255,255,0.12)", transform: "translate(35%,-35%)" }} />
+      <div className="relative">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 min-w-0">
+            {branding.logo ? <img src={branding.logo} alt="" className="w-8 h-8 rounded-lg object-cover" /> : <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(255,255,255,0.2)" }}><Gift size={16} /></div>}
+            <span className="font-semibold text-sm truncate">{branding.name}</span>
+          </div>
+          <div className="flex items-center gap-1 text-xs shrink-0" style={{ opacity: 0.9 }}><Gift size={13} /> Buono Regalo</div>
+        </div>
+        <div className="mt-6">
+          <div className="text-3xl font-bold tracking-wide">{l1}</div>
+          {l2 ? <div className="text-sm mt-1" style={{ opacity: 0.9 }}>{l2}</div> : null}
+        </div>
+        <div className="mt-4">
+          <div className="text-xs uppercase tracking-widest" style={{ opacity: 0.7 }}>Codice</div>
+          <div className="text-2xl font-bold tracking-widest">{v.code}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SlotPicker({ duration, candidates, bookings, value, onChange, startDate, closures }) {
   const [weekStart, setWeekStart] = useState(startDate);
   const [date, setDate] = useState(startDate);
@@ -587,12 +658,13 @@ export default function SalonApp({ onLogout, moduli, azienda }) {
   const [clients, setClients] = useState([]);
   const [catalog, setCatalog] = useState(DEFAULT_CATALOG);
   const [sales, setSales] = useState([]);
+  const [vouchers, setVouchers] = useState([]);
   const [loading, setLoading] = useState(true);
   const loadedRef = useRef(false);
   const [license, setLicense] = useState(() => loadLicense()); // licenza: resta in locale, invariata
   const [session, setSession] = useState({ role: "operator", hidePartial: false }); // login gestito dal contenitore (server)
   const [view, setView] = useState("agenda");
-  const enabledSections = ["agenda", "clienti", ...(flags.vendite ? ["shop"] : []), ...(flags.statistiche ? ["stats"] : []), ...(flags.marketing ? ["marketing"] : []), "settings"];
+  const enabledSections = ["agenda", "clienti", "buoni", ...(flags.vendite ? ["shop"] : []), ...(flags.statistiche ? ["stats"] : []), ...(flags.marketing ? ["marketing"] : []), "settings"];
   useEffect(() => { if (!enabledSections.includes(view)) setView("agenda"); }, [moduli, view]);
   const [demoBanner, setDemoBanner] = useState(false);
   const isDemo = !!(session && session.role === "demo");
@@ -610,6 +682,8 @@ export default function SalonApp({ onLogout, moduli, azienda }) {
         apiLoad("config", null), apiLoad("bookings", null), apiLoad("clients", null), apiLoad("catalog", null), apiLoad("sales", null),
       ]);
       if (!alive) return;
+      const vch = await apiLoad("vouchers", null);
+      if (alive) setVouchers(Array.isArray(vch) ? vch : []);
       if (cfg == null && bk == null && cl == null && sl == null) {
         const s = buildSampleData();
         setConfig(DEFAULT_CONFIG); setBookings(s.bookings); setClients(s.clients); setSales(s.sales); setCatalog(DEFAULT_CATALOG);
@@ -630,6 +704,7 @@ export default function SalonApp({ onLogout, moduli, azienda }) {
   useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("clients", clients); }, [clients]);
   useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("catalog", catalog); }, [catalog]);
   useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("sales", sales); }, [sales]);
+  useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("vouchers", vouchers); }, [vouchers]);
   dataRef.current = { config, bookings, clients, catalog, sales };
   useEffect(() => { loadDirHandle().then((h) => { if (h) { setBackupDir(h); setBackupDirName(h.name || "cartella"); } }); }, []);
   useEffect(() => {
@@ -693,7 +768,8 @@ export default function SalonApp({ onLogout, moduli, azienda }) {
 
   const ls = licenseState(license);
   const operatorWarn = session.role === "operator" && ls.state === "active" && !ls.unlimited && ls.days <= 30;
-  const ALL_NAV = [["agenda", "Agenda", Calendar], ["clienti", "Clienti", Users], ["shop", "Vendite", ShoppingBag], ["stats", "Statistiche", BarChart3], ["marketing", "Marketing", MessageCircle], ["settings", "Impostazioni", Settings]];
+  const ALL_NAV = [["agenda", "Agenda", Calendar], ["clienti", "Clienti", Users], ["buoni", "Buoni", Gift], ["shop", "Vendite", ShoppingBag], ["stats", "Statistiche", BarChart3], ["marketing", "Marketing", MessageCircle], ["settings", "Impostazioni", Settings]];
+  const canAddVoucher = !isDemo || vouchers.length < 5;
   const NAV = ALL_NAV.filter((x) => enabledSections.includes(x[0]));
   const canAddClient = !isDemo || clients.length < DEMO_MAX_CLIENTS;
   const canAddBooking = !isDemo || bookings.length < DEMO_MAX_BOOKINGS;
@@ -727,9 +803,10 @@ export default function SalonApp({ onLogout, moduli, azienda }) {
 
       <main className="max-w-5xl w-full mx-auto px-4 py-6 flex-1">
         {view === "agenda" && <AgendaPage config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={session.hidePartial} canAddBooking={canAddBooking} canAddClient={canAddClient} />}
-        {view === "clienti" && <ClientsView config={config} bookings={bookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} />}
+        {view === "clienti" && <ClientsView config={config} bookings={bookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} vouchers={vouchers} setVouchers={setVouchers} />}
+        {view === "buoni" && <GiftCardsView config={config} vouchers={vouchers} setVouchers={setVouchers} clients={clients} canAddVoucher={canAddVoucher} />}
         {view === "shop" && <ShopView catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} clients={clients} setClients={setClients} branding={b} loyalty={config.loyalty} hidePartial={session.hidePartial} canAddClient={canAddClient} />}
-        {view === "stats" && <StatsView config={config} bookings={bookings} clients={clients} sales={sales} catalog={catalog} />}
+        {view === "stats" && <StatsView config={config} bookings={bookings} clients={clients} sales={sales} catalog={catalog} vouchers={vouchers} />}
         {view === "marketing" && <MarketingView config={config} saveConfig={saveConfig} bookings={bookings} clients={clients} sales={sales} catalog={catalog} />}
         {view === "settings" && !isDemo && <SettingsView config={config} saveConfig={saveConfig} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} session={session} license={license} onSaveLicense={updateLicense} backupDirName={backupDirName} onPickBackupDir={pickBackupDir} onClearBackupDir={clearBackupDir} onBackupNow={backupNow} lastBackup={lastBackup} licenza={{ plan: planName(moduli), prezzo_finale: azienda && azienda.prezzo_finale, scadenza: azienda && azienda.licenza_scadenza }} />}
       </main>
@@ -886,11 +963,13 @@ function AgendaView({ config, bookings, setBookings, clients, setClients, sales,
 
   const shift = (dir) => setAnchor((a) => addDays(mode === "week" ? mondayOf(a) : a, dir * span));
   const consumesStatus = (s) => s === "done" || s === "partial";
-  const setStatus = (id, status) => {
+  const setStatus = (id, status, amount) => {
     const b = bookings.find((x) => x.id === id);
     if (!b) { setSel(null); return; }
     const now = consumesStatus(status);
     let patch = { status };
+    if (now) patch.amount = (amount === "" || amount == null) ? null : (Number(amount) || 0);
+    else patch.amount = null;
     if (now && !b.packageUsed && b.clientCode) {
       const cl = clients.find((c) => c.code === b.clientCode);
       const pkg = matchPackage(cl, b.serviceIds);
@@ -988,6 +1067,10 @@ function ApptActions({ booking, config, clients, setClients, bookings, sales, ca
   const pkgs = (cl && Array.isArray(cl.packages)) ? cl.packages.filter((p) => (b.serviceIds || []).includes(p.serviceId)) : [];
   const hasHealth = cl && (cl.allergies || cl.conditions || cl.notes);
   const [chosen, setChosen] = useState([]);
+  const [askPrice, setAskPrice] = useState(null);
+  const [price, setPrice] = useState("");
+  const proposed = (b.serviceIds || []).reduce((a, id) => { const s = config.services.find((x) => x.id === id); return a + ((s && s.price) || 0); }, 0);
+  const openPrice = (status) => { setAskPrice(status); setPrice(proposed > 0 ? String(proposed) : ""); };
   const toggleReward = (id) => setChosen((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   const selSum = reached.filter((r) => chosen.includes(r.id)).reduce((a, r) => a + r.points, 0);
   const doRedeem = () => {
@@ -1044,11 +1127,24 @@ function ApptActions({ booking, config, clients, setClients, bookings, sales, ca
             <button onClick={doRedeem} disabled={!chosen.length || selSum > balance} className="mt-2 w-full brand-bg disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium py-2 rounded-lg flex items-center justify-center gap-1.5"><Gift size={14} /> Riscatta selezionati{chosen.length ? ` · −${selSum} pt` : ""}</button>
           </div>
         ) : null}
+        {askPrice ? (
+          <div className="border border-stone-200 rounded-xl p-4 mb-2">
+            <div className="text-sm font-medium mb-1 flex items-center gap-1.5"><Wallet size={15} className="brand-accent" /> Prezzo da incassare</div>
+            <p className="text-xs text-stone-400 mb-3">{proposed > 0 ? "Prezzo proposto in base ai servizi. Puoi modificarlo per questo cliente." : "Nessun prezzo impostato sui servizi: inseriscilo qui se vuoi registrarlo."}</p>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 flex-1"><input type="number" min={0} step={0.5} value={price} onChange={(e) => setPrice(e.target.value)} autoFocus className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring" /><span className="text-sm text-stone-400">€</span></div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-3">
+              <button onClick={() => onStatus(b.id, askPrice, price)} className="flex items-center justify-center gap-1.5 text-sm font-medium bg-green-600 text-white px-3 py-2.5 rounded-lg hover:bg-green-700"><Check size={15} /> Conferma {askPrice === "partial" ? "parziale" : "svolto"}</button>
+              <button onClick={() => setAskPrice(null)} className="flex items-center justify-center gap-1.5 text-sm font-medium border border-stone-300 text-stone-600 px-3 py-2.5 rounded-lg hover:bg-stone-50">Indietro</button>
+            </div>
+          </div>
+        ) : (
         <div className="grid grid-cols-2 gap-2">
           {!b.status ? (
             <>
-              <button onClick={() => onStatus(b.id, "done")} className="flex items-center justify-center gap-1.5 text-sm font-medium bg-green-600 text-white px-3 py-2.5 rounded-lg hover:bg-green-700"><Check size={15} /> Svolto</button>
-              {!hidePartial ? <button onClick={() => onStatus(b.id, "partial")} className="flex items-center justify-center gap-1.5 text-sm font-medium border border-sky-300 text-sky-700 px-3 py-2.5 rounded-lg hover:bg-sky-50"><Timer size={15} /> Parziale</button> : null}
+              <button onClick={() => openPrice("done")} className="flex items-center justify-center gap-1.5 text-sm font-medium bg-green-600 text-white px-3 py-2.5 rounded-lg hover:bg-green-700"><Check size={15} /> Svolto</button>
+              {!hidePartial ? <button onClick={() => openPrice("partial")} className="flex items-center justify-center gap-1.5 text-sm font-medium border border-sky-300 text-sky-700 px-3 py-2.5 rounded-lg hover:bg-sky-50"><Timer size={15} /> Parziale</button> : null}
               <button onClick={() => onStatus(b.id, "noshow")} className="flex items-center justify-center gap-1.5 text-sm font-medium border border-amber-300 text-amber-700 px-3 py-2.5 rounded-lg hover:bg-amber-50"><UserX size={15} /> Non presentato</button>
               <button onClick={() => onResch(b)} className="flex items-center justify-center gap-1.5 text-sm font-medium border border-stone-300 text-stone-700 px-3 py-2.5 rounded-lg hover:bg-stone-50"><CalendarClock size={15} /> Sposta</button>
               <button onClick={() => onStatus(b.id, "cancelled")} className="col-span-2 flex items-center justify-center gap-1.5 text-sm font-medium border border-stone-300 text-stone-500 px-3 py-2.5 rounded-lg hover:bg-stone-50"><Ban size={15} /> Annulla</button>
@@ -1057,17 +1153,43 @@ function ApptActions({ booking, config, clients, setClients, bookings, sales, ca
             <button onClick={() => onStatus(b.id, undefined)} className="col-span-2 flex items-center justify-center gap-1.5 text-sm font-medium border border-stone-300 text-stone-600 px-3 py-2.5 rounded-lg hover:bg-stone-50"><Undo2 size={15} /> Ripristina</button>
           )}
         </div>
+        )}
       </div>
     </div>
   );
 }
 
-function ClientsView({ config, bookings, clients, setClients, sales, catalog }) {
+function ClientsView({ config, bookings, clients, setClients, sales, catalog, vouchers, setVouchers }) {
   const F = useMods();
   const staff = config.staff, services = config.services;
   const loyalty = loyaltyConfig(config);
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(null);
+  const [vc, setVc] = useState("");
+  const redeemVoucher = (c) => {
+    const code = vc.trim().toUpperCase();
+    if (!code) return;
+    const v = (vouchers || []).find((x) => String(x.code).toUpperCase() === code);
+    if (!v) { alert("Codice non valido: nessun buono con questo codice."); return; }
+    if (v.stato !== "attivo") { alert("Questo buono è già stato registrato o utilizzato e non è più valido."); return; }
+    if (v.tipo === "pacchetto") {
+      setClients((cs) => cs.map((x) => (x.code === c.code ? { ...x, packages: [...(x.packages || []), { id: uid(), serviceId: v.serviceId, total: v.sedute, used: 0, price: 0, createdAt: Date.now(), fromVoucher: v.code }] } : x)));
+      setVouchers((vs) => vs.map((x) => (x.id === v.id ? { ...x, stato: "riscattato", clienteCode: c.code, clienteNome: c.name, riscattato: Date.now() } : x)));
+      alert("Buono pacchetto registrato: le sedute sono state aggiunte ai pacchetti del cliente.");
+    } else {
+      setVouchers((vs) => vs.map((x) => (x.id === v.id ? { ...x, stato: "assegnato", clienteCode: c.code, clienteNome: c.name, riscattato: Date.now() } : x)));
+      alert("Buono valore registrato sul cliente. Trovi il saldo qui sotto.");
+    }
+    setVc("");
+  };
+  const scalaVoucher = (v, amount) => {
+    const max = Number(v.residuo) || 0; if (max <= 0) return;
+    let amt = amount == null ? max : Number(amount);
+    if (!(amt > 0)) { alert("Importo non valido."); return; }
+    amt = Math.min(amt, max);
+    const residuo = Math.round((max - amt) * 100) / 100;
+    setVouchers((vs) => vs.map((x) => (x.id === v.id ? { ...x, residuo, stato: residuo <= 0 ? "esaurito" : "assegnato", usi: [{ at: Date.now(), importo: amt }, ...(x.usi || [])] } : x)));
+  };
   const nq = q.replace(/\s/g, "");
   const filtered = clients.filter((c) => !q || (c.name || "").toLowerCase().includes(q.toLowerCase()) || c.code.includes(nq) || (c.phone || "").replace(/\s/g, "").includes(nq) || (c.card || "").replace(/\s/g, "").toLowerCase().includes(nq.toLowerCase())).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
   const patchClient = (code, patch) => setClients(clients.map((x) => (x.code === code ? { ...x, ...patch } : x)));
@@ -1168,6 +1290,30 @@ function ClientsView({ config, bookings, clients, setClients, sales, catalog }) 
         </div>
         )}
 
+        {(() => { const myV = (vouchers || []).filter((v) => v.clienteCode === c.code); const val = myV.filter((v) => v.tipo === "valore"); const pkgV = myV.filter((v) => v.tipo === "pacchetto"); return (
+        <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+          <h3 className="font-semibold flex items-center gap-2 mb-3"><Gift size={16} className="brand-accent" /> Buoni regalo</h3>
+          <div className="flex flex-wrap items-end gap-2 mb-4">
+            <div className="flex-1 min-w-[160px]"><div className="text-[11px] text-stone-400 mb-1">Registra un buono ricevuto</div>
+              <input value={vc} onChange={(e) => setVc(e.target.value)} placeholder="Codice (es. BN-XXXXXX)" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring font-mono uppercase" /></div>
+            <button onClick={() => redeemVoucher(c)} className="brand-bg text-sm font-medium px-3 py-2 rounded-lg">Registra</button>
+          </div>
+          {val.length ? (
+            <div className="space-y-2">{val.map((v) => (
+              <div key={v.id} className="border border-stone-200 rounded-xl p-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="min-w-0"><div className="font-medium">Buono valore <span className="font-mono text-xs text-stone-400">{v.code}</span></div>
+                    <div className="text-xs text-stone-400">Saldo <b className="brand-accent">{eur(v.residuo)}</b> di {eur(v.importo)}{v.stato === "esaurito" ? " · esaurito" : ""}</div></div>
+                  {v.residuo > 0 ? <VoucherBalanceRow v={v} onScala={scalaVoucher} /> : <span className="text-[11px] px-2 py-1 rounded-full bg-stone-100 text-stone-500">Esaurito</span>}
+                </div>
+              </div>
+            ))}</div>
+          ) : null}
+          {pkgV.length ? <p className="text-xs text-stone-400 mt-2">Buoni pacchetto registrati ({pkgV.length}): le sedute confluiscono nei <b>Pacchetti sedute</b>.</p> : null}
+          {myV.length === 0 ? <p className="text-sm text-stone-400">Nessun buono registrato su questo cliente.</p> : null}
+        </div>
+        ); })()}
+
         <div>
           <h3 className="font-semibold mb-2 flex items-center gap-2"><History size={16} className="brand-accent" /> Storico servizi</h3>
           {stats.upcoming.length > 0 ? <div className="space-y-2 mb-3"><div className="text-xs text-stone-400 uppercase tracking-wide">In programma</div>{stats.upcoming.map((b) => <ApptItem key={b.id} b={b} staff={staff} services={services} onCal={(bk) => downloadICS(bk, staff, services, config.branding.name)} />)}</div> : null}
@@ -1189,6 +1335,112 @@ function ClientsView({ config, bookings, clients, setClients, sales, catalog }) 
           </button>
         ); })}</div>
       )}
+    </div>
+  );
+}
+
+function voucherStatusLabel(v) {
+  if (v.stato === "esaurito") return { txt: "Esaurito", cls: "bg-stone-100 text-stone-500" };
+  if (v.stato === "riscattato" || v.stato === "assegnato") return { txt: v.clienteNome ? `Riscattato · ${v.clienteNome}` : "Riscattato", cls: "bg-green-100 text-green-700" };
+  return { txt: "Attivo · da consegnare", cls: "bg-amber-100 text-amber-700" };
+}
+function VoucherBalanceRow({ v, onScala }) {
+  const [amt, setAmt] = useState("");
+  return (
+    <div className="flex items-center gap-1.5 shrink-0">
+      <input type="number" min={0} step={0.5} value={amt} onChange={(e) => setAmt(e.target.value)} placeholder="importo" className="w-20 px-2 py-1.5 rounded-lg border border-stone-300 text-sm text-right brand-ring" />
+      <button onClick={() => { const n = Number(amt); if (!(n > 0)) { alert("Inserisci un importo."); return; } onScala(v, n); setAmt(""); }} className="text-sm font-medium px-2.5 py-1.5 rounded-lg border border-stone-300 text-stone-700 hover:bg-stone-50">Scala</button>
+      <button onClick={() => { if (confirm(`Usare tutto il saldo (${eur(v.residuo)})?`)) onScala(v, null); }} className="text-sm font-medium px-2.5 py-1.5 rounded-lg brand-bg">Tutto</button>
+    </div>
+  );
+}
+function GiftCardsView({ config, vouchers, setVouchers, clients, canAddVoucher }) {
+  const services = config.services, b = config.branding;
+  const [tipo, setTipo] = useState("valore");
+  const [importo, setImporto] = useState("");
+  const [prezzo, setPrezzo] = useState("");
+  const [descr, setDescr] = useState("");
+  const [svc, setSvc] = useState("");
+  const [sedute, setSedute] = useState(5);
+  const [created, setCreated] = useState(null);
+  const limite = canAddVoucher === false;
+
+  const reset = () => { setImporto(""); setPrezzo(""); setDescr(""); setSvc(""); setSedute(5); };
+  const crea = () => {
+    if (limite) return;
+    if (tipo === "valore" && !(Number(importo) > 0)) { alert("Inserisci l'importo del buono."); return; }
+    if (tipo === "pacchetto" && (!svc || !(Number(sedute) > 0))) { alert("Scegli servizio e numero di sedute."); return; }
+    const prezzoNum = prezzo === "" ? (tipo === "valore" ? Number(importo) || 0 : 0) : Number(prezzo) || 0;
+    const v = {
+      id: uid(), code: genVoucherCode(vouchers), tipo, descrizione: descr.trim(),
+      prezzo: prezzoNum, creato: Date.now(), stato: "attivo",
+      clienteCode: null, clienteNome: null, riscattato: null, usi: [],
+      ...(tipo === "valore" ? { importo: Number(importo) || 0, residuo: Number(importo) || 0 } : { serviceId: svc, sedute: Math.max(1, Math.round(Number(sedute) || 1)) }),
+    };
+    setVouchers([v, ...(vouchers || [])]);
+    setCreated(v); reset();
+  };
+  const elimina = (id) => { if (confirm("Eliminare questo buono? Operazione non reversibile.")) setVouchers((vs) => vs.filter((x) => x.id !== id)); };
+
+  const totIncasso = (vouchers || []).reduce((a, v) => a + (Number(v.prezzo) || 0), 0);
+  const attivi = (vouchers || []).filter((v) => v.stato === "attivo").length;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h2 className="text-lg font-semibold flex items-center gap-2"><Gift size={18} className="brand-accent" /> Buoni regalo</h2>
+        <div className="text-sm text-stone-500">{(vouchers || []).length} buoni · {attivi} da consegnare · incasso {eur(totIncasso)}</div>
+      </div>
+
+      {limite ? <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2"><AlertCircle size={16} className="shrink-0 mt-0.5" /> Hai raggiunto il numero massimo di buoni della versione demo.</p> : null}
+
+      <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+        <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-3">Genera un nuovo buono</div>
+        <div className="flex gap-2 mb-4">
+          <button onClick={() => setTipo("valore")} className={`flex-1 text-sm border rounded-lg px-3 py-2 transition ${tipo === "valore" ? "brand-soft brand-border" : "bg-white border-stone-200"}`}><div className="font-medium">Buono valore</div><div className="text-xs text-stone-400">Un importo in euro</div></button>
+          <button onClick={() => setTipo("pacchetto")} className={`flex-1 text-sm border rounded-lg px-3 py-2 transition ${tipo === "pacchetto" ? "brand-soft brand-border" : "bg-white border-stone-200"}`}><div className="font-medium">Buono pacchetto</div><div className="text-xs text-stone-400">Sedute di un servizio</div></button>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-3">
+          {tipo === "valore" ? (
+            <Field label="Importo del buono (€)"><input type="number" min={0} step={0.5} value={importo} onChange={(e) => setImporto(e.target.value)} placeholder="50" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
+          ) : (
+            <>
+              <Field label="Servizio"><select value={svc} onChange={(e) => setSvc(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm bg-white brand-ring"><option value="">Scegli…</option>{services.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
+              <Field label="Numero di sedute"><input type="number" min={1} step={1} value={sedute} onChange={(e) => setSedute(Math.max(1, Math.round(Number(e.target.value) || 1)))} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
+            </>
+          )}
+          <Field label="Prezzo pagato / incasso (€)"><input type="number" min={0} step={0.5} value={prezzo} onChange={(e) => setPrezzo(e.target.value)} placeholder={tipo === "valore" ? "come importo" : "0"} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
+          <Field label="Descrizione (facoltativa)"><input value={descr} onChange={(e) => setDescr(e.target.value)} placeholder={tipo === "valore" ? "Es. Buono compleanno" : "Es. Pacchetto benessere"} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
+        </div>
+        <button onClick={crea} disabled={limite} className="mt-4 brand-bg font-medium px-4 py-2.5 rounded-lg inline-flex items-center gap-2 disabled:opacity-40"><Plus size={16} /> Genera buono</button>
+      </div>
+
+      {created ? (
+        <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-3"><h3 className="font-semibold flex items-center gap-2"><Check size={16} className="text-green-600" /> Buono creato</h3><button onClick={() => setCreated(null)} className="text-stone-400 hover:text-stone-600"><X size={18} /></button></div>
+          <VoucherCard branding={b} v={created} services={services} />
+          <div className="mt-3 flex flex-col items-center gap-1">
+            <button onClick={() => downloadVoucherImage(b, created, services)} className="text-sm brand-bg px-4 py-2 rounded-lg inline-flex items-center gap-2"><Wallet size={16} /> Salva immagine del buono</button>
+            <p className="text-xs text-stone-400 text-center">Consegnala al cliente. Il codice si registra dalla scheda del cliente che lo riceve.</p>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="space-y-2">
+        <div className="text-xs font-medium text-stone-400 uppercase tracking-wide">Buoni emessi</div>
+        {(vouchers || []).length === 0 ? <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center text-stone-400">Ancora nessun buono.</div> : (vouchers || []).map((v) => { const lab = voucherStatusLabel(v); return (
+          <div key={v.id} className="bg-white rounded-xl border border-stone-200 p-4 flex items-center gap-3 shadow-sm">
+            <div className="w-10 h-10 rounded-xl brand-soft brand-accent flex items-center justify-center shrink-0"><Gift size={18} /></div>
+            <div className="flex-1 min-w-0">
+              <div className="font-medium truncate">{v.tipo === "valore" ? eur(v.importo) : `${v.sedute} sedute · ${voucherServiceName(v, services)}`}{v.descrizione ? <span className="text-stone-400 font-normal"> · {v.descrizione}</span> : null}</div>
+              <div className="text-xs text-stone-400">Codice <span className="font-mono">{v.code}</span> · {fmtFullDate(v.creato)}{v.tipo === "valore" && (v.stato === "assegnato" || v.stato === "esaurito") ? ` · residuo ${eur(v.residuo)}` : ""}</div>
+            </div>
+            <span className={`text-[11px] px-2 py-1 rounded-full shrink-0 ${lab.cls}`}>{lab.txt}</span>
+            <button onClick={() => downloadVoucherImage(b, v, services)} className="p-2 text-stone-400 hover:text-stone-700 shrink-0" title="Salva immagine"><Wallet size={16} /></button>
+            {v.stato === "attivo" ? <button onClick={() => elimina(v.id)} className="p-2 text-stone-400 hover:text-red-500 shrink-0" title="Elimina"><Trash2 size={16} /></button> : null}
+          </div>
+        ); })}
+      </div>
     </div>
   );
 }
@@ -1330,7 +1582,7 @@ function StatBar({ rows, fmt }) {
   );
 }
 
-function StatsView({ config, bookings, clients, sales, catalog }) {
+function StatsView({ config, bookings, clients, sales, catalog, vouchers }) {
   const [days, setDays] = useState(90);
   const cutoff = days ? addDays(todayStr(), -days) : null;
   const bk = bookings.filter((b) => !cutoff || b.date >= cutoff);
@@ -1360,13 +1612,21 @@ function StatsView({ config, bookings, clients, sales, catalog }) {
   const totRevenue = sl.reduce((a, s) => a + s.total, 0);
 
   const realized = bk.filter((b) => b.status === "done" || b.status === "partial");
-  const svcPrice = (b) => (b.serviceIds || []).reduce((a, id) => { const s = config.services.find((x) => x.id === id); return a + ((s && s.price) || 0); }, 0);
+  const svcPrice = (b) => (b.amount != null ? Number(b.amount) || 0 : (b.serviceIds || []).reduce((a, id) => { const s = config.services.find((x) => x.id === id); return a + ((s && s.price) || 0); }, 0));
   const svcRevTot = realized.reduce((a, b) => a + svcPrice(b), 0);
   const svcMonth = {};
   realized.forEach((b) => { const k = b.date.slice(0, 7); svcMonth[k] = (svcMonth[k] || 0) + svcPrice(b); });
   const svcMonthRows = Object.keys(svcMonth).sort().slice(-6).map((k) => { const parts = k.split("-"); return { label: `${MONTHS[Number(parts[1]) - 1].slice(0, 3)} ${parts[0].slice(2)}`, value: Math.round(svcMonth[k]) }; });
 
   const card = "bg-white rounded-2xl border border-stone-200 p-5 shadow-sm";
+
+  const vch = (vouchers || []).filter((v) => !cutoff || pd(new Date(v.creato)) >= cutoff);
+  const vchRevTot = vch.reduce((a, v) => a + (Number(v.prezzo) || 0), 0);
+  const vchMonth = {};
+  vch.forEach((v) => { const d = new Date(v.creato); const k = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; vchMonth[k] = (vchMonth[k] || 0) + (Number(v.prezzo) || 0); });
+  const vchMonthRows = Object.keys(vchMonth).sort().slice(-6).map((k) => { const parts = k.split("-"); return { label: `${MONTHS[Number(parts[1]) - 1].slice(0, 3)} ${parts[0].slice(2)}`, value: Math.round(vchMonth[k]) }; });
+  const vchValore = vch.filter((v) => v.tipo === "valore").length;
+  const vchPacchetto = vch.filter((v) => v.tipo === "pacchetto").length;
 
   return (
     <div className="space-y-6">
@@ -1390,6 +1650,16 @@ function StatsView({ config, bookings, clients, sales, catalog }) {
       <section className={card}><h3 className="font-semibold flex items-center gap-2 mb-4"><Users size={16} className="brand-accent" /> Clienti più attivi</h3><StatBar rows={cliRows} /></section>
       <section className={card}><h3 className="font-semibold flex items-center gap-2 mb-4"><Package size={16} className="brand-accent" /> Prodotti più venduti <span className="text-xs font-normal text-stone-400">· unità</span></h3><StatBar rows={prodRows} /></section>
       <section className={card}><h3 className="font-semibold flex items-center gap-2 mb-4"><TrendingUp size={16} className="brand-accent" /> Andamento vendite prodotti <span className="text-xs font-normal text-stone-400">· per mese · totale {eur(totRevenue)}</span></h3><StatBar rows={monthRows} fmt={(v) => eur(v)} /></section>
+
+      <section className={card}>
+        <h3 className="font-semibold flex items-center gap-2 mb-4"><Gift size={16} className="brand-accent" /> Incasso buoni regalo</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+          <div className="rounded-xl border border-stone-200 p-3"><div className="text-xs text-stone-400 uppercase tracking-wide">Totale incassato</div><div className="text-2xl font-bold mt-1 brand-accent">{eur(vchRevTot)}</div></div>
+          <div className="rounded-xl border border-stone-200 p-3"><div className="text-xs text-stone-400 uppercase tracking-wide">Buoni valore</div><div className="text-2xl font-bold mt-1">{vchValore}</div></div>
+          <div className="rounded-xl border border-stone-200 p-3"><div className="text-xs text-stone-400 uppercase tracking-wide">Buoni pacchetto</div><div className="text-2xl font-bold mt-1">{vchPacchetto}</div></div>
+        </div>
+        {vchMonthRows.length ? <StatBar rows={vchMonthRows} fmt={(v) => eur(v)} /> : <p className="text-sm text-stone-400">Nessun buono venduto nel periodo selezionato.</p>}
+      </section>
     </div>
   );
 }
