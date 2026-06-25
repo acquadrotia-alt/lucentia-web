@@ -17,9 +17,9 @@ e le loro licenze da un pannello dedicato. Ogni salone vede solo i propri dati.
    (in src/ ora ci sono 3 file: App.jsx, SalonApp.jsx, ResellerPanel.jsx).
 2. D1: apri la Console del database ed esegui di nuovo schema.sql
    (crea le nuove tabelle; quelle esistenti restano, è sicuro rieseguirlo).
-   Poi esegui migrazione-moduli.sql, migrazione-prezzi.sql e migrazione-operatori.sql
-   (aggiungono le colonne moduli, prezzi e operatore). Se danno errore
-   "duplicate column name" c'erano già: ignoralo.
+   Poi esegui migrazione-moduli.sql, migrazione-prezzi.sql, migrazione-operatori.sql
+   e migrazione-rivenditori.sql. Se danno errore "duplicate column name" c'erano
+   già: ignoralo (è normale).
 3. Cloudflare → Settings → Environment variables → Production → Add:
    SETUP_TOKEN = una stringa lunga e segreta a tua scelta.
 4. Fai ripartire una pubblicazione con un piccolo commit su GitHub
@@ -72,3 +72,28 @@ accesso (email + password) collegato alla sua scheda. L'operatore entra con quel
 credenziali e vede SOLO la propria agenda, in sola lettura (nessun cliente, vendite
 o impostazioni). Il filtro è applicato anche lato server.
 Eliminando un cliente-salone vengono rimossi anche i suoi accessi operatore.
+
+## RIVENDITORI (sub-rivenditori, solo per il principale)
+Il rivenditore PRINCIPALE (il primo creato col setup) vede tre schede: Licenze,
+Rivenditori, Fatturazione.
+- Rivenditori: crea/gestisce altri rivenditori. Richiede tutti i dati di
+  fatturazione (ragione sociale, P.IVA, C.F., indirizzo, CAP, città, provincia,
+  SDI o PEC) + email e password. Licenza rivenditore: 12 mesi (rinnovo annuale).
+- Licenze: filtro Tutte / Mie / per singolo rivenditore.
+- Fatturazione: per mese e per rivenditore mostra licenze nuove e rinnovi con
+  totali imponibile, e permette di segnarle come fatturate.
+Ogni rivenditore vede solo i propri saloni-cliente. Eliminando un rivenditore,
+i suoi saloni passano al principale.
+
+## NOVITA (sconto, angolo licenza, ripristino dati)
+- I sub-rivenditori possono creare licenze solo con i piani Basic/Smart/Pro (nessun
+  personalizzato) e non vedono/modificano il prezzo: il cliente paga sempre il prezzo
+  pieno del piano. Ogni rivenditore ha uno "sconto sul canone" (default 50%): in
+  Fatturazione l'importo "da fatturare" è già scontato.
+- Cliente (salone): in Impostazioni compare "La tua licenza" con piano, canone mensile
+  e scadenza.
+- Cliente (salone): in Impostazioni, "Zona ripristino" con 3 opzioni protette da
+  password e conferma: azzera punti fedeltà; azzera vendite+appuntamenti (mantenendo
+  i punti); ripristino totale (clienti, operatori, fidelity, ecc.).
+Nessuna nuova migrazione: lo sconto è incluso nella tabella rivenditori (esegui
+migrazione-rivenditori.sql se non l'hai ancora fatto).

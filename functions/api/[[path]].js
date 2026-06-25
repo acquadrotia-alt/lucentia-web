@@ -24,6 +24,10 @@ function cleanModuli(arr) {
 }
 function cleanPrezzo(v) { if (v == null) return null; const s = String(v).trim(); return s === "" ? null : s; }
 function maxOperatoriOf(raw) { const m = parseModuli(raw); return m.includes("opinf") ? Infinity : (m.includes("op3") ? 3 : 1); }
+function isMaster(sess) { return sess && sess.ruolo === "reseller" && !sess.reseller_parent; }
+async function logEvento(env, aziendaId, resellerId, tipo, mesi, imp, fin) {
+  await env.DB.prepare("INSERT INTO licenze_eventi (id, azienda_id, reseller_id, tipo, mesi, prezzo_imponibile, prezzo_finale) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(crypto.randomUUID(), aziendaId, resellerId || null, tipo, Number(mesi) || 0, imp || null, fin || null).run();
+}
 const SESSION_DAYS = 30;
 
 function json(data, status = 200, headers = {}) {
@@ -71,7 +75,7 @@ async function getSession(env, request) {
   const sid = getCookie(request, "sid");
   if (!sid) return null;
   const row = await env.DB.prepare(
-    "SELECT s.token, s.scadenza, u.id AS uid, u.email, u.ruolo, u.azienda_id, u.nome, u.staff_id FROM sessioni s JOIN utenti u ON u.id = s.utente_id WHERE s.token = ?"
+    "SELECT s.token, s.scadenza, u.id AS uid, u.email, u.ruolo, u.azienda_id, u.nome, u.staff_id, u.reseller_parent FROM sessioni s JOIN utenti u ON u.id = s.utente_id WHERE s.token = ?"
   ).bind(sid).first();
   if (!row) return null;
   if (new Date(row.scadenza).getTime() < Date.now()) { await env.DB.prepare("DELETE FROM sessioni WHERE token = ?").bind(sid).run(); return null; }
@@ -91,6 +95,7 @@ export async function onRequest(context) {
   const { request, env, params } = context;
   const segs = params.path || [];
   const method = request.method;
+  const url = new URL(request.url);
 
   // ---- /api/health ----
   if (segs[0] === "health") {
@@ -141,10 +146,24 @@ export async function onRequest(context) {
   // ---- /api/me ----
   if (segs[0] === "me") {
     const az = await getAzienda(env, sess.azienda_id);
+    let reseller = null;
+    if (sess.ruolo === "reseller" && sess.reseller_parent) {
+      const r = await env.DB.prepare("SELECT ragione_sociale, attiva, licenza_scadenza FROM rivenditori WHERE id = ?").bind(sess.uid).first();
+      reseller = r ? { ragione_sociale: r.ragione_sociale, stato: licStatus({ attiva: r.attiva, licenza_scadenza: r.licenza_scadenza }), licenza_scadenza: r.licenza_scadenza } : { stato: "none" };
+    }
     return json({
-      user: { email: sess.email, ruolo: sess.ruolo, nome: sess.nome, azienda_id: sess.azienda_id, staff_id: sess.staff_id || null },
-      azienda: az ? { id: az.id, denominazione: az.denominazione, licenza_scadenza: az.licenza_scadenza, attiva: !!az.attiva, stato: licStatus(az), moduli: parseModuli(az.moduli) } : null,
+      user: { email: sess.email, ruolo: sess.ruolo, nome: sess.nome, azienda_id: sess.azienda_id, staff_id: sess.staff_id || null, master: isMaster(sess) },
+      azienda: az ? { id: az.id, denominazione: az.denominazione, licenza_scadenza: az.licenza_scadenza, attiva: !!az.attiva, stato: licStatus(az), moduli: parseModuli(az.moduli), prezzo_imponibile: az.prezzo_imponibile || null, prezzo_finale: az.prezzo_finale || null } : null,
+      reseller,
     });
+  }
+
+  // ---- /api/verify-password (conferma identita per operazioni sensibili) ----
+  if (segs[0] === "verify-password" && method === "POST") {
+    const b = await request.json().catch(() => ({}));
+    const u = await env.DB.prepare("SELECT password_hash FROM utenti WHERE id = ?").bind(sess.uid).first();
+    const ok = u && (await verifyPassword(String(b.password || ""), u.password_hash));
+    return json({ ok: !!ok });
   }
 
   // ---- /api/aziende  (solo reseller) ----
@@ -153,9 +172,16 @@ export async function onRequest(context) {
 
     if (!segs[1]) {
       if (method === "GET") {
-        const res = await env.DB.prepare(
-          "SELECT a.id, a.denominazione, a.licenza_scadenza, a.attiva, a.note, a.moduli, a.prezzo_imponibile, a.prezzo_finale, a.creata_il, (SELECT email FROM utenti u WHERE u.azienda_id = a.id AND u.ruolo = 'azienda' ORDER BY u.creato_il LIMIT 1) AS email FROM aziende a ORDER BY a.creata_il DESC"
-        ).all();
+        const base = "SELECT a.id, a.denominazione, a.licenza_scadenza, a.attiva, a.note, a.moduli, a.prezzo_imponibile, a.prezzo_finale, a.reseller_id, a.creata_il, (SELECT email FROM utenti u WHERE u.azienda_id = a.id AND u.ruolo = 'azienda' ORDER BY u.creato_il LIMIT 1) AS email, COALESCE(r.ragione_sociale, '') AS reseller_nome FROM aziende a LEFT JOIN rivenditori r ON r.id = a.reseller_id";
+        let res;
+        if (isMaster(sess)) {
+          const f = url.searchParams.get("reseller");
+          if (f && f !== "all" && f !== "me") res = await env.DB.prepare(base + " WHERE a.reseller_id = ? ORDER BY a.creata_il DESC").bind(f).all();
+          else if (f === "me") res = await env.DB.prepare(base + " WHERE a.reseller_id IS NULL OR a.reseller_id = ? ORDER BY a.creata_il DESC").bind(sess.uid).all();
+          else res = await env.DB.prepare(base + " ORDER BY a.creata_il DESC").all();
+        } else {
+          res = await env.DB.prepare(base + " WHERE a.reseller_id = ? ORDER BY a.creata_il DESC").bind(sess.uid).all();
+        }
         const items = (res.results || []).map((a) => ({ ...a, attiva: !!a.attiva, stato: licStatus(a), moduli: parseModuli(a.moduli) }));
         return json({ items });
       }
@@ -172,8 +198,9 @@ export async function onRequest(context) {
         const aid = crypto.randomUUID();
         const uidv = crypto.randomUUID();
         const ph = await hashPassword(password);
-        await env.DB.prepare("INSERT INTO aziende (id, denominazione, licenza_scadenza, attiva, note, moduli, prezzo_imponibile, prezzo_finale) VALUES (?, ?, ?, 1, ?, ?, ?, ?)").bind(aid, denominazione, scadenza, String(body.note || ""), cleanModuli(body.moduli), cleanPrezzo(body.prezzo_imponibile), cleanPrezzo(body.prezzo_finale)).run();
+        await env.DB.prepare("INSERT INTO aziende (id, denominazione, licenza_scadenza, attiva, note, moduli, prezzo_imponibile, prezzo_finale, reseller_id) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?)").bind(aid, denominazione, scadenza, String(body.note || ""), cleanModuli(body.moduli), cleanPrezzo(body.prezzo_imponibile), cleanPrezzo(body.prezzo_finale), sess.uid).run();
         await env.DB.prepare("INSERT INTO utenti (id, email, password_hash, ruolo, azienda_id, nome) VALUES (?, ?, ?, 'azienda', ?, ?)").bind(uidv, email, ph, aid, denominazione).run();
+        await logEvento(env, aid, sess.uid, "nuova", mesi, cleanPrezzo(body.prezzo_imponibile), cleanPrezzo(body.prezzo_finale));
         return json({ ok: true, id: aid });
       }
       return json({ error: "metodo non consentito" }, 405);
@@ -185,10 +212,11 @@ export async function onRequest(context) {
       const body = await request.json().catch(() => ({}));
       const az = await getAzienda(env, aid);
       if (!az) return json({ error: "azienda non trovata" }, 404);
+      if (!isMaster(sess) && az.reseller_id !== sess.uid) return json({ error: "non autorizzato" }, 403);
       if (body.denominazione != null) await env.DB.prepare("UPDATE aziende SET denominazione = ? WHERE id = ?").bind(String(body.denominazione), aid).run();
       if (body.note != null) await env.DB.prepare("UPDATE aziende SET note = ? WHERE id = ?").bind(String(body.note), aid).run();
       if (body.attiva != null) await env.DB.prepare("UPDATE aziende SET attiva = ? WHERE id = ?").bind(body.attiva ? 1 : 0, aid).run();
-      if (body.rinnovaMesi != null) { const m = Number(body.rinnovaMesi); const scad = m > 0 ? addMonthsISO(m) : null; await env.DB.prepare("UPDATE aziende SET licenza_scadenza = ? WHERE id = ?").bind(scad, aid).run(); }
+      if (body.rinnovaMesi != null) { const m = Number(body.rinnovaMesi); const scad = m > 0 ? addMonthsISO(m) : null; await env.DB.prepare("UPDATE aziende SET licenza_scadenza = ? WHERE id = ?").bind(scad, aid).run(); await logEvento(env, aid, az.reseller_id, "rinnovo", m, az.prezzo_imponibile, az.prezzo_finale); }
       if (body.scadenza !== undefined) await env.DB.prepare("UPDATE aziende SET licenza_scadenza = ? WHERE id = ?").bind(body.scadenza || null, aid).run();
       if (body.moduli != null) await env.DB.prepare("UPDATE aziende SET moduli = ? WHERE id = ?").bind(cleanModuli(body.moduli), aid).run();
       if (body.prezzo_imponibile !== undefined) await env.DB.prepare("UPDATE aziende SET prezzo_imponibile = ? WHERE id = ?").bind(cleanPrezzo(body.prezzo_imponibile), aid).run();
@@ -201,10 +229,105 @@ export async function onRequest(context) {
       return json({ ok: true });
     }
     if (method === "DELETE") {
+      const azd = await getAzienda(env, aid);
+      if (azd && !isMaster(sess) && azd.reseller_id !== sess.uid) return json({ error: "non autorizzato" }, 403);
       await env.DB.prepare("DELETE FROM sessioni WHERE utente_id IN (SELECT id FROM utenti WHERE azienda_id = ?)").bind(aid).run();
       await env.DB.prepare("DELETE FROM utenti WHERE azienda_id = ?").bind(aid).run();
       await env.DB.prepare("DELETE FROM dati_app WHERE azienda_id = ?").bind(aid).run();
       await env.DB.prepare("DELETE FROM aziende WHERE id = ?").bind(aid).run();
+      return json({ ok: true });
+    }
+    return json({ error: "metodo non consentito" }, 405);
+  }
+
+  // ---- /api/rivenditori  (solo master) ----
+  if (segs[0] === "rivenditori") {
+    if (!isMaster(sess)) return json({ error: "riservato al rivenditore principale" }, 403);
+
+    if (!segs[1]) {
+      if (method === "GET") {
+        const res = await env.DB.prepare("SELECT * FROM rivenditori ORDER BY creato_il DESC").all();
+        const items = await Promise.all((res.results || []).map(async (r) => {
+          const c = await env.DB.prepare("SELECT COUNT(*) AS n FROM aziende WHERE reseller_id = ?").bind(r.id).first();
+          const em = await env.DB.prepare("SELECT email FROM utenti WHERE id = ?").bind(r.id).first();
+          return { ...r, attiva: !!r.attiva, stato: licStatus({ attiva: r.attiva, licenza_scadenza: r.licenza_scadenza }), clienti: c ? c.n : 0, email: (em && em.email) || r.email };
+        }));
+        return json({ items });
+      }
+      if (method === "POST") {
+        const b = await request.json().catch(() => ({}));
+        const email = String(b.email || "").trim().toLowerCase();
+        const password = String(b.password || "");
+        const req = { ragione_sociale: b.ragione_sociale, piva: b.piva, codice_fiscale: b.codice_fiscale, indirizzo: b.indirizzo, cap: b.cap, citta: b.citta, provincia: b.provincia };
+        const mancanti = Object.keys(req).filter((k) => !String(req[k] || "").trim());
+        if (!email || password.length < 6) mancanti.push("email/password");
+        if (!String(b.sdi || "").trim() && !String(b.pec || "").trim()) mancanti.push("sdi_o_pec");
+        if (mancanti.length) return json({ error: "Dati di fatturazione mancanti: " + mancanti.join(", ") }, 400);
+        const dup = await env.DB.prepare("SELECT id FROM utenti WHERE email = ?").bind(email).first();
+        if (dup) return json({ error: "email gia in uso" }, 409);
+        const id = crypto.randomUUID();
+        const ph = await hashPassword(password);
+        const scad = addMonthsISO(12);
+        const sconto = (b.sconto == null || b.sconto === "") ? 50 : Math.max(0, Math.min(100, Math.round(Number(b.sconto)) || 0));
+        await env.DB.prepare("INSERT INTO utenti (id, email, password_hash, ruolo, azienda_id, nome, reseller_parent) VALUES (?, ?, ?, 'reseller', NULL, ?, ?)").bind(id, email, ph, String(b.ragione_sociale).trim(), sess.uid).run();
+        await env.DB.prepare("INSERT INTO rivenditori (id, ragione_sociale, piva, codice_fiscale, indirizzo, cap, citta, provincia, sdi, pec, email, telefono, note, licenza_scadenza, attiva, sconto) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)").bind(id, String(b.ragione_sociale).trim(), String(b.piva).trim(), String(b.codice_fiscale).trim(), String(b.indirizzo).trim(), String(b.cap).trim(), String(b.citta).trim(), String(b.provincia).trim(), String(b.sdi || "").trim(), String(b.pec || "").trim(), email, String(b.telefono || "").trim(), String(b.note || "").trim(), scad, sconto).run();
+        return json({ ok: true, id });
+      }
+      return json({ error: "metodo non consentito" }, 405);
+    }
+
+    const rid = segs[1];
+    const riv = await env.DB.prepare("SELECT id FROM rivenditori WHERE id = ?").bind(rid).first();
+    if (!riv) return json({ error: "rivenditore non trovato" }, 404);
+    if (method === "PATCH") {
+      const b = await request.json().catch(() => ({}));
+      const campi = ["ragione_sociale", "piva", "codice_fiscale", "indirizzo", "cap", "citta", "provincia", "sdi", "pec", "telefono", "note"];
+      for (const k of campi) { if (b[k] !== undefined) await env.DB.prepare(`UPDATE rivenditori SET ${k} = ? WHERE id = ?`).bind(String(b[k] || ""), rid).run(); }
+      if (b.attiva != null) await env.DB.prepare("UPDATE rivenditori SET attiva = ? WHERE id = ?").bind(b.attiva ? 1 : 0, rid).run();
+      if (b.sconto != null) await env.DB.prepare("UPDATE rivenditori SET sconto = ? WHERE id = ?").bind(Math.max(0, Math.min(100, Math.round(Number(b.sconto)) || 0)), rid).run();
+      if (b.rinnova) { await env.DB.prepare("UPDATE rivenditori SET licenza_scadenza = ? WHERE id = ?").bind(addMonthsISO(12), rid).run(); }
+      if (b.nuovaPassword) {
+        if (String(b.nuovaPassword).length < 6) return json({ error: "password troppo corta" }, 400);
+        const ph = await hashPassword(String(b.nuovaPassword));
+        await env.DB.prepare("UPDATE utenti SET password_hash = ? WHERE id = ?").bind(ph, rid).run();
+      }
+      return json({ ok: true });
+    }
+    if (method === "DELETE") {
+      // i clienti del rivenditore passano al master (reseller_id = NULL)
+      await env.DB.prepare("UPDATE aziende SET reseller_id = NULL WHERE reseller_id = ?").bind(rid).run();
+      await env.DB.prepare("DELETE FROM sessioni WHERE utente_id = ?").bind(rid).run();
+      await env.DB.prepare("DELETE FROM utenti WHERE id = ?").bind(rid).run();
+      await env.DB.prepare("DELETE FROM rivenditori WHERE id = ?").bind(rid).run();
+      return json({ ok: true });
+    }
+    return json({ error: "metodo non consentito" }, 405);
+  }
+
+  // ---- /api/fatturazione  (solo master) ----
+  if (segs[0] === "fatturazione") {
+    if (!isMaster(sess)) return json({ error: "riservato al rivenditore principale" }, 403);
+    if (!segs[1]) {
+      if (method === "GET") {
+        const mese = url.searchParams.get("mese") || "";
+        const f = url.searchParams.get("reseller") || "all";
+        const base = "SELECT e.*, COALESCE(a.denominazione, '(eliminato)') AS denominazione FROM licenze_eventi e LEFT JOIN aziende a ON a.id = e.azienda_id";
+        const conds = []; const binds = [];
+        if (mese) { conds.push("e.creato_il LIKE ?"); binds.push(mese + "%"); }
+        if (f === "me") { conds.push("(e.reseller_id IS NULL OR e.reseller_id = ?)"); binds.push(sess.uid); }
+        else if (f !== "all") { conds.push("e.reseller_id = ?"); binds.push(f); }
+        const sql = base + (conds.length ? " WHERE " + conds.join(" AND ") : "") + " ORDER BY e.creato_il DESC";
+        const res = await env.DB.prepare(sql).bind(...binds).all();
+        const items = (res.results || []).map((e) => ({ ...e, fatturato: !!e.fatturato }));
+        return json({ items });
+      }
+      return json({ error: "metodo non consentito" }, 405);
+    }
+    const eid = segs[1];
+    if (method === "PATCH") {
+      const b = await request.json().catch(() => ({}));
+      const fatt = b.fatturato ? 1 : 0;
+      await env.DB.prepare("UPDATE licenze_eventi SET fatturato = ?, fatturato_il = ? WHERE id = ?").bind(fatt, fatt ? new Date().toISOString() : null, eid).run();
       return json({ ok: true });
     }
     return json({ error: "metodo non consentito" }, 405);

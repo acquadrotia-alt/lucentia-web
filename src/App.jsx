@@ -34,8 +34,7 @@ function Login({ onLogged }) {
     <div className="min-h-screen bg-stone-50 flex items-center justify-center p-4">
       <div className="w-full max-w-sm bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
         <div className="px-6 pt-8 pb-5 text-center border-b border-stone-100">
-          <div className="text-3xl font-bold" style={{ color: "#e11d48" }}>Lucentia</div>
-          <div className="text-xs text-stone-400 mt-2">Gestionale per centri estetici e parrucchieri</div>
+          <img src="/lucentia-logo.png" alt="Lucentia — Gestionale per parrucchieri ed estetisti" className="h-20 w-auto mx-auto" />
         </div>
         <div className="p-6 space-y-3">
           <div className="flex items-center gap-2 text-sm font-medium text-stone-600"><Lock size={15} style={{ color: "#e11d48" }} /> Accesso</div>
@@ -89,7 +88,10 @@ export default function App() {
   );
   if (stato === "login" || !me) return <Login onLogged={refresh} />;
 
-  if (me.user.ruolo === "reseller") return <ResellerPanel email={me.user.email} onLogout={logout} apiGet={apiGet} apiSend={apiSend} />;
+  if (me.user.ruolo === "reseller") {
+    if (me.reseller && me.reseller.stato !== "active") return <Blocked stato={me.reseller.stato} denominazione={me.reseller.ragione_sociale || ""} onLogout={logout} />;
+    return <ResellerPanel email={me.user.email} master={!!me.user.master} onLogout={logout} apiGet={apiGet} apiSend={apiSend} />;
+  }
 
   if (me.user.ruolo === "operatore") {
     const azo = me.azienda;
@@ -100,5 +102,5 @@ export default function App() {
   // ruolo azienda
   const az = me.azienda;
   if (!az || az.stato !== "active") return <Blocked stato={az ? az.stato : "none"} denominazione={az ? az.denominazione : ""} onLogout={logout} />;
-  return <SalonApp onLogout={logout} moduli={az.moduli} />;
+  return <SalonApp onLogout={logout} moduli={az.moduli} azienda={az} />;
 }
