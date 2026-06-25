@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="it">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lucentia · Setup rivenditore</title>
+<style>body{font-family:Arial,sans-serif;background:#fafaf9;color:#1c1917;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0}.card{background:#fff;border:1px solid #e7e5e4;border-radius:16px;padding:24px;width:340px;box-shadow:0 1px 3px rgba(0,0,0,.06)}h1{font-size:20px;margin:0 0 4px;color:#e11d48}p{font-size:13px;color:#78716c;margin:0 0 16px}label{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#78716c;display:block;margin:10px 0 4px}input{width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid #d6d3d1;border-radius:8px;font-size:14px}button{width:100%;margin-top:16px;background:#e11d48;color:#fff;border:0;border-radius:8px;padding:11px;font-size:14px;font-weight:600;cursor:pointer}.msg{font-size:13px;margin-top:12px;text-align:center}</style></head>
+<body>
+<div class="card">
+<h1>Setup rivenditore</h1>
+<p>Crea il tuo account rivenditore. Funziona una sola volta; dopo, elimina questa pagina.</p>
+<label>Token di setup</label><input id="token" placeholder="SETUP_TOKEN">
+<label>Email</label><input id="email" type="email" placeholder="tua@email.it">
+<label>Password</label><input id="password" type="password" placeholder="min 6 caratteri">
+<button id="go">Crea rivenditore</button>
+<div class="msg" id="msg"></div>
+</div>
+<script>
+document.getElementById('go').onclick = async () => {
+  const msg = document.getElementById('msg');
+  msg.textContent = 'Attendere…'; msg.style.color = '#78716c';
+  try {
+    const r = await fetch('/api/setup', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ token: token.value.trim(), email: email.value.trim(), password: password.value }) });
+    const d = await r.json().catch(()=>({}));
+    if (r.ok) { msg.style.color = '#16a34a'; msg.textContent = 'Fatto! Ora vai sulla pagina principale e accedi. Poi elimina questo file.'; }
+    else { msg.style.color = '#dc2626'; msg.textContent = d.error || 'Errore.'; }
+  } catch(e) { msg.style.color = '#dc2626'; msg.textContent = 'Errore di rete.'; }
+};
+</script>
+</body></html>

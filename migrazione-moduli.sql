@@ -1,0 +1,1 @@
+ALTER TABLE aziende ADD COLUMN moduli TEXT;

@@ -1,47 +1,74 @@
-# Lucentia Web — istruzioni rapide
+# Lucentia Web — login email/password + gestione licenze
 
-Questo pacchetto contiene la "metà server" per portare Lucentia online (Cloudflare Pages + D1),
-lasciando login e licenze come sono ora (lato client, mono-salone).
+Ora l'accesso è con EMAIL e PASSWORD. Tu (rivenditore) entri e gestisci i saloni-cliente
+e le loro licenze da un pannello dedicato. Ogni salone vede solo i propri dati.
 
-## Contenuto
-- package.json, vite.config.js, index.html
-- src/main.jsx
-- functions/api/[[path]].js   → l'API (rotte /api/...)
-- schema.sql                  → tabelle del database D1
-- (DA AGGIUNGERE TU) src/App.jsx → il tuo Lucentia.jsx, rinominato e con le 6 modifiche
+## Struttura
+- src/App.jsx        → schermata di accesso + instradamento (login, rivenditore, salone, avviso licenza)
+- src/SalonApp.jsx   → l'app del salone (agenda, clienti, vendite…)
+- src/ResellerPanel.jsx → pannello rivenditore (crea clienti, rinnova/sospendi licenze)
+- src/main.jsx, index.html, package.json, vite.config.js
+- functions/api/[[path]].js → API con login, sessioni, licenze, isolamento per azienda
+- schema.sql         → tabelle del database (utenti, aziende, sessioni, dati_app)
+- public/setup.html  → paginetta usata UNA volta per creare il tuo account rivenditore
 
-## Passo 0 — prepara src/App.jsx
-1. Copia il tuo Lucentia.jsx dentro la cartella src/ e rinominalo App.jsx
-2. Applica le 6 modifiche allo strato dati (vedi chat): apiLoad/apiSave, i 5 useState,
-   il caricamento dal server, i 4 salvataggi, saveConfig, logout.
+## AGGIORNARE il sito già online (passi)
+1. GitHub: carica/sostituisci tutti questi file nel repository
+   (in src/ ora ci sono 3 file: App.jsx, SalonApp.jsx, ResellerPanel.jsx).
+2. D1: apri la Console del database ed esegui di nuovo schema.sql
+   (crea le nuove tabelle; quelle esistenti restano, è sicuro rieseguirlo).
+   Poi esegui migrazione-moduli.sql, migrazione-prezzi.sql e migrazione-operatori.sql
+   (aggiungono le colonne moduli, prezzi e operatore). Se danno errore
+   "duplicate column name" c'erano già: ignoralo.
+3. Cloudflare → Settings → Environment variables → Production → Add:
+   SETUP_TOKEN = una stringa lunga e segreta a tua scelta.
+4. Fai ripartire una pubblicazione con un piccolo commit su GitHub
+   (NON usare "Retry deployment", rifà il commit vecchio).
 
-## Passo 1 — GitHub (da zero)
-1. Crea un account su github.com
-2. New repository → nome "lucentia-web" → Private → Create
-3. "uploading an existing file" → trascina TUTTO il contenuto della cartella lucentia-web
-   (con package.json alla radice, non dentro una sottocartella) → Commit changes
+## CREARE il tuo account rivenditore (una volta sola)
+1. Apri  https://TUO-SITO.pages.dev/setup.html
+2. Inserisci il SETUP_TOKEN, la tua email e una password → Crea rivenditore.
+3. Vai su  https://TUO-SITO.pages.dev  e accedi con quella email/password:
+   vedrai il pannello Rivenditore.
+4. Per sicurezza, elimina poi il file public/setup.html dal repository
+   (dopo il primo rivenditore comunque non funziona più).
 
-## Passo 2 — Database D1 (Cloudflare)
-1. Crea un account su dash.cloudflare.com
-2. Storage & Databases → D1 SQL Database → Create → nome "lucentia-db"
-3. Scheda Console → incolla il contenuto di schema.sql → esegui
+## USARE il pannello rivenditore
+- "Nuovo salone-cliente": nome, email, password iniziale, durata licenza → Crea.
+- Per ogni cliente: Rinnova (scegli i mesi), Sospendi/Riattiva, cambia Password, Elimina.
+- Consegna al cliente l'indirizzo del sito + la sua email e password.
+  Il cliente entra e vede solo la SUA agenda/clienti/vendite.
+- Licenza scaduta o sospesa: il cliente entra ma vede un avviso e non può lavorare
+  finché non rinnovi/riattivi.
 
-## Passo 3 — Progetto Pages
-1. Workers & Pages → Create application → scheda PAGES → Connect to Git
-2. Scegli il repository lucentia-web → Begin setup
-3. Build command: npm run build   —   Build output directory: dist
-4. Save and Deploy → otterrai un indirizzo *.pages.dev
+## (Opzionale) Recuperare i dati di prova già inseriti
+I dati che avevi inserito finora stanno sotto azienda_id 'default'. I nuovi clienti
+partono vuoti. Se vuoi assegnare quei dati a un cliente nuovo, nella Console D1:
+  UPDATE dati_app SET azienda_id='ID_DEL_CLIENTE' WHERE azienda_id='default';
+(l'ID del cliente lo trovi nel database, tabella aziende.)
 
-## Passo 4 — Collega il database
-1. Progetto Pages → Settings → Functions → D1 database bindings → Add binding
-2. Variable name: DB   —   D1 database: lucentia-db
+## MODULI (cosa attivare per ogni cliente)
+BASE (sempre incluso): Agenda con 1 operatore + Clienti (solo anagrafica e storico appuntamenti).
+ADD-ON attivabili dal pannello, alla creazione o dopo (riga cliente -> "Moduli"):
+  Fidelity · Vendite · Statistiche · Marketing · Allergeni e patologie · Pacchetti sedute
+OPERATORI: livello a scelta -> 1 (base) / fino a 3 / illimitati.
 
-## Passo 5 — Ripubblica e verifica
-1. Deployments → ultimo deploy → ⋯ → Retry deployment
-2. Apri https://TUO-SITO.pages.dev/api/health → deve dare {"ok":true,...}
-3. Apri il sito: la prima volta carica i dati di esempio e li salva sul database
+Note:
+- I clienti creati prima dei moduli hanno tutto attivo (nessuna regressione).
+- Il limite operatori blocca l'aggiunta di nuovi operatori oltre il piano; quelli
+  gia' presenti non vengono rimossi automaticamente.
+- I controlli sono lato server (arrivano da /api/me): il cliente non puo' aggirarli.
 
-## (Opzionale) Protezione leggera dell'API
-Settings → Environment variables → Production → API_SECRET = stringa lunga a caso.
-Poi fai inviare l'header "x-api-key" da apiLoad/apiSave nel frontend.
-Nota: ferma solo gli accessi casuali, non sostituisce un vero login.
+## PREZZI (promemoria commerciale, solo lato rivenditore)
+Nella scheda di ogni cliente (pannello) puoi indicare Imponibile (IVA escl.) e
+Prezzo finale mensile. Sono campi liberi, vuoti di default: li compili tu.
+In creazione, sotto il prezzo finale, vedi il Totale licenza = mensile x durata.
+Questi prezzi NON sono visibili al cliente: servono solo a te come promemoria.
+
+## ACCESSI OPERATORI
+Disponibile nei piani con più di un operatore (Smart/Pro).
+Il titolare, da Impostazioni -> Accessi operatori, crea per ogni operatore un
+accesso (email + password) collegato alla sua scheda. L'operatore entra con quelle
+credenziali e vede SOLO la propria agenda, in sola lettura (nessun cliente, vendite
+o impostazioni). Il filtro è applicato anche lato server.
+Eliminando un cliente-salone vengono rimossi anche i suoi accessi operatore.

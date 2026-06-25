@@ -1,0 +1,2129 @@
+import { useState, useEffect, useMemo, useRef, createContext, useContext } from "react";
+import { Sparkles, Calendar, Clock, User, Mail, Lock, Settings, LayoutDashboard, Plus, Trash2, Check, ChevronLeft, ChevronRight, X, Users, CalendarPlus, Phone, MapPin, Image as ImageIcon, Palette, Store, Sunrise, Sun, Moon, History, Search, Gift, Star, Hash, LogOut, Ban, UserX, Undo2, Timer, CalendarClock, Wallet, RefreshCw, Printer, Download, Upload, KeyRound, ShieldCheck, CalendarX2, AlertTriangle, BadgeCheck, ShoppingCart, ShoppingBag, Package, Tag, Minus, Boxes, Receipt, Layers, AlertCircle, CalendarRange, CalendarDays, PackagePlus, BarChart3, TrendingUp, MessageCircle, FolderOpen } from "lucide-react";
+
+const CFG_KEY = "salon-config-v3";
+const BK_KEY = "salon-bookings-v2";
+const CLIENTS_KEY = "salon-clients-v1";
+const PROD_KEY = "salon-catalog-v1"; // catalogo prodotti + giacenze
+const SALES_KEY = "salon-sales-v1"; // storico vendite
+const LIC_KEY = "salon-license-v1"; // licenza salvata a parte: NON inclusa nei backup
+const STEP = 15;
+const ADVANCE_DAYS = 30;
+const LOYALTY_GOAL = 10;
+
+// Codice master del RIVENDITORE: vale sempre, non scade mai, sblocca il pannello Licenza.
+// Cambialo qui (e ricompila) se vuoi un master diverso da 0724 per le tue build.
+const RESELLER_CODE = "0724";
+// Firma anti-manomissione della licenza (vedi nota sicurezza nel messaggio di consegna).
+const LIC_SECRET = "bs-lic-39f1c7";
+
+const uid = () => Math.random().toString(36).slice(2, 9);
+const pad = (n) => String(n).padStart(2, "0");
+const minToStr = (m) => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
+const strToMin = (s) => { const [h, m] = s.split(":").map(Number); return h * 60 + m; };
+const pd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const todayStr = () => pd(new Date());
+const parseDate = (s) => { const [y, mo, d] = s.split("-").map(Number); return new Date(y, mo - 1, d); };
+const addDays = (s, n) => { const d = parseDate(s); d.setDate(d.getDate() + n); return pd(d); };
+const bookingStart = (b) => { const d = parseDate(b.date); d.setHours(Math.floor(b.startMin / 60), b.startMin % 60, 0, 0); return d; };
+const bookingEnd = (b) => { const d = parseDate(b.date); d.setHours(Math.floor(b.endMin / 60), b.endMin % 60, 0, 0); return d; };
+
+const DAYS = [{ k: 1, l: "Lun" }, { k: 2, l: "Mar" }, { k: 3, l: "Mer" }, { k: 4, l: "Gio" }, { k: 5, l: "Ven" }, { k: 6, l: "Sab" }, { k: 0, l: "Dom" }];
+const DAY_NAMES = ["Domenica", "Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato"];
+const WDAY_SHORT = ["Dom", "Lun", "Mar", "Mer", "Gio", "Ven", "Sab"];
+const MONTHS = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"];
+const fmtDate = (s) => { const d = parseDate(s); return `${DAY_NAMES[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`; };
+const fmtFullDate = (ms) => { const d = new Date(ms); return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`; };
+
+const W_FULL = [[540, 780], [900, 1140]];
+const SERVICES = [
+  { id: "s1", name: "Taglio uomo", durationMin: 30 }, { id: "s2", name: "Taglio donna", durationMin: 45 },
+  { id: "s3", name: "Piega", durationMin: 30 }, { id: "s4", name: "Colore", durationMin: 90 },
+  { id: "s5", name: "Taglio + piega", durationMin: 60 }, { id: "s6", name: "Manicure", durationMin: 45 },
+  { id: "s7", name: "Pedicure", durationMin: 60 }, { id: "s8", name: "Pulizia viso", durationMin: 50 },
+  { id: "s9", name: "Trucco", durationMin: 40 }, { id: "s10", name: "Trattamento viso anti-age", durationMin: 70 },
+  { id: "s11", name: "Ceretta gambe", durationMin: 40 },
+];
+const STAFF = [
+  { id: "a1", name: "Giulia", role: "Estetista", serviceIds: ["s6", "s7", "s8", "s11"], availability: { 1: W_FULL, 2: W_FULL, 3: W_FULL, 4: W_FULL, 5: W_FULL } },
+  { id: "a2", name: "Sara", role: "Estetista", serviceIds: ["s9", "s10", "s11", "s6"], availability: { 2: [[600, 840], [900, 1140]], 3: [[600, 840], [900, 1140]], 4: [[600, 840], [900, 1140]], 5: [[600, 840], [900, 1140]], 6: [[600, 840], [900, 1140]] } },
+  { id: "a3", name: "Marco", role: "Parrucchiere", serviceIds: ["s1", "s2", "s3", "s4", "s5"], availability: { 1: [[540, 780], [840, 1080]], 2: [[540, 780], [840, 1080]], 3: [[540, 780], [840, 1080]], 4: [[540, 780], [840, 1080]], 5: [[540, 780], [840, 1080]], 6: [[540, 780], [840, 1080]] } },
+];
+const BRANDING = { name: "Bellezza & Stile", tagline: "Gestionale salone", logo: null, primary: "#e11d48", phone: "+39 070 123 4567", email: "info@bellezzaestile.it", address: "Via Roma 12, Cagliari" };
+const DEFAULT_LOYALTY = { mode: "flat", fromSales: false, rewards: [{ id: "rw5", points: 5, label: "Omaggio piccolo" }, { id: "rw10", points: 10, label: "Sconto 10%" }] };
+const DEFAULT_MARKETING = {
+  msgInactive: "Ciao *{nome}*, come stai? Tutto bene? È un po' di tempo che non ci vediamo, volevo solo dirti che per questo mese abbiamo una promo dedicata!",
+  msgServices: "Ciao *{nome}*, abbiamo delle novità che potrebbero interessarti. Ti aspettiamo in salone!",
+  msgProducts: "Ciao *{nome}*, è disponibile un prodotto che potrebbe piacerti. Passa a trovarci quando vuoi!",
+};
+const DEFAULT_CONFIG = { services: SERVICES, staff: STAFF, branding: BRANDING, cancelHours: 6, loyalty: DEFAULT_LOYALTY, marketing: DEFAULT_MARKETING, closures: [], backup: { enabled: false, time: "20:00" } };
+const BLANK_BRANDING = { name: "", tagline: "Gestionale salone", logo: null, primary: "#6b50b8", phone: "", email: "", address: "" };
+const PRESETS = ["#e11d48", "#db2777", "#7c3aed", "#2563eb", "#0d9488", "#059669", "#d97706", "#475569"];
+
+// --- Catalogo prodotti (vendita + magazzino) ---
+const DEFAULT_CATALOG = {
+  categories: [
+    { id: "c-cap", name: "Capelli" },
+    { id: "c-viso", name: "Viso" },
+    { id: "c-corpo", name: "Corpo" },
+    { id: "c-unghie", name: "Unghie" },
+  ],
+  products: [
+    { id: "p1", name: "Shampoo idratante", description: "Per capelli secchi e sfibrati", categoryId: "c-cap", formats: [{ id: "f1", label: "300 ml", price: 12.5, stock: 8 }, { id: "f2", label: "1 L", price: 29, stock: 3 }] },
+    { id: "p2", name: "Maschera nutriente", description: "Trattamento intensivo settimanale", categoryId: "c-cap", formats: [{ id: "f1", label: "250 ml", price: 18, stock: 5 }] },
+    { id: "p3", name: "Crema viso anti-age", description: "Acido ialuronico, uso quotidiano", categoryId: "c-viso", formats: [{ id: "f1", label: "50 ml", price: 34, stock: 6 }] },
+    { id: "p4", name: "Olio corpo elasticizzante", description: "Mandorle dolci e vitamina E", categoryId: "c-corpo", formats: [{ id: "f1", label: "100 ml", price: 15, stock: 4 }, { id: "f2", label: "250 ml", price: 28, stock: 2 }] },
+    { id: "p5", name: "Smalto semipermanente", description: "Lunga tenuta, finish lucido", categoryId: "c-unghie", formats: [{ id: "f1", label: "Rosso", price: 9.5, stock: 10 }, { id: "f2", label: "Rosa cipria", price: 9.5, stock: 7 }] },
+  ],
+};
+const eur = (n) => (Number(n) || 0).toFixed(2).replace(".", ",") + " €";
+const fmtDateTime = (ts) => { const d = new Date(ts); return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const cartTotal = (cart) => cart.reduce((a, it) => a + it.price * it.qty, 0);
+// Scarica le giacenze dal catalogo in base al carrello venduto.
+function applySaleToCatalog(catalog, cart) {
+  const products = catalog.products.map((p) => {
+    const touched = cart.some((it) => it.productId === p.id);
+    if (!touched) return p;
+    const formats = p.formats.map((f) => { const it = cart.find((x) => x.productId === p.id && x.formatId === f.id); return it ? { ...f, stock: Math.max(0, (Number(f.stock) || 0) - it.qty) } : f; });
+    return { ...p, formats };
+  });
+  return { ...catalog, products };
+}
+// Carico magazzino: incrementa le giacenze.
+function applyLoadToCatalog(catalog, items) {
+  const products = catalog.products.map((p) => {
+    if (!items.some((it) => it.productId === p.id)) return p;
+    const formats = p.formats.map((f) => { const it = items.find((x) => x.productId === p.id && x.formatId === f.id); return it ? { ...f, stock: (Number(f.stock) || 0) + it.qty } : f; });
+    return { ...p, formats };
+  });
+  return { ...catalog, products };
+}
+
+// --- Salvataggio LOCALE su questo PC (localStorage di Tauri) ---
+const loadKey = (key, fallback) => { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch (e) { return fallback; } };
+const saveKey = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {} };
+
+// --- Strato dati: legge/salva sul server (database D1) invece che nel localStorage ---
+// Login e licenze restano in locale e invariati; qui passano solo i 5 contenitori dati.
+async function apiLoad(coll, fallback) {
+  try { const r = await fetch(`/api/data/${coll}`); if (!r.ok) return fallback; const j = await r.json(); return (j && j.value != null) ? j.value : fallback; }
+  catch (e) { return fallback; }
+}
+async function apiSave(coll, value) {
+  try { await fetch(`/api/data/${coll}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ value }) }); } catch (e) {}
+}
+const _saveTimers = {};
+function apiSaveDebounced(coll, value, delay = 800) {
+  clearTimeout(_saveTimers[coll]);
+  _saveTimers[coll] = setTimeout(() => apiSave(coll, value), delay);
+}
+
+// --- Sistema licenza cliente (a tempo) ---
+function hashStr(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h.toString(36); }
+const licSig = (code, expiry) => hashStr(`${code}|${expiry}|${LIC_SECRET}`);
+const loadLicense = () => loadKey(LIC_KEY, null);
+const saveLicense = (lic) => saveKey(LIC_KEY, lic);
+function makeLicense(code, months) {
+  const m = Number(months) || 0;
+  let expiry = null;
+  if (m > 0) { const d = new Date(); d.setMonth(d.getMonth() + m); expiry = d.getTime(); }
+  const base = { code: String(code).trim(), expiry, months: m, issuedAt: Date.now() };
+  return { ...base, sig: licSig(base.code, base.expiry) };
+}
+function licenseState(lic) {
+  if (!lic || !lic.code) return { state: "none" };
+  if (lic.sig !== licSig(lic.code, lic.expiry)) return { state: "tampered" };
+  if (lic.expiry == null) return { state: "active", unlimited: true };
+  const ms = lic.expiry - Date.now();
+  if (ms <= 0) return { state: "expired", expiry: lic.expiry };
+  return { state: "active", expiry: lic.expiry, days: Math.ceil(ms / 86400000) };
+}
+const licenseOk = (lic) => licenseState(lic).state === "active";
+
+const hexToRgb = (h) => { h = String(h).replace("#", ""); if (h.length === 3) h = h.split("").map((c) => c + c).join(""); const n = parseInt(h, 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+const mix = (rgb, t, a) => rgb.map((c, i) => Math.round(c + (t[i] - c) * a));
+const rgbStr = (a) => `rgb(${a[0]},${a[1]},${a[2]})`;
+function themeVars(primary) {
+  let rgb; try { rgb = hexToRgb(primary); } catch (e) { rgb = [225, 29, 72]; }
+  return { "--brand": rgbStr(rgb), "--brand-dark": rgbStr(mix(rgb, [0, 0, 0], 0.18)), "--brand-soft": rgbStr(mix(rgb, [255, 255, 255], 0.9)), "--brand-text": rgbStr(mix(rgb, [0, 0, 0], 0.25)), "--brand-ring": `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.3)` };
+}
+function fileToResizedDataURL(file, max = 256) {
+  return new Promise((res, rej) => {
+    const reader = new FileReader();
+    reader.onload = () => { const img = new Image(); img.onload = () => { let w = img.width, h = img.height; if (w > h && w > max) { h = (h * max) / w; w = max; } else if (h > max) { w = (w * max) / h; h = max; } const c = document.createElement("canvas"); c.width = w; c.height = h; c.getContext("2d").drawImage(img, 0, 0, w, h); res(c.toDataURL("image/png")); }; img.onerror = rej; img.src = reader.result; };
+    reader.onerror = rej; reader.readAsDataURL(file);
+  });
+}
+
+function qualifiedStaff(staff, ids) { return staff.filter((st) => ids.every((id) => st.serviceIds.includes(id))); }
+function inRange(date, from, to) { const lo = from || to, hi = to || from; if (!lo) return false; return date >= lo && date <= hi; }
+function staffOff(st, date) { return Array.isArray(st && st.off) && st.off.some((r) => inRange(date, r.from, r.to)); }
+function salonClosure(config, date) { return ((config && config.closures) || []).find((r) => inRange(date, r.from, r.to)) || null; }
+function computeSlots(dateStr, duration, staffList, bookings, closures) {
+  if (Array.isArray(closures) && closures.some((r) => inRange(dateStr, r.from, r.to))) return {};
+  const wd = parseDate(dateStr).getDay();
+  const isToday = dateStr === todayStr();
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const map = {};
+  staffList.forEach((st) => {
+    if (staffOff(st, dateStr)) return;
+    const windows = (st.availability && st.availability[wd]) || [];
+    const stBk = bookings.filter((b) => b.staffId === st.id && b.date === dateStr && b.status !== "cancelled");
+    windows.forEach((win) => {
+      const ws = win[0], we = win[1];
+      for (let t = ws; t + duration <= we; t += STEP) {
+        if (isToday && t < nowMin + 15) continue;
+        const clash = stBk.some((b) => t < b.endMin && t + duration > b.startMin);
+        if (!clash) { if (!map[t]) map[t] = []; map[t].push(st.id); }
+      }
+    });
+  });
+  return map;
+}
+function generateCode(clients) { let c; do { c = String(Math.floor(10000 + Math.random() * 90000)); } while (clients.some((x) => x.code === c)); return c; }
+function upsertClient(info, clients) {
+  const name = info.name, email = info.email, phone = info.phone, code = info.code;
+  let list = clients;
+  if (code) { const ex = list.find((c) => c.code === code); if (ex) { list = list.map((c) => (c.code === code ? { ...c, name: name || c.name, email: email || c.email, phone: phone || c.phone } : c)); return { code, clients: list }; } }
+  if (email) { const be = list.find((c) => c.email && c.email.toLowerCase() === email.toLowerCase()); if (be) { list = list.map((c) => (c.code === be.code ? { ...c, name: name || c.name, phone: phone || c.phone } : c)); return { code: be.code, clients: list }; } }
+  const nc = generateCode(list);
+  list = [...list, { code: nc, name, email: email || "", phone: phone || "", createdAt: Date.now() }];
+  return { code: nc, clients: list };
+}
+function clientStats(code, bookings) {
+  const cb = bookings.filter((b) => b.clientCode === code);
+  const now = Date.now();
+  const upcoming = cb.filter((b) => !b.status && bookingEnd(b).getTime() > now).sort((a, b) => bookingStart(a) - bookingStart(b));
+  const past = cb.filter((b) => b.status || bookingEnd(b).getTime() <= now).sort((a, b) => bookingStart(b) - bookingStart(a));
+  const done = cb.filter((b) => b.status === "done" || b.status === "partial");
+  const servicesUsed = done.reduce((a, b) => a + b.serviceIds.length, 0);
+  return { all: cb, past, upcoming, done, servicesUsed, rewards: Math.floor(servicesUsed / LOYALTY_GOAL), progress: servicesUsed % LOYALTY_GOAL };
+}
+function loyaltyConfig(config) { const L = (config && config.loyalty) || {}; return { mode: L.mode || "flat", fromSales: !!L.fromSales, rewards: Array.isArray(L.rewards) ? L.rewards : [] }; }
+function marketingConfig(config) { const m = (config && config.marketing) || {}; return { msgInactive: m.msgInactive != null ? m.msgInactive : DEFAULT_MARKETING.msgInactive, msgServices: m.msgServices != null ? m.msgServices : DEFAULT_MARKETING.msgServices, msgProducts: m.msgProducts != null ? m.msgProducts : DEFAULT_MARKETING.msgProducts }; }
+function waNumber(phone) { let d = String(phone || "").replace(/\D/g, ""); if (!d) return ""; if (d.startsWith("00")) d = d.slice(2); if (!d.startsWith("39") && d.length <= 11) d = "39" + d; return d; }
+function clientPoints(code, bookings, sales, config, catalog) {
+  const L = loyaltyConfig(config);
+  const svcPts = (id) => { if (L.mode === "perService") { const s = (config.services || []).find((x) => x.id === id); return s && s.points != null ? Number(s.points) || 0 : 0; } return 1; };
+  let pts = 0;
+  (bookings || []).forEach((b) => { if ((b.status === "done" || b.status === "partial") && b.clientCode === code) pts += (b.serviceIds || []).reduce((a, id) => a + svcPts(id), 0); });
+  if (L.fromSales && Array.isArray(sales) && catalog) { const prodPts = (pid) => { const p = (catalog.products || []).find((x) => x.id === pid); return p && p.points != null ? Number(p.points) || 0 : 0; }; sales.forEach((s) => { if (s.type === "sale" && s.clientCode === code) (s.items || []).forEach((it) => { pts += prodPts(it.productId) * it.qty; }); }); }
+  return pts;
+}
+function clientBalance(c, bookings, sales, config, catalog) { return clientPoints(c.code, bookings, sales, config, catalog) - (Number(c.redeemedPoints) || 0); }
+function matchPackage(client, serviceIds) { if (!client || !Array.isArray(client.packages)) return null; for (const sid of (serviceIds || [])) { const pkg = client.packages.find((p) => p.serviceId === sid && (Number(p.used) || 0) < p.total); if (pkg) return pkg; } return null; }
+
+// --- Dati DEMO FREE (in memoria, mai salvati su disco) ---
+const DEMO_FIRST = ["Anna", "Marco", "Giulia", "Luca", "Sara", "Elena", "Paolo", "Chiara"];
+const DEMO_LAST = ["Rossi", "Bianchi", "Verdi", "Russo", "Ferrari", "Romano", "Greco", "Conti"];
+function buildDemoData() {
+  const config = { ...DEFAULT_CONFIG, branding: { ...BRANDING, name: "Salone Demo" }, loyalty: DEFAULT_LOYALTY };
+  const catalog = JSON.parse(JSON.stringify(DEFAULT_CATALOG));
+  const clients = []; const bookings = [];
+  const allSvc = config.services;
+  for (let i = 0; i < 5; i++) {
+    const code = String(10000 + i * 137 + 7);
+    const name = `${DEMO_FIRST[i]} ${DEMO_LAST[i]}`;
+    const phone = `3${pad(20 + i)} ${pad(100 + i * 3).slice(0, 3)} ${pad(10 + i)}${pad(20 + i)}`;
+    clients.push({ code, name, email: "", phone, card: "", createdAt: Date.now() - (i + 1) * 30 * 864e5 });
+    const visits = 2 + (i % 3);
+    for (let v = 0; v < visits; v++) {
+      const svc = allSvc[(i + v) % allSvc.length];
+      const st = qualifiedStaff(config.staff, [svc.id])[0] || config.staff[0];
+      const daysAgo = (v + 1) * 12 + i * 3;
+      bookings.push({ id: uid(), date: addDays(todayStr(), -daysAgo), startMin: 600 + v * 30, endMin: 600 + v * 30 + svc.durationMin, serviceIds: [svc.id], staffId: st ? st.id : "", clientCode: code, clientName: name, status: "done", createdAt: Date.now() });
+    }
+  }
+  return { config, bookings, clients, catalog, sales: [] };
+}
+const DEMO_SEED = buildDemoData();
+const DEMO_MAX_CLIENTS = DEMO_SEED.clients.length + 3;
+const DEMO_MAX_BOOKINGS = DEMO_SEED.bookings.length + 20;
+
+// Dati di esempio precaricati (clienti, appuntamenti, vendite) per mostrare l'app già "viva".
+function buildSampleData() {
+  const services = SERVICES, staff = STAFF, cat = DEFAULT_CATALOG;
+  const FIRST = ["Anna", "Marco", "Giulia", "Luca", "Sara", "Elena", "Paolo", "Chiara"];
+  const LAST = ["Rossi", "Bianchi", "Ferrari", "Russo", "Esposito", "Romano", "Greco", "Conti"];
+  const pick = (arr, idx) => arr[((idx % arr.length) + arr.length) % arr.length];
+  const clients = [];
+  for (let i = 0; i < 8; i++) {
+    const d = "3" + String(200000000 + i * 11111111).slice(0, 9);
+    clients.push({ code: String(10010 + i * 53), name: `${FIRST[i]} ${LAST[i]}`, firstName: FIRST[i], lastName: LAST[i], email: i % 3 === 0 ? `${FIRST[i].toLowerCase()}.${LAST[i].toLowerCase()}@email.it` : "", phone: `${d.slice(0, 3)} ${d.slice(3, 6)} ${d.slice(6)}`, card: i % 4 === 0 ? `TS${1000 + i}` : "", createdAt: Date.now() - (i + 1) * 25 * 864e5 });
+  }
+  if (clients[0]) clients[0].packages = [{ id: uid(), serviceId: "s11", total: 10, used: 3, price: 120, createdAt: Date.now() }];
+  if (clients[1]) clients[1].packages = [{ id: uid(), serviceId: "s4", total: 5, used: 1, price: 150, createdAt: Date.now() }];
+  const bookings = [];
+  clients.forEach((c, i) => {
+    const visits = 2 + (i % 3);
+    for (let v = 0; v < visits; v++) {
+      const svc = pick(services, i + v * 2);
+      const stf = qualifiedStaff(staff, [svc.id])[0] || staff[0];
+      const start = 540 + ((i + v) % 6) * 60;
+      bookings.push({ id: uid(), date: addDays(todayStr(), -((v + 1) * 11 + i * 4)), startMin: start, endMin: start + svc.durationMin, serviceIds: [svc.id], staffId: stf ? stf.id : "", clientCode: c.code, clientName: c.name, status: "done", createdAt: Date.now() });
+    }
+  });
+  for (let k = 0; k < 5; k++) {
+    const c = clients[k];
+    const svc = pick(services, k * 3 + 1);
+    const stf = qualifiedStaff(staff, [svc.id])[0] || staff[0];
+    const start = 600 + (k % 5) * 45;
+    bookings.push({ id: uid(), date: addDays(todayStr(), k + 1), startMin: start, endMin: start + svc.durationMin, serviceIds: [svc.id], staffId: stf ? stf.id : "", clientCode: c.code, clientName: c.name, createdAt: Date.now() });
+  }
+  const sales = [];
+  for (let s = 0; s < 10; s++) {
+    const c = clients[(s * 3) % clients.length];
+    const p = pick(cat.products, s);
+    const f = p.formats[s % p.formats.length];
+    const qty = 1 + (s % 2);
+    const assign = s % 2 === 0;
+    sales.push({ id: uid(), ts: Date.now() - (s * 12 + 3) * 864e5, type: "sale", partial: false, clientCode: assign ? c.code : null, clientName: assign ? c.name : "", items: [{ productId: p.id, formatId: f.id, name: p.name, label: f.label, price: f.price, qty }], total: f.price * qty });
+  }
+  return { clients, bookings, sales };
+}
+
+const STATUS = {
+  done: { label: "Svolto", cls: "bg-green-100 text-green-700", Icon: Check },
+  partial: { label: "Parziale", cls: "bg-sky-100 text-sky-700", Icon: Timer },
+  noshow: { label: "Non presentato", cls: "bg-amber-100 text-amber-700", Icon: UserX },
+  cancelled: { label: "Annullato", cls: "bg-stone-200 text-stone-500", Icon: Ban },
+};
+function downloadICS(booking, staff, services, brandName) {
+  const st = staff.find((s) => s.id === booking.staffId);
+  const names = booking.serviceIds.map((id) => { const s = services.find((x) => x.id === id); return s ? s.name : null; }).filter(Boolean).join(", ");
+  const d = parseDate(booking.date);
+  const f = (m) => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(Math.floor(m / 60))}${pad(m % 60)}00`;
+  const now = new Date();
+  const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}T${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//SaloneApp//IT", "CALSCALE:GREGORIAN", "BEGIN:VEVENT", `UID:${booking.id}@saloneapp`, `DTSTAMP:${stamp}`, `DTSTART:${f(booking.startMin)}`, `DTEND:${f(booking.endMin)}`, `SUMMARY:${brandName} - ${names}`, `DESCRIPTION:Servizi: ${names}\\nCon: ${st ? st.name : "-"}`, "BEGIN:VALARM", "TRIGGER:-PT60M", "ACTION:DISPLAY", "DESCRIPTION:Promemoria appuntamento", "END:VALARM", "END:VEVENT", "END:VCALENDAR"].join("\r\n");
+  const blob = new Blob([ics], { type: "text/calendar" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = "appuntamento.ics"; document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+function paintCard(ctx, branding, name, code, logoImg) {
+  const W = 720, H = 440;
+  let rgb; try { rgb = hexToRgb(branding.primary); } catch (e) { rgb = [225, 29, 72]; }
+  const dark = mix(rgb, [0, 0, 0], 0.18);
+  const g = ctx.createLinearGradient(0, 0, W, H); g.addColorStop(0, rgbStr(rgb)); g.addColorStop(1, rgbStr(dark));
+  roundRect(ctx, 0, 0, W, H, 36); ctx.fillStyle = g; ctx.fill();
+  ctx.save(); roundRect(ctx, 0, 0, W, H, 36); ctx.clip();
+  ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.beginPath(); ctx.arc(W - 30, -10, 130, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,0.10)"; ctx.beginPath(); ctx.arc(W - 10, 130, 90, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  const font = (w, s) => `${w} ${s}px -apple-system, system-ui, Segoe UI, Roboto, sans-serif`;
+  let nameX = 52;
+  if (logoImg) { ctx.save(); roundRect(ctx, 52, 42, 56, 56, 14); ctx.clip(); ctx.drawImage(logoImg, 52, 42, 56, 56); ctx.restore(); nameX = 124; }
+  ctx.fillStyle = "#fff"; ctx.textBaseline = "middle";
+  ctx.font = font("600", 30); ctx.fillText(branding.name || "", nameX, 72);
+  ctx.font = font("500", 22); ctx.textAlign = "right"; ctx.globalAlpha = 0.92; ctx.fillText("★ Carta Fedeltà", W - 44, 66); ctx.textAlign = "left"; ctx.globalAlpha = 1;
+  ctx.textBaseline = "alphabetic";
+  ctx.globalAlpha = 0.7; ctx.font = font("600", 20); ctx.fillText("INTESTATARIO", 52, 252);
+  ctx.globalAlpha = 1; ctx.font = font("600", 42); ctx.fillText(name || "Cliente", 52, 302);
+  ctx.globalAlpha = 0.7; ctx.font = font("600", 20); ctx.fillText("CODICE", 52, 362);
+  ctx.globalAlpha = 1; ctx.font = font("700", 58); ctx.fillText(String(code), 52, 418);
+}
+function downloadCardImage(branding, name, code) {
+  const c = document.createElement("canvas"); c.width = 720; c.height = 440; const ctx = c.getContext("2d");
+  const finish = () => { try { const url = c.toDataURL("image/png"); const a = document.createElement("a"); a.href = url; a.download = `tessera-${code}.png`; document.body.appendChild(a); a.click(); a.remove(); } catch (e) { alert("Impossibile generare l'immagine."); } };
+  if (branding.logo) { const img = new Image(); img.onload = () => { paintCard(ctx, branding, name, code, img); finish(); }; img.onerror = () => { paintCard(ctx, branding, name, code, null); finish(); }; img.src = branding.logo; }
+  else { paintCard(ctx, branding, name, code, null); finish(); }
+}
+
+function receiptHTML(booking, config, code) {
+  const branding = config.branding, services = config.services, staff = config.staff;
+  const st = staff.find((s) => s.id === booking.staffId);
+  const items = booking.serviceIds.map((id) => services.find((s) => s.id === id)).filter(Boolean);
+  const total = items.reduce((a, s) => a + s.durationMin, 0);
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  const logo = branding.logo ? `<img src="${branding.logo}" style="width:120px;height:120px;object-fit:contain;display:block;margin:0 auto 6px;border-radius:8px"/>` : "";
+  const rows = items.map((s) => `<tr><td>${esc(s.name)}</td><td style="text-align:right;white-space:nowrap">${s.durationMin}'</td></tr>`).join("");
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Riepilogo</title><style>@page{size:80mm auto;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0}body{width:72mm;margin:0 auto;padding:8px 4px;font-family:'Courier New',monospace;color:#000}.c{text-align:center}.b{font-weight:bold}.big{font-size:15px}.sm{font-size:11px}hr{border:none;border-top:1px dashed #000;margin:6px 0}table{width:100%;font-size:12px;border-collapse:collapse}td{padding:1px 0;vertical-align:top}.row{display:flex;justify-content:space-between;gap:8px;font-size:12px}</style></head><body>${logo}<div class="c b big">${esc(branding.name)}</div>${branding.address ? `<div class="c sm">${esc(branding.address)}</div>` : ""}${branding.phone ? `<div class="c sm">${esc(branding.phone)}</div>` : ""}<hr/><div class="c b">RIEPILOGO APPUNTAMENTO</div><hr/><div class="row"><span>Cliente</span><span class="b">${esc(booking.clientName)}</span></div><div class="row"><span>Codice</span><span>${esc(code || booking.clientCode || "-")}</span></div><div class="row"><span>Data</span><span>${esc(fmtDate(booking.date))}</span></div><div class="row"><span>Orario</span><span>${minToStr(booking.startMin)} - ${minToStr(booking.endMin)}</span></div><div class="row"><span>Operatore</span><span>${st ? esc(st.name) : "-"}</span></div><hr/><table>${rows}</table><hr/><div class="row b"><span>Durata totale</span><span>${total} min</span></div><hr/><div class="c sm">Grazie e a presto!</div></body></html>`;
+}
+function printReceipt(booking, config, code) {
+  try {
+    const html = receiptHTML(booking, config, code);
+    const ifr = document.createElement("iframe");
+    ifr.style.position = "fixed"; ifr.style.width = "0"; ifr.style.height = "0"; ifr.style.right = "0"; ifr.style.bottom = "0"; ifr.style.border = "0";
+    document.body.appendChild(ifr);
+    const doc = ifr.contentWindow.document;
+    doc.open(); doc.write(html); doc.close();
+    setTimeout(() => { try { ifr.contentWindow.focus(); ifr.contentWindow.print(); } catch (e) {} setTimeout(() => { ifr.remove(); }, 1500); }, 500);
+  } catch (e) { alert("Stampa non disponibile."); }
+}
+
+function saleReceiptHTML(sale, branding) {
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  const logo = branding.logo ? `<img src="${branding.logo}" style="width:120px;height:120px;object-fit:contain;display:block;margin:0 auto 6px;border-radius:8px"/>` : "";
+  const rows = sale.items.map((it) => `<tr><td>${esc(it.name)}${it.label ? ` <span style="color:#666">(${esc(it.label)})</span>` : ""}<br><span style="color:#666">${it.qty} × ${eur(it.price)}</span></td><td style="text-align:right;white-space:nowrap;vertical-align:top">${eur(it.price * it.qty)}</td></tr>`).join("");
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Scontrino</title><style>@page{size:80mm auto;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0}body{width:72mm;margin:0 auto;padding:8px 4px;font-family:'Courier New',monospace;color:#000}.c{text-align:center}.b{font-weight:bold}.big{font-size:15px}.sm{font-size:11px}hr{border:none;border-top:1px dashed #000;margin:6px 0}table{width:100%;font-size:12px;border-collapse:collapse}td{padding:2px 0;vertical-align:top}.row{display:flex;justify-content:space-between;gap:8px;font-size:13px}</style></head><body>${logo}<div class="c b big">${esc(branding.name)}</div>${branding.address ? `<div class="c sm">${esc(branding.address)}</div>` : ""}${branding.phone ? `<div class="c sm">${esc(branding.phone)}</div>` : ""}<hr/><div class="c b">SCONTRINO PRODOTTI${sale.partial ? " · PARZIALE" : ""}</div><div class="c sm">${esc(fmtDateTime(sale.ts))}</div>${sale.clientName ? `<div class="c sm">Cliente: ${esc(sale.clientName)}${sale.clientCode ? ` #${esc(sale.clientCode)}` : ""}</div>` : ""}<hr/><table>${rows}</table><hr/><div class="row b"><span>TOTALE</span><span>${eur(sale.total)}</span></div><hr/><div class="c sm">Grazie e a presto!</div></body></html>`;
+}
+function printSale(sale, branding) {
+  try {
+    const html = saleReceiptHTML(sale, branding);
+    const ifr = document.createElement("iframe");
+    ifr.style.position = "fixed"; ifr.style.width = "0"; ifr.style.height = "0"; ifr.style.right = "0"; ifr.style.bottom = "0"; ifr.style.border = "0";
+    document.body.appendChild(ifr);
+    const doc = ifr.contentWindow.document;
+    doc.open(); doc.write(html); doc.close();
+    setTimeout(() => { try { ifr.contentWindow.focus(); ifr.contentWindow.print(); } catch (e) {} setTimeout(() => { ifr.remove(); }, 1500); }, 500);
+  } catch (e) { alert("Stampa non disponibile."); }
+}
+
+function priceListHTML(config) {
+  const branding = config.branding || {};
+  const services = config.services || [];
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  const col = branding.primary || "#2C1F52";
+  const logo = branding.logo ? `<img src="${branding.logo}" alt=""/>` : "";
+  const cols = services.length > 12 ? 2 : 1;
+  const contacts = [branding.address, branding.phone, branding.email].filter(Boolean).map(esc).join(" · ");
+  const items = services.map((s) => `<div class="item"><span class="nm">${esc(s.name)}${s.durationMin ? ` <span class="du">${s.durationMin}′</span>` : ""}</span><span class="dots"></span><span class="pr">${(s.price != null && Number(s.price) > 0) ? esc(eur(s.price)) : "su richiesta"}</span></div>`).join("");
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Listino servizi</title><style>@page{size:A4;margin:14mm}*{box-sizing:border-box}html,body{margin:0;padding:0}body{font-family:Arial,Helvetica,sans-serif;color:#1c1917}.head{display:flex;align-items:center;gap:14px;border-bottom:2px solid ${col};padding-bottom:10px;margin-bottom:12px}.head img{width:62px;height:62px;object-fit:contain;border-radius:10px}.name{font-size:22px;font-weight:bold;color:${col};line-height:1.1}.tag{font-size:12px;color:#666;margin-top:2px}.contacts{font-size:11px;color:#777;margin-top:3px}h1{font-size:14px;letter-spacing:1.5px;text-transform:uppercase;color:${col};margin:4px 0 12px}.list{column-count:${cols};column-gap:22px}.item{break-inside:avoid;display:flex;align-items:baseline;gap:6px;padding:5px 0;border-bottom:1px dotted #d6d3d1}.nm{font-weight:600;font-size:13px}.du{font-size:10px;color:#a8a29e;font-weight:normal}.dots{flex:1}.pr{font-size:13px;font-weight:bold;white-space:nowrap;color:${col}}.foot{margin-top:16px;font-size:10px;color:#a8a29e;text-align:center}</style></head><body><div class="head">${logo}<div><div class="name">${esc(branding.name || "Listino")}</div>${branding.tagline ? `<div class="tag">${esc(branding.tagline)}</div>` : ""}${contacts ? `<div class="contacts">${contacts}</div>` : ""}</div></div><h1>Listino servizi</h1><div class="list">${items || '<div class="item"><span class="nm">Nessun servizio inserito.</span></div>'}</div><div class="foot">Listino aggiornato al ${esc(fmtDate(todayStr()))} · I prezzi possono subire variazioni.</div></body></html>`;
+}
+function printPriceList(config) {
+  try {
+    const html = priceListHTML(config);
+    const ifr = document.createElement("iframe");
+    ifr.style.position = "fixed"; ifr.style.width = "0"; ifr.style.height = "0"; ifr.style.right = "0"; ifr.style.bottom = "0"; ifr.style.border = "0";
+    document.body.appendChild(ifr);
+    const doc = ifr.contentWindow.document;
+    doc.open(); doc.write(html); doc.close();
+    setTimeout(() => { try { ifr.contentWindow.focus(); ifr.contentWindow.print(); } catch (e) {} setTimeout(() => { ifr.remove(); }, 1500); }, 500);
+  } catch (e) { alert("Generazione listino non disponibile."); }
+}
+
+// La licenza NON viene inclusa nel backup: il cliente non può estendersela reimportando un file.
+function exportBackup(config, bookings, clients, catalog, sales) {
+  const data = { config, bookings, clients, catalog, sales, exportedAt: new Date().toISOString(), version: 3 };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = `backup-salone-${todayStr()}.json`; document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+const BACKUP_KEY = "salon-backup-meta-v1";
+function backupPayload(config, bookings, clients, catalog, sales) { return { config, bookings, clients, catalog, sales, exportedAt: new Date().toISOString(), version: 3 }; }
+function openBackupDB() { return new Promise((res, rej) => { const r = indexedDB.open("lucentia-backup", 1); r.onupgradeneeded = () => { r.result.createObjectStore("h"); }; r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+async function saveDirHandle(handle) { const db = await openBackupDB(); await new Promise((res, rej) => { const tx = db.transaction("h", "readwrite"); tx.objectStore("h").put(handle, "dir"); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); }
+async function loadDirHandle() { try { const db = await openBackupDB(); return await new Promise((res) => { const tx = db.transaction("h", "readonly"); const rq = tx.objectStore("h").get("dir"); rq.onsuccess = () => res(rq.result || null); rq.onerror = () => res(null); }); } catch (e) { return null; } }
+async function clearDirHandle() { try { const db = await openBackupDB(); await new Promise((res) => { const tx = db.transaction("h", "readwrite"); tx.objectStore("h").delete("dir"); tx.oncomplete = () => res(); tx.onerror = () => res(); }); } catch (e) {} }
+async function writeBackupToDir(handle, data) {
+  if (handle.queryPermission) { let p = await handle.queryPermission({ mode: "readwrite" }); if (p !== "granted") { p = await handle.requestPermission({ mode: "readwrite" }); if (p !== "granted") throw new Error("perm"); } }
+  const fh = await handle.getFileHandle(`lucentia-backup-${todayStr()}.json`, { create: true });
+  const w = await fh.createWritable(); await w.write(JSON.stringify(data, null, 2)); await w.close();
+}
+
+const BRAND_CSS = ".brand-bg{background:var(--brand);color:#fff}.brand-bg:hover:not(:disabled){background:var(--brand-dark)}.brand-soft{background:var(--brand-soft)}.brand-text{color:var(--brand-text)}.brand-accent{color:var(--brand)}.brand-border{border-color:var(--brand)!important}.brand-hover:hover{border-color:var(--brand)}.brand-ring:focus,.brand-ring:focus-within{outline:none;box-shadow:0 0 0 3px var(--brand-ring)}";
+
+function FidelityCard({ branding, name, code }) {
+  return (
+    <div className="rounded-2xl p-5 text-white shadow-lg relative overflow-hidden" style={{ background: "linear-gradient(135deg, var(--brand), var(--brand-dark))" }}>
+      <div className="absolute right-0 top-0 w-28 h-28 rounded-full" style={{ background: "rgba(255,255,255,0.12)", transform: "translate(35%,-35%)" }} />
+      <div className="absolute right-0 top-12 w-20 h-20 rounded-full" style={{ background: "rgba(255,255,255,0.1)", transform: "translate(25%,0)" }} />
+      <div className="relative">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 min-w-0">
+            {branding.logo ? <img src={branding.logo} alt="" className="w-8 h-8 rounded-lg object-cover" /> : <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "rgba(255,255,255,0.2)" }}><Sparkles size={16} /></div>}
+            <span className="font-semibold text-sm truncate">{branding.name}</span>
+          </div>
+          <div className="flex items-center gap-1 text-xs shrink-0" style={{ opacity: 0.9 }}><Star size={13} /> Carta Fedeltà</div>
+        </div>
+        <div className="mt-6">
+          <div className="text-xs uppercase tracking-widest" style={{ opacity: 0.7 }}>Intestatario</div>
+          <div className="text-lg font-semibold tracking-wide truncate">{name || "Cliente"}</div>
+        </div>
+        <div className="mt-3 flex items-end justify-between">
+          <div>
+            <div className="text-xs uppercase tracking-widest" style={{ opacity: 0.7 }}>Codice</div>
+            <div className="text-2xl font-bold tracking-widest">{code}</div>
+          </div>
+          <Hash size={20} style={{ opacity: 0.5 }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+function CardActions({ branding, name, code }) {
+  return (
+    <div className="mt-2 flex flex-col items-center gap-1">
+      <button onClick={() => downloadCardImage(branding, name, code)} className="text-sm brand-bg px-4 py-2 rounded-lg inline-flex items-center gap-2"><Wallet size={16} /> Salva tessera</button>
+      <p className="text-xs text-stone-400 text-center">Salvala come immagine.</p>
+    </div>
+  );
+}
+
+function SlotPicker({ duration, candidates, bookings, value, onChange, startDate, closures }) {
+  const [weekStart, setWeekStart] = useState(startDate);
+  const [date, setDate] = useState(startDate);
+  const maxDate = pd(new Date(Date.now() + ADVANCE_DAYS * 864e5));
+  const slotMap = useMemo(() => computeSlots(date, duration, candidates, bookings, closures), [date, duration, candidates, bookings, closures]);
+  const slotTimes = useMemo(() => Object.keys(slotMap).map(Number).sort((a, b) => a - b), [slotMap]);
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const d0 = parseDate(weekDays[0]); const d6 = parseDate(weekDays[6]);
+  const rangeLabel = `${d0.getDate()} – ${d6.getDate()} ${MONTHS[d6.getMonth()]} ${d6.getFullYear()}`;
+  const groups = [
+    { label: "Mattina", Icon: Sunrise, times: slotTimes.filter((t) => t < 720) },
+    { label: "Pomeriggio", Icon: Sun, times: slotTimes.filter((t) => t >= 720 && t < 1020) },
+    { label: "Sera", Icon: Moon, times: slotTimes.filter((t) => t >= 1020) },
+  ].filter((g) => g.times.length);
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <button disabled={weekStart <= todayStr()} onClick={() => setWeekStart((w) => { const p = addDays(w, -7); return p < todayStr() ? todayStr() : p; })} className="p-1.5 rounded-lg text-stone-500 hover:bg-stone-100 disabled:opacity-30"><ChevronLeft size={18} /></button>
+        <span className="text-sm font-medium capitalize">{rangeLabel}</span>
+        <button disabled={addDays(weekStart, 7) > maxDate} onClick={() => setWeekStart((w) => addDays(w, 7))} className="p-1.5 rounded-lg text-stone-500 hover:bg-stone-100 disabled:opacity-30"><ChevronRight size={18} /></button>
+      </div>
+      <div className="grid grid-cols-7 gap-1.5">
+        {weekDays.map((ds) => { const d = parseDate(ds); const beyond = ds > maxDate; const has = !beyond && Object.keys(computeSlots(ds, duration, candidates, bookings, closures)).length > 0; const isSel = ds === date; return (
+          <button key={ds} disabled={!has} onClick={() => { setDate(ds); onChange(null); }} className={`flex flex-col items-center py-2 rounded-xl border transition ${isSel ? "brand-bg border-transparent" : has ? "bg-white border-stone-200 brand-hover" : "bg-stone-50 border-stone-100 text-stone-300 cursor-not-allowed"}`}>
+            <span className={`text-xs uppercase ${isSel ? "opacity-80" : "text-stone-400"}`}>{WDAY_SHORT[d.getDay()]}</span>
+            <span className="text-base font-semibold leading-tight">{d.getDate()}</span>
+          </button>
+        ); })}
+      </div>
+      <div className="mt-5">
+        {slotTimes.length === 0 ? <p className="text-sm text-stone-400 bg-stone-50 rounded-lg p-3 text-center">Nessuno slot disponibile per <span className="font-medium">{fmtDate(date)}</span>.</p> : (
+          <div className="space-y-4">{groups.map((g) => (
+            <div key={g.label}>
+              <div className="flex items-center gap-1.5 text-xs font-medium text-stone-400 uppercase tracking-wide mb-2"><g.Icon size={13} className="brand-accent" /> {g.label}</div>
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">{g.times.map((t) => { const on = value && value.date === date && value.startMin === t; return <button key={t} onClick={() => onChange({ date, startMin: t })} className={`py-2 rounded-lg border text-sm font-medium transition ${on ? "brand-bg border-transparent" : "bg-white border-stone-200 brand-hover"}`}>{minToStr(t)}</button>; })}</div>
+            </div>
+          ))}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RescheduleModal({ booking, config, bookings, onClose, onSave }) {
+  const services = config.services, staff = config.staff;
+  const dur = booking.endMin - booking.startMin;
+  const st = staff.find((s) => s.id === booking.staffId);
+  const candidates = st ? [st] : qualifiedStaff(staff, booking.serviceIds);
+  const others = useMemo(() => bookings.filter((b) => b.id !== booking.id), [bookings, booking.id]);
+  const start = booking.date >= todayStr() ? booking.date : todayStr();
+  const [pick, setPick] = useState(null);
+  const names = booking.serviceIds.map((id) => { const s = services.find((x) => x.id === id); return s ? s.name : null; }).filter(Boolean).join(", ");
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
+      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 overflow-auto" style={{ maxHeight: "90vh" }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="font-semibold flex items-center gap-2"><CalendarClock size={16} className="brand-accent" /> Sposta appuntamento</h3>
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-600"><X size={20} /></button>
+        </div>
+        <p className="text-sm text-stone-400 mb-4">{names} · {st ? st.name : "operatore"} — attuale: {fmtDate(booking.date)} {minToStr(booking.startMin)}</p>
+        <SlotPicker duration={dur} candidates={candidates} bookings={others} value={pick} onChange={setPick} startDate={start} closures={config.closures} />
+        <button disabled={!pick} onClick={() => onSave(pick.date, pick.startMin)} className="w-full brand-bg disabled:opacity-40 disabled:cursor-not-allowed font-medium py-2.5 rounded-lg transition mt-5">Conferma nuovo orario</button>
+      </div>
+    </div>
+  );
+}
+
+const ALL_FLAGS = { fidelity: true, vendite: true, statistiche: true, marketing: true, allergeni: true, pacchetti: true, maxOperatori: Infinity };
+function flagsFromModuli(moduli) {
+  if (!Array.isArray(moduli)) return ALL_FLAGS;
+  const has = (k) => moduli.includes(k);
+  return {
+    fidelity: has("fidelity"), vendite: has("vendite"), statistiche: has("statistiche"),
+    marketing: has("marketing"), allergeni: has("allergeni"), pacchetti: has("pacchetti"),
+    maxOperatori: has("opinf") ? Infinity : (has("op3") ? 3 : 1),
+  };
+}
+const ModsCtx = createContext(ALL_FLAGS);
+function useMods() { return useContext(ModsCtx) || ALL_FLAGS; }
+export default function SalonApp({ onLogout, moduli }) {
+  const flags = flagsFromModuli(moduli);
+  const [config, setConfig] = useState(DEFAULT_CONFIG);
+  const [bookings, setBookings] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [catalog, setCatalog] = useState(DEFAULT_CATALOG);
+  const [sales, setSales] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const loadedRef = useRef(false);
+  const [license, setLicense] = useState(() => loadLicense()); // licenza: resta in locale, invariata
+  const [session, setSession] = useState({ role: "operator", hidePartial: false }); // login gestito dal contenitore (server)
+  const [view, setView] = useState("agenda");
+  const enabledSections = ["agenda", "clienti", ...(flags.vendite ? ["shop"] : []), ...(flags.statistiche ? ["stats"] : []), ...(flags.marketing ? ["marketing"] : []), "settings"];
+  useEffect(() => { if (!enabledSections.includes(view)) setView("agenda"); }, [moduli, view]);
+  const [demoBanner, setDemoBanner] = useState(false);
+  const isDemo = !!(session && session.role === "demo");
+  const demoRef = useRef(false); demoRef.current = isDemo;
+  const [backupDir, setBackupDir] = useState(null);
+  const [backupDirName, setBackupDirName] = useState("");
+  const [lastBackup, setLastBackup] = useState(() => loadKey(BACKUP_KEY, null));
+  const backupDirRef = useRef(null); backupDirRef.current = backupDir;
+  const dataRef = useRef(null);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const [cfg, bk, cl, cat, sl] = await Promise.all([
+        apiLoad("config", null), apiLoad("bookings", null), apiLoad("clients", null), apiLoad("catalog", null), apiLoad("sales", null),
+      ]);
+      if (!alive) return;
+      if (cfg == null && bk == null && cl == null && sl == null) {
+        const s = buildSampleData();
+        setConfig(DEFAULT_CONFIG); setBookings(s.bookings); setClients(s.clients); setSales(s.sales); setCatalog(DEFAULT_CATALOG);
+        await Promise.all([ apiSave("config", DEFAULT_CONFIG), apiSave("bookings", s.bookings), apiSave("clients", s.clients), apiSave("sales", s.sales), apiSave("catalog", DEFAULT_CATALOG) ]);
+      } else {
+        setConfig(cfg ? { ...DEFAULT_CONFIG, ...cfg, branding: { ...BRANDING, ...(cfg.branding || {}) } } : DEFAULT_CONFIG);
+        setBookings(Array.isArray(bk) ? bk : []);
+        setClients(Array.isArray(cl) ? cl : []);
+        setCatalog(cat && Array.isArray(cat.products) ? cat : DEFAULT_CATALOG);
+        setSales(Array.isArray(sl) ? sl : []);
+      }
+      loadedRef.current = true;
+      setLoading(false);
+    })();
+    return () => { alive = false; };
+  }, []);
+  useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("bookings", bookings); }, [bookings]);
+  useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("clients", clients); }, [clients]);
+  useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("catalog", catalog); }, [catalog]);
+  useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("sales", sales); }, [sales]);
+  dataRef.current = { config, bookings, clients, catalog, sales };
+  useEffect(() => { loadDirHandle().then((h) => { if (h) { setBackupDir(h); setBackupDirName(h.name || "cartella"); } }); }, []);
+  useEffect(() => {
+    const tick = async () => {
+      if (demoRef.current) return;
+      const d = dataRef.current || {}; const bkc = (d.config && d.config.backup) || {};
+      if (!bkc.enabled || !bkc.time) return;
+      const h = backupDirRef.current; if (!h) return;
+      const today = todayStr(); const last = loadKey(BACKUP_KEY, null);
+      if (last && last.date === today) return;
+      const now = new Date(); const hhmm = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+      if (hhmm >= bkc.time) { try { await writeBackupToDir(h, backupPayload(d.config, d.bookings, d.clients, d.catalog, d.sales)); const info = { date: today, at: Date.now() }; saveKey(BACKUP_KEY, info); setLastBackup(info); } catch (e) {} }
+    };
+    const id = setInterval(tick, 60000); const t0 = setTimeout(tick, 5000);
+    return () => { clearInterval(id); clearTimeout(t0); };
+  }, []);
+  // La licenza è ora verificata dal server: nessun controllo locale qui.
+  useEffect(() => {}, [session]);
+
+  const saveConfig = (next) => { setConfig(next); if (!demoRef.current && loadedRef.current) apiSaveDebounced("config", next); };
+  const updateLicense = (lic) => { setLicense(lic); saveLicense(lic); };
+  const enterSession = (role, hidePartial) => {
+    if (role === "demo") {
+      const d = buildDemoData();
+      setConfig(d.config); setBookings(d.bookings); setClients(d.clients); setCatalog(d.catalog); setSales(d.sales);
+      setView("agenda"); setDemoBanner(true); setSession({ role: "demo", hidePartial: false }); return;
+    }
+    setSession({ role, hidePartial: !!hidePartial });
+  };
+  const logout = () => {
+    const wasDemo = demoRef.current;
+    setDemoBanner(false); setSession(null);
+    if (wasDemo) (async () => {
+      const [cfg, bk, cl, cat, sl] = await Promise.all([
+        apiLoad("config", null), apiLoad("bookings", null), apiLoad("clients", null), apiLoad("catalog", null), apiLoad("sales", null),
+      ]);
+      setConfig(cfg ? { ...DEFAULT_CONFIG, ...cfg, branding: { ...BRANDING, ...(cfg.branding || {}) } } : DEFAULT_CONFIG);
+      setBookings(Array.isArray(bk) ? bk : []); setClients(Array.isArray(cl) ? cl : []);
+      setCatalog(cat && Array.isArray(cat.products) ? cat : DEFAULT_CATALOG); setSales(Array.isArray(sl) ? sl : []);
+    })();
+  };
+  const b = config.branding;
+  const pickBackupDir = async () => {
+    if (!window.showDirectoryPicker) { alert("La scelta della cartella non è supportata in questo ambiente. Su Windows funziona; altrimenti usa \"Esporta backup\"."); return; }
+    try { const h = await window.showDirectoryPicker({ mode: "readwrite", id: "lucentia-backup" }); await saveDirHandle(h); setBackupDir(h); setBackupDirName(h.name || "cartella"); } catch (e) {}
+  };
+  const backupNow = async () => {
+    const h = backupDirRef.current; if (!h) { alert("Scegli prima una cartella di destinazione."); return; }
+    try { await writeBackupToDir(h, backupPayload(config, bookings, clients, catalog, sales)); const info = { date: todayStr(), at: Date.now() }; saveKey(BACKUP_KEY, info); setLastBackup(info); alert("Backup salvato nella cartella scelta."); } catch (e) { alert("Backup non riuscito: permesso negato o cartella non disponibile. Riprova."); }
+  };
+  const clearBackupDir = async () => { await clearDirHandle(); setBackupDir(null); setBackupDirName(""); };
+
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-stone-50 text-stone-800" style={themeVars(b.primary)}>
+        <style>{BRAND_CSS}</style>
+        <LoginGate branding={b} license={license} onUnlock={(role, hidePartial) => enterSession(role, hidePartial)} />
+      </div>
+    );
+  }
+
+  const ls = licenseState(license);
+  const operatorWarn = session.role === "operator" && ls.state === "active" && !ls.unlimited && ls.days <= 30;
+  const ALL_NAV = [["agenda", "Agenda", Calendar], ["clienti", "Clienti", Users], ["shop", "Vendite", ShoppingBag], ["stats", "Statistiche", BarChart3], ["marketing", "Marketing", MessageCircle], ["settings", "Impostazioni", Settings]];
+  const NAV = ALL_NAV.filter((x) => enabledSections.includes(x[0]));
+  const canAddClient = !isDemo || clients.length < DEMO_MAX_CLIENTS;
+  const canAddBooking = !isDemo || bookings.length < DEMO_MAX_BOOKINGS;
+
+  return (
+    <ModsCtx.Provider value={flags}>
+    <div className="min-h-screen bg-stone-50 text-stone-800 flex flex-col" style={themeVars(b.primary)}>
+      <style>{BRAND_CSS}</style>
+      <header className="bg-white border-b border-stone-200 sticky top-0 z-20" style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 28px)" }}>
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            {b.logo ? <img src={b.logo} alt="logo" className="w-9 h-9 rounded-xl object-cover shrink-0" /> : <div className="w-9 h-9 rounded-xl brand-bg flex items-center justify-center shrink-0"><Sparkles size={18} /></div>}
+            <div className="min-w-0 hidden sm:block">
+              <div className="font-semibold leading-tight truncate">{b.name}</div>
+              {b.tagline ? <div className="text-xs text-stone-400 leading-tight truncate">{b.tagline}</div> : null}
+            </div>
+          </div>
+          <nav className="flex items-center gap-0.5 shrink-0">
+            {NAV.map((item) => { const k = item[0], label = item[1], Icon = item[2]; return (
+              <button key={k} onClick={() => setView(k)} className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-medium transition ${view === k ? "brand-soft brand-text" : "text-stone-500 hover:bg-stone-100"}`}>
+                <Icon size={16} /><span className="hidden md:inline">{label}</span>
+              </button>
+            ); })}
+            {session.role === "reseller" ? <span className="hidden sm:inline-flex items-center gap-1 text-xs font-medium bg-stone-800 text-white px-2 py-1 rounded-lg ml-1"><ShieldCheck size={13} /> Rivenditore</span> : null}
+            {isDemo ? <span className="inline-flex items-center gap-1 text-xs font-medium bg-amber-500 text-white px-2 py-1 rounded-lg ml-1"><Sparkles size={13} /> Demo</span> : null}
+            <button onClick={onLogout} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-medium text-stone-500 hover:bg-stone-100 ml-1" title="Esci"><LogOut size={16} /><span className="hidden md:inline">Esci</span></button>
+          </nav>
+        </div>
+        {operatorWarn ? <div className="bg-amber-50 border-t border-amber-200 text-amber-700 text-xs text-center py-1.5 flex items-center justify-center gap-1.5"><AlertTriangle size={13} /> Licenza in scadenza tra {ls.days} giorn{ls.days === 1 ? "o" : "i"}. Contatta il rivenditore per il rinnovo.</div> : null}
+      </header>
+
+      <main className="max-w-5xl w-full mx-auto px-4 py-6 flex-1">
+        {view === "agenda" && <AgendaPage config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={session.hidePartial} canAddBooking={canAddBooking} canAddClient={canAddClient} />}
+        {view === "clienti" && <ClientsView config={config} bookings={bookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} />}
+        {view === "shop" && <ShopView catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} clients={clients} setClients={setClients} branding={b} loyalty={config.loyalty} hidePartial={session.hidePartial} canAddClient={canAddClient} />}
+        {view === "stats" && <StatsView config={config} bookings={bookings} clients={clients} sales={sales} catalog={catalog} />}
+        {view === "marketing" && <MarketingView config={config} saveConfig={saveConfig} bookings={bookings} clients={clients} sales={sales} catalog={catalog} />}
+        {view === "settings" && !isDemo && <SettingsView config={config} saveConfig={saveConfig} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} session={session} license={license} onSaveLicense={updateLicense} backupDirName={backupDirName} onPickBackupDir={pickBackupDir} onClearBackupDir={clearBackupDir} onBackupNow={backupNow} lastBackup={lastBackup} />}
+      </main>
+
+      {isDemo && demoBanner ? (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl">
+            <h3 className="font-semibold text-lg flex items-center gap-2"><Sparkles size={18} className="brand-accent" /> Demo gratuita</h3>
+            <p className="text-sm text-stone-600 mt-3">Stai provando Lucentia in versione dimostrativa. Da tenere presente:</p>
+            <ul className="text-sm text-stone-600 mt-3 space-y-2">
+              <li className="flex gap-2"><AlertCircle size={16} className="text-amber-500 shrink-0 mt-0.5" /><span>I dati <b>non vengono salvati</b>: alla chiusura dell'app tutto si azzera.</span></li>
+              <li className="flex gap-2"><AlertCircle size={16} className="text-amber-500 shrink-0 mt-0.5" /><span>Puoi creare al massimo <b>3 clienti</b> e <b>20 appuntamenti</b>.</span></li>
+              <li className="flex gap-2"><AlertCircle size={16} className="text-amber-500 shrink-0 mt-0.5" /><span>Le <b>Impostazioni</b> non sono disponibili in demo.</span></li>
+            </ul>
+            <button onClick={() => setDemoBanner(false)} className="mt-5 w-full brand-bg font-medium py-2.5 rounded-lg">Ho capito, inizia</button>
+          </div>
+        </div>
+      ) : null}
+
+      <footer className="bg-white border-t border-stone-200">
+        <div className="max-w-5xl mx-auto px-4 py-5 text-sm text-stone-500 flex flex-wrap gap-x-6 gap-y-1.5 items-center">
+          <span className="font-medium text-stone-700">{b.name}</span>
+          {b.phone ? <span className="flex items-center gap-1.5"><Phone size={14} className="brand-accent" /> {b.phone}</span> : null}
+          {b.email ? <span className="flex items-center gap-1.5"><Mail size={14} className="brand-accent" /> {b.email}</span> : null}
+          {b.address ? <span className="flex items-center gap-1.5"><MapPin size={14} className="brand-accent" /> {b.address}</span> : null}
+        </div>
+      </footer>
+    </div>
+    </ModsCtx.Provider>
+  );
+}
+
+// Logo dell'app Lucentia (marchio + nome) per la schermata di accesso.
+const LUCENTIA_LOGO = "data:image/png;base64,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";
+
+// Logo del produttore (Office Solution) usato come firma nella schermata di accesso.
+const MAKER_LOGO = "data:image/png;base64,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";
+
+function LoginGate({ branding, license, onUnlock }) {
+  const [v, setV] = useState("");
+  const [err, setErr] = useState("");
+  const submit = () => {
+    const code = v.trim();
+    if (!code) return;
+    if (code === RESELLER_CODE) { onUnlock("reseller", false); return; }
+    if (code === "1234") { onUnlock("demo", false); return; }
+    if (license && license.code) {
+      const isFull = code === license.code;
+      const isReduced = code === license.code + "01"; // accesso ridotto: nasconde vendite e appuntamenti parziali
+      if (isFull || isReduced) {
+        if (licenseOk(license)) { onUnlock("operator", isReduced); return; }
+        setErr("expired"); setV(""); return;
+      }
+    }
+    setErr("wrong"); setV("");
+  };
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="w-full max-w-sm bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+        <div className="px-6 pt-8 pb-5 text-center border-b border-stone-100">
+          <img src={LUCENTIA_LOGO} alt="Lucentia" className="h-11 w-auto mx-auto" />
+          <div className="text-xs text-stone-400 mt-2">Gestionale per centri estetici e parrucchieri</div>
+          {branding.name ? <div className="text-xs text-stone-300 mt-0.5">per {branding.name}</div> : null}
+        </div>
+        <div className="p-6">
+          <div className="flex items-center gap-2 text-sm font-medium text-stone-600 mb-1"><Lock size={15} className="brand-accent" /> Accesso operatori</div>
+          <p className="text-xs text-stone-400 mb-4">Inserisci il codice di accesso per usare il gestionale.</p>
+          <input type="password" value={v} autoFocus onChange={(e) => { setV(e.target.value); setErr(""); }} onKeyDown={(e) => e.key === "Enter" && submit()} placeholder="Codice di accesso" className={`w-full text-center tracking-widest text-lg px-3 py-2.5 rounded-lg border brand-ring ${err ? "border-red-400 bg-red-50" : "border-stone-300"}`} />
+          {err === "wrong" ? <p className="text-xs text-red-500 mt-2 text-center">Codice non valido.</p> : null}
+          {err === "expired" ? <p className="text-xs text-red-500 mt-2 text-center flex items-center justify-center gap-1"><AlertTriangle size={13} /> Licenza scaduta. Contatta il rivenditore per il rinnovo.</p> : null}
+          <button onClick={submit} className="mt-4 w-full brand-bg font-medium py-2.5 rounded-lg transition">Entra</button>
+        </div>
+        <div className="px-6 pb-5 pt-1 text-center border-t border-stone-100">
+          <div className="text-[10px] uppercase tracking-widest text-stone-300 mb-1.5 mt-3">Realizzato da</div>
+          <img src={MAKER_LOGO} alt="Office Solution" className="h-7 w-auto mx-auto opacity-80" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FieldIcon({ icon: Icon, children }) { return <div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2 brand-ring"><Icon size={16} className="text-stone-400" />{children}</div>; }
+function Row({ icon: Icon, label }) { return <div className="flex items-center gap-2"><Icon size={15} className="text-stone-400 shrink-0" /><span>{label}</span></div>; }
+function StaffPick({ active, onClick, name, role }) { return <button onClick={onClick} className={`text-left p-3 rounded-xl border transition ${active ? "brand-soft brand-border" : "bg-white border-stone-200 brand-hover"}`}><div className="font-medium text-sm">{name}</div><div className="text-xs text-stone-400">{role}</div></button>; }
+function Field({ label, children }) { return <div><div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">{label}</div>{children}</div>; }
+
+function LoyaltyCard({ stats }) {
+  const filled = stats.progress;
+  return (
+    <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+      <div className="flex items-center gap-2 mb-3"><Star size={16} className="brand-accent" /><h3 className="font-semibold">Programma fedeltà</h3></div>
+      {stats.rewards > 0 ? <div className="flex items-center gap-2 bg-green-50 text-green-700 rounded-lg px-3 py-2 text-sm mb-3"><Gift size={16} /> <span>Ha <span className="font-semibold">{stats.rewards} sconto{stats.rewards > 1 ? "i" : ""} del 10%</span> disponibile.</span></div> : null}
+      <div className="flex items-center gap-1.5 mb-2">{Array.from({ length: LOYALTY_GOAL }).map((_, i) => <div key={i} className={`h-2.5 flex-1 rounded-full ${i < filled ? "brand-bg" : "bg-stone-200"}`} />)}</div>
+      <p className="text-sm text-stone-500">{stats.servicesUsed} servizi completati · {filled === 0 && stats.rewards > 0 ? "premio maturato!" : `mancano ${LOYALTY_GOAL - filled} servizi al prossimo sconto`}</p>
+    </div>
+  );
+}
+
+function ApptItem({ b, staff, services, onCal, onCancel, onEdit, canCancel, cancelHours }) {
+  const st = staff.find((s) => s.id === b.staffId);
+  const names = b.serviceIds.map((id) => { const s = services.find((x) => x.id === id); return s ? s.name : null; }).filter(Boolean).join(", ");
+  const meta = b.status ? STATUS[b.status] : null;
+  const showActions = onCancel || onEdit;
+  return (
+    <div className={`bg-white rounded-xl border border-stone-200 p-4 shadow-sm ${b.status && b.status !== "done" ? "opacity-70" : ""}`}>
+      <div className="flex gap-4 items-start">
+        <div className="text-center shrink-0 w-16"><div className="text-xs text-stone-400 capitalize">{WDAY_SHORT[parseDate(b.date).getDay()]} {parseDate(b.date).getDate()}/{parseDate(b.date).getMonth() + 1}</div><div className="font-semibold brand-accent">{minToStr(b.startMin)}</div></div>
+        <div className="w-px self-stretch bg-stone-100" />
+        <div className="flex-1 min-w-0">
+          <div className="font-medium flex items-center gap-2 flex-wrap">{names}{meta ? <span className={`text-xs px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${meta.cls}`}><meta.Icon size={11} /> {meta.label}</span> : null}</div>
+          <div className="text-xs text-stone-400 mt-0.5 flex flex-wrap gap-x-3 gap-y-1"><span className="flex items-center gap-1"><User size={12} /> {st ? st.name : "—"}</span><span className="flex items-center gap-1"><Clock size={12} /> {minToStr(b.startMin)}–{minToStr(b.endMin)}</span></div>
+        </div>
+        {onCal && !b.status ? <button onClick={() => onCal(b)} className="shrink-0 text-stone-400 hover:brand-accent p-1" title="Calendario"><CalendarPlus size={18} /></button> : null}
+      </div>
+      {showActions ? <div className="mt-3 pt-3 border-t border-stone-100">{canCancel ? (
+        <div className="flex flex-wrap gap-2">
+          {onEdit ? <button onClick={onEdit} className="flex items-center gap-1 text-xs font-medium border border-stone-300 text-stone-600 px-3 py-1.5 rounded-lg hover:bg-stone-50"><CalendarClock size={14} /> Modifica</button> : null}
+          {onCancel ? <button onClick={onCancel} className="flex items-center gap-1 text-xs font-medium border border-red-300 text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-50"><Ban size={14} /> Annulla</button> : null}
+        </div>
+      ) : <span className="text-xs text-stone-400">Modifiche e annullamenti fino a {cancelHours} ore prima.</span>}</div> : null}
+    </div>
+  );
+}
+
+function AgendaPage({ config, bookings, setBookings, clients, setClients, sales, catalog, hidePartial, canAddBooking, canAddClient }) {
+  const [adding, setAdding] = useState(false);
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold">Agenda</h2>
+        <button onClick={() => setAdding((a) => !a)} className="flex items-center gap-1.5 text-sm brand-bg px-3 py-2 rounded-lg">{adding ? <X size={15} /> : <Plus size={15} />} {adding ? "Chiudi" : "Appuntamento"}</button>
+      </div>
+      {adding ? <ManualBooking config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} canAddBooking={canAddBooking} canAddClient={canAddClient} onDone={() => setAdding(false)} /> : null}
+      <AgendaView config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={hidePartial} />
+    </div>
+  );
+}
+
+const VIEW_MODES = [["day", "Giorno", CalendarDays], ["3day", "3 giorni", CalendarRange], ["week", "Settimana", Calendar]];
+function mondayOf(dateStr) { const d = parseDate(dateStr); const wd = (d.getDay() + 6) % 7; return addDays(dateStr, -wd); }
+
+function AgendaView({ config, bookings, setBookings, clients, setClients, sales, catalog, hidePartial }) {
+  const staff = config.staff, services = config.services;
+  const [anchor, setAnchor] = useState(todayStr());
+  const [mode, setMode] = useState("day");
+  const [filter, setFilter] = useState("all");
+  const [sel, setSel] = useState(null);
+  const [resch, setResch] = useState(null);
+
+  const span = mode === "week" ? 7 : mode === "3day" ? 3 : 1;
+  const days = useMemo(() => { const start = mode === "week" ? mondayOf(anchor) : anchor; return Array.from({ length: span }, (_, i) => addDays(start, i)); }, [anchor, mode, span]);
+  const byDay = useMemo(() => { const m = {}; days.forEach((ds) => { m[ds] = bookings.filter((b) => b.date === ds && (filter === "all" || b.staffId === filter) && !(hidePartial && b.status === "partial")).sort((a, b) => a.startMin - b.startMin); }); return m; }, [bookings, days, filter, hidePartial]);
+  const totalCount = days.reduce((a, ds) => a + byDay[ds].length, 0);
+
+  const shift = (dir) => setAnchor((a) => addDays(mode === "week" ? mondayOf(a) : a, dir * span));
+  const consumesStatus = (s) => s === "done" || s === "partial";
+  const setStatus = (id, status) => {
+    const b = bookings.find((x) => x.id === id);
+    if (!b) { setSel(null); return; }
+    const now = consumesStatus(status);
+    let patch = { status };
+    if (now && !b.packageUsed && b.clientCode) {
+      const cl = clients.find((c) => c.code === b.clientCode);
+      const pkg = matchPackage(cl, b.serviceIds);
+      if (pkg) {
+        setClients(clients.map((c) => (c.code === b.clientCode ? { ...c, packages: (c.packages || []).map((p) => (p.id === pkg.id ? { ...p, used: (Number(p.used) || 0) + 1 } : p)) } : c)));
+        patch.packageUsed = { packageId: pkg.id, serviceId: pkg.serviceId };
+      }
+    } else if (!now && b.packageUsed) {
+      const pu = b.packageUsed;
+      setClients(clients.map((c) => (c.code === b.clientCode ? { ...c, packages: (c.packages || []).map((p) => (p.id === pu.packageId ? { ...p, used: Math.max(0, (Number(p.used) || 0) - 1) } : p)) } : c)));
+      patch.packageUsed = null;
+    }
+    setBookings(bookings.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+    setSel(null);
+  };
+  const applyResch = (bk, d2, startMin) => { const dur = bk.endMin - bk.startMin; setBookings(bookings.map((x) => (x.id === bk.id ? { ...x, date: d2, startMin, endMin: startMin + dur } : x))); setResch(null); };
+
+  const first = parseDate(days[0]), last = parseDate(days[days.length - 1]);
+  const rangeLabel = mode === "day" ? fmtDate(anchor) : `${first.getDate()} ${MONTHS[first.getMonth()]} – ${last.getDate()} ${MONTHS[last.getMonth()]} ${last.getFullYear()}`;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex gap-1 bg-stone-100 rounded-lg p-1">
+          {VIEW_MODES.map((m) => { const k = m[0], l = m[1], Icon = m[2]; return (
+            <button key={k} onClick={() => setMode(k)} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium transition ${mode === k ? "bg-white shadow-sm text-stone-800" : "text-stone-500"}`}><Icon size={15} /><span className="hidden sm:inline">{l}</span></button>
+          ); })}
+        </div>
+        <select value={filter} onChange={(e) => setFilter(e.target.value)} className="px-3 py-2 rounded-lg border border-stone-300 text-sm bg-white brand-ring"><option value="all">Tutti gli operatori</option>{staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
+      </div>
+
+      <div className="flex items-center justify-between bg-white rounded-xl border border-stone-200 px-3 py-2">
+        <button onClick={() => shift(-1)} className="p-2 rounded-lg hover:bg-stone-100 text-stone-500"><ChevronLeft size={18} /></button>
+        <div className="text-center"><div className="font-medium capitalize">{rangeLabel}</div><button onClick={() => setAnchor(todayStr())} className="text-xs brand-accent hover:underline">Oggi</button></div>
+        <button onClick={() => shift(1)} className="p-2 rounded-lg hover:bg-stone-100 text-stone-500"><ChevronRight size={18} /></button>
+      </div>
+
+      {mode === "day" ? (
+        <div className="space-y-2">
+          {byDay[days[0]].length === 0 ? <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center text-stone-400">Nessun appuntamento.</div> : byDay[days[0]].map((b) => <ApptCard key={b.id} b={b} staff={staff} services={services} big onClick={() => setSel(b)} />)}
+        </div>
+      ) : (
+        <div className="overflow-x-auto -mx-1 px-1 pb-1">
+          <div className="flex gap-2" style={{ minWidth: mode === "week" ? 980 : 540 }}>
+            {days.map((ds) => { const list = byDay[ds]; const d = parseDate(ds); const isToday = ds === todayStr(); return (
+              <div key={ds} className="flex-1" style={{ minWidth: 0 }}>
+                <div className={`text-center rounded-lg py-1.5 mb-2 ${isToday ? "brand-soft brand-text" : "bg-stone-100 text-stone-500"}`}>
+                  <div className="text-[11px] uppercase">{WDAY_SHORT[d.getDay()]}</div>
+                  <div className="text-sm font-semibold leading-none">{d.getDate()}/{d.getMonth() + 1}</div>
+                </div>
+                <div className="space-y-1.5">
+                  {list.length === 0 ? <div className="text-center text-xs text-stone-300 py-3">—</div> : list.map((b) => <ApptCard key={b.id} b={b} staff={staff} services={services} onClick={() => setSel(b)} />)}
+                </div>
+              </div>
+            ); })}
+          </div>
+        </div>
+      )}
+
+      {totalCount > 0 ? <p className="text-xs text-stone-400 text-center">{totalCount} appuntament{totalCount === 1 ? "o" : "i"} nel periodo · tocca per gestire</p> : null}
+
+      {sel ? <ApptActions booking={sel} config={config} clients={clients} setClients={setClients} bookings={bookings} sales={sales} catalog={catalog} hidePartial={hidePartial} onStatus={setStatus} onResch={(bk) => { setResch(bk); setSel(null); }} onClose={() => setSel(null)} /> : null}
+      {resch ? <RescheduleModal booking={resch} config={config} bookings={bookings} onClose={() => setResch(null)} onSave={(d2, startMin) => applyResch(resch, d2, startMin)} /> : null}
+    </div>
+  );
+}
+
+function ApptCard({ b, staff, services, onClick, big }) {
+  const st = staff.find((s) => s.id === b.staffId);
+  const names = b.serviceIds.map((id) => { const s = services.find((x) => x.id === id); return s ? s.name : null; }).filter(Boolean).join(", ");
+  const meta = b.status ? STATUS[b.status] : null;
+  return (
+    <button onClick={onClick} className={`w-full text-left rounded-lg border p-2.5 shadow-sm transition ${b.status ? "bg-stone-50 border-stone-200 opacity-70" : "bg-white border-stone-200 brand-hover"}`}>
+      <div className="flex items-center justify-between gap-1">
+        <span className="text-xs font-semibold brand-accent">{minToStr(b.startMin)}{big ? `–${minToStr(b.endMin)}` : ""}</span>
+        {meta ? <span className={`text-[10px] px-1.5 py-0.5 rounded-full inline-flex items-center gap-0.5 ${meta.cls}`}><meta.Icon size={10} /> {big ? meta.label : ""}</span> : null}
+      </div>
+      <div className="text-sm font-medium truncate mt-0.5">{b.clientName}{b.clientCode ? <span className="text-xs text-stone-400 font-normal"> #{b.clientCode}</span> : null}</div>
+      <div className="text-xs text-stone-500 truncate">{names}</div>
+      <div className="text-[11px] text-stone-400 truncate flex items-center gap-1 mt-0.5"><User size={11} /> {st ? st.name : "—"}</div>
+    </button>
+  );
+}
+
+function ApptActions({ booking, config, clients, setClients, bookings, sales, catalog, hidePartial, onStatus, onResch, onClose }) {
+  const F = useMods();
+  const b = booking;
+  const st = config.staff.find((s) => s.id === b.staffId);
+  const cl = (clients || []).find((x) => x.code === b.clientCode);
+  const names = b.serviceIds.map((id) => { const s = config.services.find((x) => x.id === id); return s ? s.name : null; }).filter(Boolean).join(", ");
+  const meta = b.status ? STATUS[b.status] : null;
+  const L = loyaltyConfig(config);
+  const balance = cl ? clientBalance(cl, bookings || [], sales, config, catalog) : 0;
+  const reached = cl ? L.rewards.filter((r) => balance >= r.points).slice().sort((a, b) => a.points - b.points) : [];
+  const pkgs = (cl && Array.isArray(cl.packages)) ? cl.packages.filter((p) => (b.serviceIds || []).includes(p.serviceId)) : [];
+  const hasHealth = cl && (cl.allergies || cl.conditions || cl.notes);
+  const [chosen, setChosen] = useState([]);
+  const toggleReward = (id) => setChosen((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const selSum = reached.filter((r) => chosen.includes(r.id)).reduce((a, r) => a + r.points, 0);
+  const doRedeem = () => {
+    const picks = reached.filter((r) => chosen.includes(r.id));
+    if (!picks.length || selSum > balance || !cl) return;
+    if (!confirm(`Riscattare ${picks.length} premio/i usando ${selSum} punti?`)) return;
+    setClients((cs) => cs.map((x) => (x.code === cl.code ? { ...x, redeemedPoints: (Number(x.redeemedPoints) || 0) + selSum, redemptions: [...picks.map((r) => ({ label: r.label, points: r.points, at: Date.now() })), ...(x.redemptions || [])] } : x)));
+    setChosen([]);
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
+      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 overflow-auto" style={{ maxHeight: "90vh" }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            <div className="font-semibold text-lg leading-tight">{b.clientName}{b.clientCode ? <span className="text-sm text-stone-400 font-normal"> #{b.clientCode}</span> : null}</div>
+            <div className="text-sm text-stone-500 capitalize">{fmtDate(b.date)} · {minToStr(b.startMin)}–{minToStr(b.endMin)}</div>
+          </div>
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-600"><X size={20} /></button>
+        </div>
+        <div className="bg-stone-50 rounded-xl p-3 text-sm space-y-1 mb-4">
+          <div className="flex items-center gap-2"><Sparkles size={14} className="text-stone-400" /> {names}</div>
+          <div className="flex items-center gap-2"><User size={14} className="text-stone-400" /> {st ? st.name : "—"}</div>
+          {cl && cl.phone ? <div className="flex items-center gap-2"><Phone size={14} className="text-stone-400" /> {cl.phone}</div> : null}
+          {b.clientEmail ? <div className="flex items-center gap-2"><Mail size={14} className="text-stone-400" /> {b.clientEmail}</div> : null}
+          {meta ? <div className="flex items-center gap-2"><meta.Icon size={14} className="text-stone-400" /> {meta.label}</div> : null}
+        </div>
+        {F.allergeni && hasHealth ? (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4">
+            <div className="flex items-center gap-1.5 text-sm font-medium text-red-800 mb-1"><AlertTriangle size={15} /> Note cliente</div>
+            <ul className="text-sm text-red-700 space-y-0.5">
+              {cl.allergies ? <li><b>Allergie:</b> {cl.allergies}</li> : null}
+              {cl.conditions ? <li><b>Patologie:</b> {cl.conditions}</li> : null}
+              {cl.notes ? <li><b>Note:</b> {cl.notes}</li> : null}
+            </ul>
+          </div>
+        ) : null}
+        {F.pacchetti && cl && pkgs.length > 0 ? (
+          <div className="bg-sky-50 border border-sky-200 rounded-xl p-3 mb-4">
+            <div className="flex items-center gap-1.5 text-sm font-medium text-sky-800 mb-1"><Layers size={15} /> Pacchetti sedute</div>
+            <ul className="text-sm text-sky-700 space-y-0.5">{pkgs.map((p) => { const svc = config.services.find((x) => x.id === p.serviceId); const rem = p.total - (Number(p.used) || 0); return <li key={p.id}>{svc ? svc.name : "Servizio"}: <b>{rem}</b> di {p.total} rimaste</li>; })}</ul>
+            {b.packageUsed ? <p className="text-[11px] text-sky-600 mt-1.5">Una seduta è già stata scalata da questo appuntamento.</p> : <p className="text-[11px] text-sky-600 mt-1.5">Segnando "Svolto" o "Parziale" verrà scalata 1 seduta dal pacchetto.</p>}
+          </div>
+        ) : null}
+        {F.fidelity && cl && reached.length > 0 ? (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
+            <div className="flex items-center gap-1.5 text-sm font-medium text-amber-800 mb-2"><Gift size={15} /> Premi fedeltà · {balance} punti disponibili</div>
+            <div className="space-y-1.5">{reached.map((r) => { const on = chosen.includes(r.id); return (
+              <button key={r.id} onClick={() => toggleReward(r.id)} className={`w-full flex items-center gap-2 text-left text-sm rounded-lg px-2.5 py-2 border transition ${on ? "bg-white border-amber-400" : "bg-white/60 border-amber-200"}`}>
+                <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${on ? "brand-bg border-transparent" : "border-stone-300 bg-white"}`}>{on ? <Check size={12} /> : null}</span>
+                <span className="flex-1 min-w-0 truncate">{r.label}</span>
+                <span className="text-amber-600 shrink-0">{r.points} pt</span>
+              </button>
+            ); })}</div>
+            <button onClick={doRedeem} disabled={!chosen.length || selSum > balance} className="mt-2 w-full brand-bg disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium py-2 rounded-lg flex items-center justify-center gap-1.5"><Gift size={14} /> Riscatta selezionati{chosen.length ? ` · −${selSum} pt` : ""}</button>
+          </div>
+        ) : null}
+        <div className="grid grid-cols-2 gap-2">
+          {!b.status ? (
+            <>
+              <button onClick={() => onStatus(b.id, "done")} className="flex items-center justify-center gap-1.5 text-sm font-medium bg-green-600 text-white px-3 py-2.5 rounded-lg hover:bg-green-700"><Check size={15} /> Svolto</button>
+              {!hidePartial ? <button onClick={() => onStatus(b.id, "partial")} className="flex items-center justify-center gap-1.5 text-sm font-medium border border-sky-300 text-sky-700 px-3 py-2.5 rounded-lg hover:bg-sky-50"><Timer size={15} /> Parziale</button> : null}
+              <button onClick={() => onStatus(b.id, "noshow")} className="flex items-center justify-center gap-1.5 text-sm font-medium border border-amber-300 text-amber-700 px-3 py-2.5 rounded-lg hover:bg-amber-50"><UserX size={15} /> Non presentato</button>
+              <button onClick={() => onResch(b)} className="flex items-center justify-center gap-1.5 text-sm font-medium border border-stone-300 text-stone-700 px-3 py-2.5 rounded-lg hover:bg-stone-50"><CalendarClock size={15} /> Sposta</button>
+              <button onClick={() => onStatus(b.id, "cancelled")} className="col-span-2 flex items-center justify-center gap-1.5 text-sm font-medium border border-stone-300 text-stone-500 px-3 py-2.5 rounded-lg hover:bg-stone-50"><Ban size={15} /> Annulla</button>
+            </>
+          ) : (
+            <button onClick={() => onStatus(b.id, undefined)} className="col-span-2 flex items-center justify-center gap-1.5 text-sm font-medium border border-stone-300 text-stone-600 px-3 py-2.5 rounded-lg hover:bg-stone-50"><Undo2 size={15} /> Ripristina</button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ClientsView({ config, bookings, clients, setClients, sales, catalog }) {
+  const F = useMods();
+  const staff = config.staff, services = config.services;
+  const loyalty = loyaltyConfig(config);
+  const [q, setQ] = useState("");
+  const [sel, setSel] = useState(null);
+  const nq = q.replace(/\s/g, "");
+  const filtered = clients.filter((c) => !q || (c.name || "").toLowerCase().includes(q.toLowerCase()) || c.code.includes(nq) || (c.phone || "").replace(/\s/g, "").includes(nq) || (c.card || "").replace(/\s/g, "").toLowerCase().includes(nq.toLowerCase())).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  const patchClient = (code, patch) => setClients(clients.map((x) => (x.code === code ? { ...x, ...patch } : x)));
+  const splitName = (c) => (c.firstName != null || c.lastName != null) ? { fn: c.firstName || "", ln: c.lastName || "" } : (function () { const p = (c.name || "").trim().split(/\s+/); return { fn: p[0] || "", ln: p.slice(1).join(" ") }; })();
+  const setName = (code, fn, ln) => patchClient(code, { firstName: fn, lastName: ln, name: `${fn} ${ln}`.trim() });
+  const [pkSvc, setPkSvc] = useState("");
+  const [pkN, setPkN] = useState(5);
+  const [pkPrice, setPkPrice] = useState("");
+  const addPackage = (c) => { if (!pkSvc) return; patchClient(c.code, { packages: [...(c.packages || []), { id: uid(), serviceId: pkSvc, total: pkN, used: 0, price: pkPrice === "" ? 0 : pkPrice, createdAt: Date.now() }] }); setPkSvc(""); setPkN(5); setPkPrice(""); };
+  const delPackage = (c, pid) => patchClient(c.code, { packages: (c.packages || []).filter((p) => p.id !== pid) });
+  const adjPackage = (c, pid, d) => patchClient(c.code, { packages: (c.packages || []).map((p) => (p.id === pid ? { ...p, used: Math.max(0, Math.min(p.total, (Number(p.used) || 0) + d)) } : p)) });
+  const redeem = (code, reward) => setClients(clients.map((x) => (x.code === code ? { ...x, redeemedPoints: (Number(x.redeemedPoints) || 0) + reward.points, redemptions: [{ label: reward.label, points: reward.points, at: Date.now() }, ...(x.redemptions || [])] } : x)));
+
+  if (sel) {
+    const c = clients.find((x) => x.code === sel);
+    if (!c) return <button onClick={() => setSel(null)} className="text-sm text-stone-500">Indietro</button>;
+    const stats = clientStats(c.code, bookings);
+    const balance = clientBalance(c, bookings, sales, config, catalog);
+    const nm = splitName(c);
+    return (
+      <div className="space-y-4">
+        <button onClick={() => setSel(null)} className="flex items-center gap-1 text-sm text-stone-500 hover:text-stone-700"><ChevronLeft size={16} /> Tutti i clienti</button>
+        {F.fidelity && <FidelityCard branding={config.branding} name={c.name} code={c.code} />}
+        {F.fidelity && <CardActions branding={config.branding} name={c.name} code={c.code} />}
+        <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm">
+          <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-3 flex items-center gap-1.5"><User size={13} /> Anagrafica cliente</div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label="Nome"><input value={nm.fn} onChange={(e) => setName(c.code, e.target.value, nm.ln)} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
+            <Field label="Cognome"><input value={nm.ln} onChange={(e) => setName(c.code, nm.fn, e.target.value)} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
+            <Field label="Telefono"><input value={c.phone || ""} onChange={(e) => patchClient(c.code, { phone: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
+            <Field label="Email"><input value={c.email || ""} onChange={(e) => patchClient(c.code, { email: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
+            <Field label="Codice tessera (facoltativo)"><input value={c.card || ""} onChange={(e) => patchClient(c.code, { card: e.target.value })} placeholder="Tessera fisica del cliente" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
+          </div>
+        </div>
+
+        {F.allergeni && (
+        <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm">
+          <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-3 flex items-center gap-1.5"><AlertTriangle size={13} /> Allergie, patologie e note</div>
+          <div className="space-y-3">
+            <div><div className="text-[11px] text-stone-400 mb-1">Allergie</div><textarea value={c.allergies || ""} onChange={(e) => patchClient(c.code, { allergies: e.target.value })} rows={2} placeholder="Es. allergia a tinture, lattice…" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></div>
+            <div><div className="text-[11px] text-stone-400 mb-1">Patologie</div><textarea value={c.conditions || ""} onChange={(e) => patchClient(c.code, { conditions: e.target.value })} rows={2} placeholder="Es. cuoio capelluto sensibile, dermatiti…" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></div>
+            <div><div className="text-[11px] text-stone-400 mb-1">Note importanti</div><textarea value={c.notes || ""} onChange={(e) => patchClient(c.code, { notes: e.target.value })} rows={2} placeholder="Preferenze, indicazioni particolari…" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></div>
+          </div>
+        </div>
+        )}
+
+        {F.fidelity && (
+        <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold flex items-center gap-2"><Star size={16} className="brand-accent" /> Programma fedeltà</h3>
+            <div className="text-right"><div className="text-2xl font-bold brand-accent leading-none">{balance}</div><div className="text-[11px] text-stone-400 uppercase tracking-wide">punti disponibili</div></div>
+          </div>
+          {loyalty.rewards.length === 0 ? <p className="text-sm text-stone-400">Nessun premio configurato. Aggiungili dalle Impostazioni → Programma fedeltà.</p> : (
+            <div className="space-y-2">{loyalty.rewards.slice().sort((a, b) => a.points - b.points).map((r) => { const ok = balance >= r.points; return (
+              <div key={r.id} className={`flex items-center gap-3 rounded-xl border p-3 ${ok ? "border-stone-200" : "border-stone-100 bg-stone-50"}`}>
+                <Gift size={18} className={ok ? "brand-accent shrink-0" : "text-stone-300 shrink-0"} />
+                <div className="flex-1 min-w-0"><div className={`font-medium truncate ${ok ? "" : "text-stone-400"}`}>{r.label}</div><div className="text-xs text-stone-400">{r.points} punti</div></div>
+                <button onClick={() => { if (balance >= r.points && confirm(`Riscattare "${r.label}" usando ${r.points} punti?`)) redeem(c.code, r); }} disabled={!ok} className="text-sm font-medium px-3 py-1.5 rounded-lg brand-bg disabled:opacity-40 disabled:cursor-not-allowed shrink-0">Usa premio</button>
+              </div>
+            ); })}</div>
+          )}
+          {c.redemptions && c.redemptions.length > 0 ? (
+            <div className="mt-4 pt-3 border-t border-stone-100">
+              <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-2">Premi riscattati</div>
+              <div className="space-y-1">{c.redemptions.slice(0, 6).map((x, i) => <div key={i} className="flex justify-between text-sm text-stone-500"><span>{x.label}</span><span className="text-stone-400">−{x.points} pt · {fmtFullDate(x.at)}</span></div>)}</div>
+            </div>
+          ) : null}
+        </div>
+        )}
+
+        {F.pacchetti && (
+        <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+          <h3 className="font-semibold flex items-center gap-2 mb-3"><Layers size={16} className="brand-accent" /> Pacchetti sedute</h3>
+          {(c.packages && c.packages.length) ? (
+            <div className="space-y-2 mb-4">{c.packages.map((p) => { const svc = services.find((x) => x.id === p.serviceId); const used = Number(p.used) || 0; const rem = p.total - used; return (
+              <div key={p.id} className="border border-stone-200 rounded-xl p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0"><div className="font-medium truncate">{svc ? svc.name : "Servizio"}</div><div className="text-xs text-stone-400">{rem > 0 ? `${rem} di ${p.total} sedute rimaste` : `Esaurito · ${p.total} sedute usate`}{p.price ? ` · ${eur(p.price)}` : ""}</div></div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button onClick={() => adjPackage(c, p.id, -1)} disabled={used <= 0} className="w-7 h-7 rounded-lg border border-stone-200 text-stone-500 disabled:opacity-30" title="Rimborsa 1 seduta">−</button>
+                    <button onClick={() => adjPackage(c, p.id, 1)} disabled={used >= p.total} className="w-7 h-7 rounded-lg border border-stone-200 text-stone-500 disabled:opacity-30" title="Usa 1 seduta">+</button>
+                    <button onClick={() => { if (confirm("Eliminare il pacchetto?")) delPackage(c, p.id); }} className="w-7 h-7 rounded-lg text-stone-400 hover:text-red-500 flex items-center justify-center"><Trash2 size={15} /></button>
+                  </div>
+                </div>
+                <div className="mt-2 bg-stone-100 rounded-full h-2 overflow-hidden"><div className="h-2 rounded-full brand-bg" style={{ width: `${p.total ? (used / p.total) * 100 : 0}%` }} /></div>
+              </div>
+            ); })}</div>
+          ) : <p className="text-sm text-stone-400 mb-4">Nessun pacchetto attivo.</p>}
+          <div className="border-t border-stone-100 pt-3">
+            <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-2">Aggiungi pacchetto</div>
+            <div className="flex flex-wrap items-end gap-2">
+              <select value={pkSvc} onChange={(e) => setPkSvc(e.target.value)} className="flex-1 min-w-[140px] px-3 py-2 rounded-lg border border-stone-300 text-sm bg-white brand-ring"><option value="">Servizio…</option>{services.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
+              <div className="flex items-center gap-1"><input type="number" min={1} step={1} value={pkN} onChange={(e) => setPkN(Math.max(1, Math.round(Number(e.target.value) || 1)))} className="w-16 px-2 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring" /><span className="text-xs text-stone-400">sedute</span></div>
+              <div className="flex items-center gap-1"><input type="number" min={0} step={0.5} value={pkPrice} onChange={(e) => setPkPrice(e.target.value === "" ? "" : Math.max(0, Number(e.target.value) || 0))} placeholder="prezzo" className="w-20 px-2 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring" /><span className="text-xs text-stone-400">€</span></div>
+              <button onClick={() => addPackage(c)} disabled={!pkSvc} className="brand-bg text-sm font-medium px-3 py-2 rounded-lg disabled:opacity-40">Aggiungi</button>
+            </div>
+          </div>
+        </div>
+        )}
+
+        <div>
+          <h3 className="font-semibold mb-2 flex items-center gap-2"><History size={16} className="brand-accent" /> Storico servizi</h3>
+          {stats.upcoming.length > 0 ? <div className="space-y-2 mb-3"><div className="text-xs text-stone-400 uppercase tracking-wide">In programma</div>{stats.upcoming.map((b) => <ApptItem key={b.id} b={b} staff={staff} services={services} onCal={(bk) => downloadICS(bk, staff, services, config.branding.name)} />)}</div> : null}
+          {stats.past.length === 0 ? <p className="text-sm text-stone-400 bg-white border border-stone-200 rounded-xl p-4">Nessun servizio passato.</p> : <div className="space-y-2">{stats.past.map((b) => <ApptItem key={b.id} b={b} staff={staff} services={services} />)}</div>}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2 bg-white brand-ring"><Search size={16} className="text-stone-400" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cerca per nome, codice, cellulare o tessera" className="flex-1 text-sm focus:outline-none" /></div>
+      {filtered.length === 0 ? <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center text-stone-400">{clients.length === 0 ? "Ancora nessun cliente." : "Nessun risultato."}</div> : (
+        <div className="space-y-2">{filtered.map((c) => { const stats = clientStats(c.code, bookings); const bal = clientBalance(c, bookings, sales, config, catalog); return (
+          <button key={c.code} onClick={() => setSel(c.code)} className="w-full text-left bg-white rounded-xl border border-stone-200 p-4 flex items-center gap-3 shadow-sm brand-hover transition">
+            <div className="w-10 h-10 rounded-full brand-soft brand-accent flex items-center justify-center font-semibold shrink-0">{(c.name || "?").slice(0, 1).toUpperCase()}</div>
+            <div className="flex-1 min-w-0"><div className="font-medium truncate">{c.name || "Senza nome"} <span className="text-xs text-stone-400 font-normal">#{c.code}</span></div><div className="text-xs text-stone-400">{stats.all.length} prenotazioni · {stats.servicesUsed} servizi{F.fidelity ? ` · ${bal} punti` : ""}</div></div>
+            <ChevronRight size={18} className="text-stone-300 shrink-0" />
+          </button>
+        ); })}</div>
+      )}
+    </div>
+  );
+}
+
+function ManualBooking({ config, bookings, setBookings, clients, setClients, canAddBooking, canAddClient, onDone }) {
+  const services = config.services, staff = config.staff;
+  const [sel, setSel] = useState([]);
+  const [staffId, setStaffId] = useState("");
+  const [date, setDate] = useState(todayStr());
+  const [slot, setSlot] = useState(null);
+  const [code, setCode] = useState("");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [lk, setLk] = useState("");
+  const lkn = lk.replace(/\s/g, "");
+  const lkMatches = lk ? clients.filter((c) => (c.name || "").toLowerCase().includes(lk.toLowerCase()) || c.code.includes(lkn) || (c.phone || "").replace(/\s/g, "").includes(lkn) || (c.card || "").replace(/\s/g, "").toLowerCase().includes(lkn.toLowerCase())).slice(0, 6) : [];
+  const pickClient = (c) => { setCode(c.code); setName(c.name || ""); setEmail(c.email || ""); setPhone(c.phone || ""); setLk(""); };
+
+  const selStaff = staffId ? staff.find((s) => s.id === staffId) : null;
+  const duration = sel.reduce((a, id) => { const s = services.find((x) => x.id === id); return a + (s ? s.durationMin : 0); }, 0);
+  const qualified = qualifiedStaff(staff, sel);
+  const candidates = staffId ? qualified.filter((s) => s.id === staffId) : qualified;
+  const closed = salonClosure(config, date);
+  const opOff = selStaff ? staffOff(selStaff, date) : false;
+  const slotMap = sel.length && candidates.length ? computeSlots(date, duration, candidates, bookings, config.closures) : {};
+  const slotTimes = Object.keys(slotMap).map(Number).sort((a, b) => a - b);
+  const maxDate = pd(new Date(Date.now() + ADVANCE_DAYS * 864e5));
+  const onCode = (v) => { v = v.replace(/\D/g, "").slice(0, 6); setCode(v); const c = clients.find((x) => x.code === v); if (c) { setName(c.name || ""); setEmail(c.email || ""); setPhone(c.phone || ""); } };
+  const toggle = (id) => { if (selStaff && !selStaff.serviceIds.includes(id)) return; setSel((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id])); setSlot(null); };
+
+  const save = () => {
+    if (canAddBooking === false) { alert("Limite demo raggiunto: massimo 20 appuntamenti. Per usare il programma senza limiti contatta Office Solution."); return; }
+    const map = computeSlots(date, duration, candidates, bookings, config.closures);
+    const avail = map[slot];
+    if (!avail || !avail.length) { alert("Orario non disponibile."); setSlot(null); return; }
+    const cm = clients.find((c) => c.code === code);
+    if (!cm && canAddClient === false) { alert("Limite demo raggiunto: massimo 3 clienti. Per usare il programma senza limiti contatta Office Solution."); return; }
+    const assigned = staffId && avail.includes(staffId) ? staffId : avail[0];
+    const r = upsertClient({ code: cm ? cm.code : null, name: name.trim(), email: email.trim(), phone: phone.trim() }, clients);
+    const booking = { id: uid(), date, startMin: slot, endMin: slot + duration, serviceIds: sel, staffId: assigned, clientCode: r.code, clientName: name.trim(), clientEmail: email.trim(), createdAt: Date.now() };
+    setBookings([...bookings, booking]);
+    setClients(r.clients);
+    onDone();
+  };
+
+  return (
+    <div className="bg-white rounded-2xl border-2 brand-border p-5 shadow-sm space-y-4">
+      <h3 className="font-semibold flex items-center gap-2"><CalendarPlus size={16} className="brand-accent" /> Nuovo appuntamento</h3>
+      <div>
+        <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Servizi {selStaff ? <span className="normal-case text-stone-400">· solo quelli di {selStaff.name}</span> : <span className="normal-case text-stone-300">· puoi sceglierne più di uno</span>}</div>
+        <div className="flex flex-wrap gap-1.5">{services.map((s) => { const on = sel.includes(s.id); const off = selStaff && !selStaff.serviceIds.includes(s.id); return <button key={s.id} disabled={off} onClick={() => toggle(s.id)} className={`px-2.5 py-1 rounded-lg text-xs border transition ${off ? "bg-stone-50 border-stone-100 text-stone-300 cursor-not-allowed" : on ? "brand-bg border-transparent" : "bg-white border-stone-200 text-stone-600 brand-hover"}`}>{s.name} · {s.durationMin}′</button>; })}</div>
+      </div>
+      <div className="grid sm:grid-cols-2 gap-3">
+        <div>
+          <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Operatore</div>
+          <select value={staffId} onChange={(e) => { const id = e.target.value; const ns = id ? staff.find((s) => s.id === id) : null; setStaffId(id); if (ns) setSel((p) => p.filter((x) => ns.serviceIds.includes(x))); setSlot(null); }} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm bg-white brand-ring">
+            <option value="">Primo disponibile</option>
+            {staff.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.role})</option>)}
+          </select>
+        </div>
+        <div>
+          <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Giorno</div>
+          <input type="date" value={date} min={todayStr()} max={maxDate} onChange={(e) => { setDate(e.target.value); setSlot(null); }} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+        </div>
+      </div>
+      {sel.length > 0 ? (
+        <div>
+          <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Orario disponibile</div>
+          {closed ? <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-2.5">Salone chiuso in questa data{closed.label ? ` (${closed.label})` : ""}.</p> : opOff ? <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5">{selStaff.name} è assente in questa data (malattia/ferie).</p> : candidates.length === 0 ? <p className="text-sm text-amber-600">Nessun operatore può fare tutti questi servizi.</p> : slotTimes.length === 0 ? <p className="text-sm text-stone-400">Nessuno slot libero.</p> : <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">{slotTimes.map((t) => <button key={t} onClick={() => setSlot(t)} className={`py-1.5 rounded-lg border text-sm font-medium transition ${slot === t ? "brand-bg border-transparent" : "bg-white border-stone-200 brand-hover"}`}>{minToStr(t)}</button>)}</div>}
+        </div>
+      ) : null}
+      <div>
+        <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Cliente abituale (cerca per nome, codice, telefono o tessera)</div>
+        <div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2 bg-white brand-ring"><Search size={15} className="text-stone-400" /><input value={lk} onChange={(e) => setLk(e.target.value)} placeholder="Cerca un cliente esistente" className="flex-1 text-sm focus:outline-none" />{lk ? <button onClick={() => setLk("")} className="text-stone-400"><X size={15} /></button> : null}</div>
+        {lkMatches.length > 0 ? <div className="mt-1 border border-stone-200 rounded-lg divide-y divide-stone-100">{lkMatches.map((c) => <button key={c.code} onClick={() => pickClient(c)} className="w-full text-left px-3 py-2 hover:bg-stone-50 text-sm flex justify-between gap-2"><span className="truncate">{c.name || "Senza nome"} <span className="text-stone-400">#{c.code}</span>{c.card ? <span className="text-stone-300"> · tessera {c.card}</span> : null}</span>{c.phone ? <span className="text-stone-400 text-xs shrink-0">{c.phone}</span> : null}</button>)}</div> : null}
+        {lk && lkMatches.length === 0 ? <p className="text-xs text-stone-400 mt-1">Nessun cliente trovato. Compila i campi sotto per crearne uno nuovo.</p> : null}
+      </div>
+      <div className="grid sm:grid-cols-2 gap-3">
+        <FieldIcon icon={Hash}><input value={code} inputMode="numeric" onChange={(e) => onCode(e.target.value)} placeholder="Codice (se esiste)" className="flex-1 text-sm focus:outline-none" /></FieldIcon>
+        <FieldIcon icon={User}><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome e cognome" className="flex-1 text-sm focus:outline-none" /></FieldIcon>
+        <FieldIcon icon={Mail}><input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="flex-1 text-sm focus:outline-none" /></FieldIcon>
+        <FieldIcon icon={Phone}><input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Telefono" className="flex-1 text-sm focus:outline-none" /></FieldIcon>
+      </div>
+      <button disabled={!sel.length || slot === null || !name.trim()} onClick={save} className="w-full brand-bg disabled:opacity-40 disabled:cursor-not-allowed font-medium py-2.5 rounded-lg transition">Salva appuntamento</button>
+    </div>
+  );
+}
+
+function LicensePanel({ license, onSave }) {
+  const st = licenseState(license);
+  const [code, setCode] = useState(license && license.code ? license.code : "");
+  const [unlimited, setUnlimited] = useState(license ? !!license.code && license.expiry == null : false);
+  const [months, setMonths] = useState(license && license.months ? license.months : 12);
+  const [saved, setSaved] = useState(false);
+  const gen = () => {
+    const c = code.trim(); if (!c) return;
+    onSave(makeLicense(c, unlimited ? 0 : months));
+    setSaved(true); setTimeout(() => setSaved(false), 2500);
+  };
+
+  let banner = null;
+  if (st.state === "none") banner = <div className="bg-stone-50 text-stone-500 rounded-lg px-3 py-2 text-sm">Nessuna licenza cliente configurata. Imposta un codice e una durata, poi consegna il codice al cliente.</div>;
+  else if (st.state === "tampered") banner = <div className="bg-red-50 text-red-600 rounded-lg px-3 py-2 text-sm flex items-center gap-1.5"><AlertTriangle size={15} /> Licenza non valida o manomessa. Rigenerala.</div>;
+  else if (st.state === "expired") banner = <div className="bg-red-50 text-red-600 rounded-lg px-3 py-2 text-sm flex items-center gap-1.5"><CalendarX2 size={15} /> Scaduta il {fmtFullDate(st.expiry)}. Genera una nuova licenza per riattivare l'accesso.</div>;
+  else if (st.unlimited) banner = <div className="bg-green-50 text-green-700 rounded-lg px-3 py-2 text-sm flex items-center gap-1.5"><BadgeCheck size={15} /> Licenza attiva — senza scadenza.</div>;
+  else banner = <div className={`rounded-lg px-3 py-2 text-sm flex items-center gap-1.5 ${st.days <= 30 ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"}`}><BadgeCheck size={15} /> Attiva fino al {fmtFullDate(st.expiry)} · {st.days} giorni rimanenti.</div>;
+
+  return (
+    <section className="bg-white rounded-2xl border-2 brand-border p-5 shadow-sm">
+      <h3 className="font-semibold flex items-center gap-2 mb-1"><KeyRound size={16} className="brand-accent" /> Licenza cliente <span className="text-xs font-normal text-stone-400">(solo rivenditore)</span></h3>
+      <p className="text-xs text-stone-400 mb-3">Sezione visibile solo con il codice rivenditore <span className="font-semibold">{RESELLER_CODE}</span>. Il cliente non la vede e non può rinnovarsi da solo.</p>
+      <div className="mb-4">{banner}</div>
+      <div className="grid sm:grid-cols-2 gap-3 mb-3">
+        <Field label="Codice cliente"><input value={code} onChange={(e) => setCode(e.target.value)} placeholder="es. 1234" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm tracking-widest brand-ring" /></Field>
+        <Field label="Durata (mesi)"><input type="number" min={1} step={1} value={months} disabled={unlimited} onChange={(e) => setMonths(Math.max(1, Number(e.target.value) || 1))} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring disabled:opacity-50 disabled:cursor-not-allowed" /></Field>
+      </div>
+      <label className="flex items-center gap-2 text-sm text-stone-600 mb-4 cursor-pointer"><input type="checkbox" checked={unlimited} onChange={(e) => setUnlimited(e.target.checked)} /> Senza scadenza (licenza illimitata)</label>
+      <div className="flex items-center gap-3 flex-wrap">
+        <button disabled={!code.trim()} onClick={gen} className="brand-bg disabled:opacity-40 disabled:cursor-not-allowed font-medium px-4 py-2.5 rounded-lg transition inline-flex items-center gap-2"><KeyRound size={16} /> {st.state === "none" ? "Genera licenza" : "Rigenera / rinnova"}</button>
+        {saved ? <span className="text-sm text-green-600 inline-flex items-center gap-1"><Check size={15} /> Salvata.</span> : null}
+      </div>
+      <p className="text-xs text-stone-400 mt-4 leading-relaxed">Alla scadenza il cliente non potrà più accedere finché non generi una nuova licenza da qui. Il rinnovo riparte da oggi.<br />Accesso ridotto: il cliente può entrare col proprio codice seguito da <span className="font-medium text-stone-500">01</span> (es. codice 1234 → 123401) per usare il gestionale senza vedere le vendite e gli appuntamenti segnati come "parziale".</p>
+    </section>
+  );
+}
+
+function StatBar({ rows, fmt }) {
+  const max = rows.reduce((m, r) => Math.max(m, r.value), 0) || 1;
+  if (rows.length === 0) return <p className="text-sm text-stone-400">Nessun dato nel periodo selezionato.</p>;
+  return (
+    <div className="space-y-2">{rows.map((r, i) => (
+      <div key={i} className="flex items-center gap-2">
+        <span className="w-24 sm:w-32 truncate text-sm text-stone-600 shrink-0" title={r.label}>{r.label}</span>
+        <div className="flex-1 bg-stone-100 rounded-full h-5 overflow-hidden"><div className="h-5 rounded-full brand-bg" style={{ width: `${Math.max(6, (r.value / max) * 100)}%` }} /></div>
+        <span className="w-16 text-right text-sm font-medium text-stone-700 shrink-0">{fmt ? fmt(r.value) : r.value}</span>
+      </div>
+    ))}</div>
+  );
+}
+
+function StatsView({ config, bookings, clients, sales, catalog }) {
+  const [days, setDays] = useState(90);
+  const cutoff = days ? addDays(todayStr(), -days) : null;
+  const bk = bookings.filter((b) => !cutoff || b.date >= cutoff);
+  const counted = bk.filter((b) => b.status !== "cancelled" && b.status !== "noshow");
+  const sl = (sales || []).filter((s) => s.type === "sale" && (!cutoff || pd(new Date(s.ts)) >= cutoff));
+
+  const svcCount = {};
+  counted.forEach((b) => (b.serviceIds || []).forEach((id) => { svcCount[id] = (svcCount[id] || 0) + 1; }));
+  const svcRows = Object.keys(svcCount).map((id) => { const s = config.services.find((x) => x.id === id); return { label: s ? s.name : "—", value: svcCount[id] }; }).sort((a, b) => b.value - a.value).slice(0, 8);
+
+  const hourCount = {};
+  counted.forEach((b) => { const h = Math.floor(b.startMin / 60); hourCount[h] = (hourCount[h] || 0) + 1; });
+  const hourRows = Object.keys(hourCount).map(Number).sort((a, b) => a - b).map((h) => ({ label: `${pad(h)}:00`, value: hourCount[h] }));
+
+  const cliCount = {};
+  counted.forEach((b) => { if (b.clientCode) cliCount[b.clientCode] = (cliCount[b.clientCode] || 0) + 1; });
+  const cliRows = Object.keys(cliCount).map((code) => { const c = clients.find((x) => x.code === code); return { label: c ? (c.name || `#${code}`) : `#${code}`, value: cliCount[code] }; }).sort((a, b) => b.value - a.value).slice(0, 8);
+
+  const prodQty = {};
+  sl.forEach((s) => (s.items || []).forEach((it) => { prodQty[it.productId] = (prodQty[it.productId] || 0) + it.qty; }));
+  const prodRows = Object.keys(prodQty).map((id) => { const p = catalog.products.find((x) => x.id === id); return { label: p ? p.name : "—", value: prodQty[id] }; }).sort((a, b) => b.value - a.value).slice(0, 8);
+
+  const monthRev = {};
+  sl.forEach((s) => { const d = new Date(s.ts); const k = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; monthRev[k] = (monthRev[k] || 0) + s.total; });
+  const monthRows = Object.keys(monthRev).sort().slice(-6).map((k) => { const parts = k.split("-"); return { label: `${MONTHS[Number(parts[1]) - 1].slice(0, 3)} ${parts[0].slice(2)}`, value: Math.round(monthRev[k]) }; });
+
+  const totRevenue = sl.reduce((a, s) => a + s.total, 0);
+
+  const realized = bk.filter((b) => b.status === "done" || b.status === "partial");
+  const svcPrice = (b) => (b.serviceIds || []).reduce((a, id) => { const s = config.services.find((x) => x.id === id); return a + ((s && s.price) || 0); }, 0);
+  const svcRevTot = realized.reduce((a, b) => a + svcPrice(b), 0);
+  const svcMonth = {};
+  realized.forEach((b) => { const k = b.date.slice(0, 7); svcMonth[k] = (svcMonth[k] || 0) + svcPrice(b); });
+  const svcMonthRows = Object.keys(svcMonth).sort().slice(-6).map((k) => { const parts = k.split("-"); return { label: `${MONTHS[Number(parts[1]) - 1].slice(0, 3)} ${parts[0].slice(2)}`, value: Math.round(svcMonth[k]) }; });
+
+  const card = "bg-white rounded-2xl border border-stone-200 p-5 shadow-sm";
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h2 className="text-lg font-semibold">Statistiche</h2>
+        <div className="flex gap-1 bg-stone-100 rounded-lg p-1">
+          {[[30, "30 giorni"], [90, "90 giorni"], [0, "Tutto"]].map((o) => <button key={o[0]} onClick={() => setDays(o[0])} className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${days === o[0] ? "bg-white shadow-sm text-stone-800" : "text-stone-500"}`}>{o[1]}</button>)}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className={card}><div className="text-xs text-stone-400 uppercase tracking-wide">Appuntamenti</div><div className="text-2xl font-bold mt-1">{counted.length}</div></div>
+        <div className={card}><div className="text-xs text-stone-400 uppercase tracking-wide">Clienti attivi</div><div className="text-2xl font-bold mt-1">{cliRows.length}</div></div>
+        <div className={card}><div className="text-xs text-stone-400 uppercase tracking-wide">Incasso servizi</div><div className="text-2xl font-bold mt-1">{eur(svcRevTot)}</div></div>
+        <div className={card}><div className="text-xs text-stone-400 uppercase tracking-wide">Incasso prodotti</div><div className="text-2xl font-bold mt-1">{eur(totRevenue)}</div></div>
+      </div>
+
+      <section className={card}><h3 className="font-semibold flex items-center gap-2 mb-4"><Sparkles size={16} className="brand-accent" /> Servizi più richiesti</h3><StatBar rows={svcRows} /></section>
+      <section className={card}><h3 className="font-semibold flex items-center gap-2 mb-4"><TrendingUp size={16} className="brand-accent" /> Andamento vendite servizi <span className="text-xs font-normal text-stone-400">· per mese · totale {eur(svcRevTot)}</span></h3><StatBar rows={svcMonthRows} fmt={(v) => eur(v)} /></section>
+      <section className={card}><h3 className="font-semibold flex items-center gap-2 mb-4"><Clock size={16} className="brand-accent" /> Fasce orarie più richieste</h3><StatBar rows={hourRows} /></section>
+      <section className={card}><h3 className="font-semibold flex items-center gap-2 mb-4"><Users size={16} className="brand-accent" /> Clienti più attivi</h3><StatBar rows={cliRows} /></section>
+      <section className={card}><h3 className="font-semibold flex items-center gap-2 mb-4"><Package size={16} className="brand-accent" /> Prodotti più venduti <span className="text-xs font-normal text-stone-400">· unità</span></h3><StatBar rows={prodRows} /></section>
+      <section className={card}><h3 className="font-semibold flex items-center gap-2 mb-4"><TrendingUp size={16} className="brand-accent" /> Andamento vendite prodotti <span className="text-xs font-normal text-stone-400">· per mese · totale {eur(totRevenue)}</span></h3><StatBar rows={monthRows} fmt={(v) => eur(v)} /></section>
+    </div>
+  );
+}
+
+function MarketingView({ config, saveConfig, bookings, clients, sales, catalog }) {
+  const M = marketingConfig(config);
+  const services = config.services || [];
+  const products = (catalog && catalog.products) || [];
+  const [svc, setSvc] = useState("");
+  const [prod, setProd] = useState("");
+  const [inact, setInact] = useState(0);
+  const [cfgOpen, setCfgOpen] = useState(false);
+  const [mi, setMi] = useState(M.msgInactive);
+  const [ms, setMs] = useState(M.msgServices);
+  const [mp, setMp] = useState(M.msgProducts);
+
+  const lastVisit = (code) => {
+    let last = "";
+    bookings.forEach((b) => { if (b.clientCode === code && b.date > last) last = b.date; });
+    (sales || []).forEach((s) => { if (s.type === "sale" && s.clientCode === code) { const d = pd(new Date(s.ts)); if (d > last) last = d; } });
+    return last;
+  };
+  const usedService = (code, sid) => bookings.some((b) => b.clientCode === code && (b.serviceIds || []).includes(sid));
+  const boughtProduct = (code, pid) => (sales || []).some((s) => s.type === "sale" && s.clientCode === code && (s.items || []).some((it) => it.productId === pid));
+
+  const cutoff = inact ? addDays(todayStr(), -inact) : null;
+  const withPhone = clients.filter((c) => (c.phone || "").replace(/\D/g, "").length >= 6);
+  const filtered = withPhone.filter((c) => {
+    if (svc && !usedService(c.code, svc)) return false;
+    if (prod && !boughtProduct(c.code, prod)) return false;
+    if (cutoff) { const lv = lastVisit(c.code); if (lv && lv >= cutoff) return false; }
+    return true;
+  }).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+
+  const activeMsg = inact ? M.msgInactive : (svc ? M.msgServices : (prod ? M.msgProducts : ""));
+  const firstNameOf = (c) => (c.firstName != null && c.firstName.trim()) ? c.firstName.trim() : ((c.name || "").trim().split(/\s+/)[0] || "");
+  const lastNameOf = (c) => (c.lastName != null) ? c.lastName.trim() : ((c.name || "").trim().split(/\s+/).slice(1).join(" "));
+  const waHref = (c) => { const num = waNumber(c.phone); const txt = activeMsg ? activeMsg.replace(/\{nome_completo\}/g, (c.name || "").trim()).replace(/\{cognome\}/g, lastNameOf(c)).replace(/\{nome\}/g, firstNameOf(c)) : ""; return `https://wa.me/${num}${txt ? `?text=${encodeURIComponent(txt)}` : ""}`; };
+
+  const openCfg = () => { setMi(M.msgInactive); setMs(M.msgServices); setMp(M.msgProducts); setCfgOpen(true); };
+  const saveMsgs = () => { saveConfig({ ...config, marketing: { msgInactive: mi, msgServices: ms, msgProducts: mp } }); setCfgOpen(false); };
+  const resetMsgs = () => { setMi(DEFAULT_MARKETING.msgInactive); setMs(DEFAULT_MARKETING.msgServices); setMp(DEFAULT_MARKETING.msgProducts); };
+  const inactOpts = [[0, "Tutti"], [30, "Inattivi 1+ mese"], [90, "Inattivi 3+ mesi"], [180, "Inattivi 6+ mesi"]];
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h2 className="text-lg font-semibold">Marketing</h2>
+        <button onClick={openCfg} className="flex items-center gap-1.5 text-sm border border-stone-300 text-stone-700 px-3 py-1.5 rounded-lg hover:bg-stone-50"><Settings size={15} /> Messaggi</button>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm grid sm:grid-cols-3 gap-3">
+        <div><div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Servizio usato</div><select value={svc} onChange={(e) => setSvc(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm bg-white brand-ring"><option value="">Tutti</option>{services.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+        <div><div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Prodotto acquistato</div><select value={prod} onChange={(e) => setProd(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm bg-white brand-ring"><option value="">Tutti</option>{products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+        <div><div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Cliente inattivo</div><select value={inact} onChange={(e) => setInact(Number(e.target.value))} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm bg-white brand-ring">{inactOpts.map((o) => <option key={o[0]} value={o[0]}>{o[1]}</option>)}</select></div>
+      </div>
+
+      {activeMsg ? <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5 flex items-start gap-2"><MessageCircle size={14} className="shrink-0 mt-0.5" /><span>Con il filtro attivo, WhatsApp si aprirà con un messaggio già pronto: potrai completarlo o modificarlo prima di inviarlo.</span></p> : null}
+
+      {filtered.length === 0 ? <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center text-stone-400">{withPhone.length === 0 ? "Nessun cliente con numero di telefono." : "Nessun cliente corrisponde ai filtri."}</div> : (
+        <div className="space-y-2">{filtered.map((c) => { const lv = lastVisit(c.code); return (
+          <div key={c.code} className="bg-white rounded-xl border border-stone-200 p-3 flex items-center gap-3 shadow-sm">
+            <div className="w-10 h-10 rounded-full brand-soft brand-accent flex items-center justify-center font-semibold shrink-0">{(c.name || "?").slice(0, 1).toUpperCase()}</div>
+            <div className="flex-1 min-w-0"><div className="font-medium truncate">{c.name || "Senza nome"} <span className="text-xs text-stone-400 font-normal">#{c.code}</span></div><div className="text-xs text-stone-400 truncate">{c.phone}{lv ? ` · ultima attività ${fmtDate(lv)}` : " · mai venuto"}</div></div>
+            <a href={waHref(c)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm font-medium bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 shrink-0"><MessageCircle size={15} /> <span className="hidden sm:inline">WhatsApp</span></a>
+          </div>
+        ); })}</div>
+      )}
+      {filtered.length > 0 ? <p className="text-xs text-stone-400 text-center">{filtered.length} client{filtered.length === 1 ? "e" : "i"} con numero · tocca WhatsApp per scrivere</p> : null}
+
+      {cfgOpen ? (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setCfgOpen(false)}>
+          <div className="bg-white rounded-2xl max-w-lg w-full p-5 shadow-xl overflow-auto" style={{ maxHeight: "90vh" }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-lg flex items-center gap-2"><Settings size={18} className="brand-accent" /> Messaggi WhatsApp</h3><button onClick={() => setCfgOpen(false)} className="text-stone-400 hover:text-stone-600"><X size={20} /></button></div>
+            <p className="text-sm text-stone-500 mb-3">Segnaposto disponibili: <code className="bg-stone-100 px-1 rounded">{"{nome}"}</code> (solo nome, più amichevole), <code className="bg-stone-100 px-1 rounded">{"{cognome}"}</code>, <code className="bg-stone-100 px-1 rounded">{"{nome_completo}"}</code>. Gli asterischi attorno a una parola (*testo*) la rendono in grassetto su WhatsApp.</p>
+            <div className="space-y-3">
+              <div><div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Cliente inattivo</div><textarea value={mi} onChange={(e) => setMi(e.target.value)} rows={3} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></div>
+              <div><div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Filtro servizio usato</div><textarea value={ms} onChange={(e) => setMs(e.target.value)} rows={3} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></div>
+              <div><div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Filtro prodotto acquistato</div><textarea value={mp} onChange={(e) => setMp(e.target.value)} rows={3} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></div>
+            </div>
+            <div className="flex gap-2 mt-4"><button onClick={saveMsgs} className="flex-1 brand-bg font-medium py-2.5 rounded-lg">Salva messaggi</button><button onClick={resetMsgs} className="text-sm text-stone-500 px-3 py-2.5 rounded-lg border border-stone-200">Ripristina default</button></div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SettingsView({ config, saveConfig, bookings, setBookings, clients, setClients, catalog, setCatalog, sales, setSales, session, license, onSaveLicense, backupDirName, onPickBackupDir, onClearBackupDir, onBackupNow, lastBackup }) {
+  const F = useMods();
+  const services = config.services, staff = config.staff, branding = config.branding;
+  const isReseller = session && session.role === "reseller";
+  const updServices = (next) => saveConfig({ ...config, services: next });
+  const updStaff = (next) => saveConfig({ ...config, staff: next });
+  const updBranding = (patch) => saveConfig({ ...config, branding: { ...branding, ...patch } });
+  const addService = () => updServices([...services, { id: uid(), name: "Nuovo servizio", durationMin: 30 }]);
+  const editService = (id, patch) => updServices(services.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  const delService = (id) => { updServices(services.filter((s) => s.id !== id)); updStaff(staff.map((st) => ({ ...st, serviceIds: st.serviceIds.filter((x) => x !== id) }))); };
+  const addStaff = () => updStaff([...staff, { id: uid(), name: "Nuovo operatore", role: "", serviceIds: [], availability: {} }]);
+  const editStaff = (id, patch) => updStaff(staff.map((st) => (st.id === id ? { ...st, ...patch } : st)));
+  const delStaff = (id) => updStaff(staff.filter((st) => st.id !== id));
+  const onLogo = async (e) => { const file = e.target.files && e.target.files[0]; if (!file) return; try { const url = await fileToResizedDataURL(file, 256); updBranding({ logo: url }); } catch (err) { alert("Impossibile caricare l'immagine."); } e.target.value = ""; };
+  const reset = () => { if (confirm("Caricare i dati di esempio (clienti, appuntamenti e vendite di prova)? I dati attuali verranno sostituiti. La licenza non viene toccata.")) { const s = buildSampleData(); saveConfig(DEFAULT_CONFIG); setClients(s.clients); setBookings(s.bookings); setSales(s.sales); setCatalog(DEFAULT_CATALOG); alert("Dati di esempio caricati."); } };
+  const azzeraGiacenze = () => { if (confirm("Azzerare TUTTE le giacenze a 0? Prodotti, formati e prezzi restano invariati: solo le quantità in magazzino verranno messe a zero. L'operazione non è reversibile.")) { setCatalog({ ...catalog, products: catalog.products.map((p) => ({ ...p, formats: p.formats.map((f) => ({ ...f, stock: 0 })) })) }); alert("Giacenze azzerate."); } };
+  const importBackup = async (e) => {
+    const file = e.target.files && e.target.files[0]; if (!file) return;
+    try { const text = await file.text(); const d = JSON.parse(text); if (d.config) saveConfig({ ...DEFAULT_CONFIG, ...d.config }); if (Array.isArray(d.bookings)) setBookings(d.bookings); if (Array.isArray(d.clients)) setClients(d.clients); if (d.catalog && Array.isArray(d.catalog.products)) setCatalog(d.catalog); if (Array.isArray(d.sales)) setSales(d.sales); alert("Backup importato."); } catch (err) { alert("File di backup non valido."); }
+    e.target.value = "";
+  };
+  const azzeraTutto = () => { if (confirm("Azzerare COMPLETAMENTE la configurazione (servizi, operatori, clienti, appuntamenti, catalogo, vendite e dati dell'attività)? Da usare per preparare una nuova installazione cliente. Operazione non reversibile.")) { saveConfig({ ...DEFAULT_CONFIG, services: [], staff: [], branding: BLANK_BRANDING, loyalty: DEFAULT_LOYALTY }); setBookings([]); setClients([]); setCatalog({ categories: [], products: [] }); setSales([]); alert("Configurazione azzerata. Puoi impostare il salone da zero."); } };
+  const loyalty = loyaltyConfig(config);
+  const updLoyalty = (patch) => saveConfig({ ...config, loyalty: { ...loyalty, ...patch } });
+  const addReward = () => updLoyalty({ rewards: [...loyalty.rewards, { id: uid(), points: 5, label: "Nuovo premio" }] });
+  const editReward = (id, patch) => updLoyalty({ rewards: loyalty.rewards.map((r) => (r.id === id ? { ...r, ...patch } : r)) });
+  const delReward = (id) => updLoyalty({ rewards: loyalty.rewards.filter((r) => r.id !== id) });
+  const [editAspect, setEditAspect] = useState(false);
+  const closures = config.closures || [];
+  const [clFrom, setClFrom] = useState("");
+  const [clTo, setClTo] = useState("");
+  const [clLabel, setClLabel] = useState("");
+  const addClosure = () => { if (!clFrom) return; const to = clTo || clFrom; const from = clFrom; saveConfig({ ...config, closures: [...closures, { id: uid(), from: from <= to ? from : to, to: from <= to ? to : from, label: clLabel.trim() }] }); setClFrom(""); setClTo(""); setClLabel(""); };
+  const delClosure = (id) => saveConfig({ ...config, closures: closures.filter((c) => c.id !== id) });
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-3 flex-wrap"><h2 className="text-lg font-semibold">Impostazioni</h2>{isReseller ? <div className="flex items-center gap-2"><button onClick={reset} className="flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-700"><RefreshCw size={14} /> Ripristina demo</button><button onClick={azzeraTutto} className="flex items-center gap-1.5 text-sm text-red-600 border border-red-300 px-2.5 py-1.5 rounded-lg hover:bg-red-50"><AlertTriangle size={14} /> Azzera tutto</button></div> : null}</div>
+
+      {isReseller ? <LicensePanel license={license} onSave={onSaveLicense} /> : null}
+
+{F.vendite && (
+      <section className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+        <h3 className="font-semibold flex items-center gap-2 mb-3"><Boxes size={16} className="brand-accent" /> Magazzino</h3>
+        <p className="text-sm text-stone-500 mb-3">Azzera la giacenza di tutti i prodotti (prodotti, formati e prezzi restano invariati). Utile prima di un nuovo inventario da ricaricare con la scheda Carico.</p>
+        <button onClick={azzeraGiacenze} className="text-sm border border-red-300 text-red-600 px-3 py-2 rounded-lg inline-flex items-center gap-2 hover:bg-red-50"><AlertCircle size={15} /> Azzera giacenze</button>
+      </section>
+      )}
+
+      <section className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+        <h3 className="font-semibold flex items-center gap-2 mb-3"><Download size={16} className="brand-accent" /> Backup dei dati</h3>
+        <p className="text-sm text-stone-500 mb-3">I dati sono salvati su questo PC. Esporta regolarmente un backup per sicurezza. (La licenza non è inclusa nel backup.)</p>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => exportBackup(config, bookings, clients, catalog, sales)} className="text-sm brand-bg px-3 py-2 rounded-lg inline-flex items-center gap-2"><Download size={15} /> Esporta backup</button>
+          <label className="text-sm border border-stone-300 text-stone-700 px-3 py-2 rounded-lg inline-flex items-center gap-2 cursor-pointer hover:bg-stone-50"><Upload size={15} /> Importa backup<input type="file" accept="application/json" onChange={importBackup} className="hidden" /></label>
+        </div>
+      </section>
+
+      <section className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+        <h3 className="font-semibold flex items-center gap-2 mb-3"><RefreshCw size={16} className="brand-accent" /> Backup automatico</h3>
+        <label className="flex items-center gap-2 text-sm cursor-pointer mb-3"><input type="checkbox" checked={!!(config.backup && config.backup.enabled)} onChange={(e) => saveConfig({ ...config, backup: { time: (config.backup && config.backup.time) || "20:00", enabled: e.target.checked } })} className="w-4 h-4" /> Salva automaticamente un backup ogni giorno</label>
+        <div className="flex flex-wrap items-end gap-3 mb-3">
+          <div><div className="text-[11px] text-stone-400 mb-1">Orario</div><input type="time" value={(config.backup && config.backup.time) || "20:00"} onChange={(e) => saveConfig({ ...config, backup: { enabled: !!(config.backup && config.backup.enabled), time: e.target.value } })} className="px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></div>
+          <div className="flex-1 min-w-[180px]"><div className="text-[11px] text-stone-400 mb-1">Cartella di destinazione</div><div className="flex items-center gap-2"><button onClick={onPickBackupDir} className="text-sm brand-bg px-3 py-2 rounded-lg inline-flex items-center gap-1.5"><FolderOpen size={15} /> Scegli cartella</button>{backupDirName ? <span className="text-sm text-stone-600 truncate">{backupDirName}</span> : <span className="text-sm text-stone-400">nessuna</span>}{backupDirName ? <button onClick={onClearBackupDir} className="text-stone-400 hover:text-red-500" title="Rimuovi"><X size={16} /></button> : null}</div></div>
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <button onClick={onBackupNow} className="text-sm border border-stone-300 text-stone-700 px-3 py-2 rounded-lg inline-flex items-center gap-1.5 hover:bg-stone-50"><Download size={15} /> Backup ora</button>
+          {lastBackup ? <span className="text-xs text-stone-400">Ultimo backup: {fmtFullDate(lastBackup.at)}</span> : <span className="text-xs text-stone-400">Nessun backup ancora.</span>}
+        </div>
+        <p className="text-xs text-stone-400 mt-3">Scegli una volta la cartella sul PC: l'app vi salverà il file <code className="bg-stone-100 px-1 rounded">lucentia-backup-AAAA-MM-GG.json</code> all'orario impostato (occorre che l'app sia aperta a quell'ora). Funziona su Windows; su Android usa "Esporta backup".</p>
+      </section>
+
+      <section className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-4"><h3 className="font-semibold flex items-center gap-2"><Store size={16} className="brand-accent" /> Attività e aspetto</h3><button onClick={() => setEditAspect((e) => !e)} className="text-sm brand-accent border border-stone-200 px-3 py-1.5 rounded-lg hover:bg-stone-50">{editAspect ? "Chiudi" : "Modifica"}</button></div>
+        {!editAspect ? (
+          <div className="flex items-center gap-3 text-sm text-stone-500">{branding.logo ? <img src={branding.logo} alt="logo" className="w-10 h-10 rounded-xl object-cover border border-stone-200" /> : <div className="w-10 h-10 rounded-xl bg-stone-100 flex items-center justify-center text-stone-300"><ImageIcon size={18} /></div>}<span className="font-medium text-stone-700">{branding.name || "—"}</span>{branding.tagline ? <span className="text-stone-400">· {branding.tagline}</span> : null}</div>
+        ) : (
+        <>
+        <div className="flex items-start gap-4 mb-5">
+          <div className="shrink-0">{branding.logo ? <img src={branding.logo} alt="logo" className="w-20 h-20 rounded-2xl object-cover border border-stone-200" /> : <div className="w-20 h-20 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-300"><ImageIcon size={26} /></div>}</div>
+          <div className="flex-1">
+            <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Logo</div>
+            <div className="flex gap-2"><label className="cursor-pointer text-sm brand-bg px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5"><ImageIcon size={15} /> Carica<input type="file" accept="image/*" onChange={onLogo} className="hidden" /></label>{branding.logo ? <button onClick={() => updBranding({ logo: null })} className="text-sm text-stone-500 hover:text-red-500 px-3 py-1.5 rounded-lg border border-stone-200">Rimuovi</button> : null}</div>
+          </div>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-3 mb-5">
+          <Field label="Nome attività"><input value={branding.name} onChange={(e) => updBranding({ name: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
+          <Field label="Sottotitolo"><input value={branding.tagline} onChange={(e) => updBranding({ tagline: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
+          <Field label="Telefono"><input value={branding.phone} onChange={(e) => updBranding({ phone: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
+          <Field label="Email"><input value={branding.email} onChange={(e) => updBranding({ email: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
+          <Field label="Indirizzo"><input value={branding.address} onChange={(e) => updBranding({ address: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
+        </div>
+        <div>
+          <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-2 flex items-center gap-1.5"><Palette size={13} /> Colore principale</div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {PRESETS.map((c) => <button key={c} onClick={() => updBranding({ primary: c })} className={`w-9 h-9 rounded-full transition ${branding.primary.toLowerCase() === c ? "ring-2 ring-offset-2 ring-stone-400" : ""}`} style={{ background: c }} aria-label={c} />)}
+            <label className="w-9 h-9 rounded-full border-2 border-dashed border-stone-300 flex items-center justify-center cursor-pointer overflow-hidden relative" title="Colore personalizzato"><Plus size={16} className="text-stone-400" /><input type="color" value={branding.primary} onChange={(e) => updBranding({ primary: e.target.value })} className="absolute inset-0 opacity-0 cursor-pointer" /></label>
+          </div>
+        </div>
+        </>
+        )}
+      </section>
+
+      <section className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+        <h3 className="font-semibold flex items-center gap-2 mb-3"><CalendarRange size={16} className="brand-accent" /> Chiusure salone (ferie / festività)</h3>
+        {closures.length > 0 ? (
+          <div className="space-y-2 mb-4">{closures.slice().sort((a, b) => (a.from > b.from ? 1 : -1)).map((c) => (
+            <div key={c.id} className="flex items-center justify-between gap-2 border border-stone-200 rounded-xl p-3">
+              <div className="min-w-0"><div className="font-medium text-sm truncate">{c.label || "Chiusura"}</div><div className="text-xs text-stone-400">{c.from === c.to ? fmtDate(c.from) : `${fmtDate(c.from)} → ${fmtDate(c.to)}`}</div></div>
+              <button onClick={() => delClosure(c.id)} className="p-2 text-stone-400 hover:text-red-500 shrink-0"><Trash2 size={16} /></button>
+            </div>
+          ))}</div>
+        ) : <p className="text-sm text-stone-400 mb-4">Nessuna chiusura programmata.</p>}
+        <div className="border-t border-stone-100 pt-3">
+          <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-2">Aggiungi chiusura</div>
+          <div className="flex flex-wrap items-end gap-2">
+            <div><div className="text-[11px] text-stone-400 mb-1">Dal</div><input type="date" value={clFrom} onChange={(e) => setClFrom(e.target.value)} className="px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></div>
+            <div><div className="text-[11px] text-stone-400 mb-1">Al (facoltativo)</div><input type="date" value={clTo} onChange={(e) => setClTo(e.target.value)} className="px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></div>
+            <input value={clLabel} onChange={(e) => setClLabel(e.target.value)} placeholder="Motivo (es. Ferie estive)" className="flex-1 min-w-[140px] px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+            <button onClick={addClosure} disabled={!clFrom} className="brand-bg text-sm font-medium px-3 py-2 rounded-lg disabled:opacity-40">Aggiungi</button>
+          </div>
+          <p className="text-xs text-stone-400 mt-2">Nei giorni di chiusura non sarà possibile prendere appuntamenti.</p>
+        </div>
+      </section>
+
+{F.fidelity && (
+      <section className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+        <h3 className="font-semibold flex items-center gap-2 mb-4"><Star size={16} className="brand-accent" /> Programma fedeltà</h3>
+        <div className="space-y-4">
+          <div>
+            <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Come si guadagnano i punti</div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button onClick={() => updLoyalty({ mode: "flat" })} className={`flex-1 text-left text-sm border rounded-lg px-3 py-2 transition ${loyalty.mode !== "perService" ? "brand-soft brand-border" : "bg-white border-stone-200"}`}><div className="font-medium">1 punto per servizio</div><div className="text-xs text-stone-400">Ogni servizio completato vale 1 punto.</div></button>
+              <button onClick={() => updLoyalty({ mode: "perService" })} className={`flex-1 text-left text-sm border rounded-lg px-3 py-2 transition ${loyalty.mode === "perService" ? "brand-soft brand-border" : "bg-white border-stone-200"}`}><div className="font-medium">Punti per servizio</div><div className="text-xs text-stone-400">Imposti i punti di ogni servizio qui sotto.</div></button>
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={loyalty.fromSales} onChange={(e) => updLoyalty({ fromSales: e.target.checked })} className="w-4 h-4" /> Genera punti anche dalle vendite <span className="text-stone-400">(imposti i punti per prodotto nel Catalogo)</span></label>
+          <div>
+            <div className="flex items-center justify-between mb-2"><div className="text-xs font-medium text-stone-400 uppercase tracking-wide">Premi a punti</div><button onClick={addReward} className="text-sm brand-accent flex items-center gap-1"><Plus size={14} /> Aggiungi premio</button></div>
+            <div className="space-y-2">{loyalty.rewards.length === 0 ? <p className="text-sm text-stone-400">Nessun premio. Aggiungine uno (es. 5 punti → omaggio, 10 punti → sconto 10%).</p> : loyalty.rewards.map((r) => (
+              <div key={r.id} className="flex items-center gap-2">
+                <div className="flex items-center gap-1"><input type="number" min={1} step={1} value={r.points} onChange={(e) => editReward(r.id, { points: Math.max(1, Math.round(Number(e.target.value) || 1)) })} className="w-20 px-2 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring" /><span className="text-xs text-stone-400">pt</span></div>
+                <input value={r.label} onChange={(e) => editReward(r.id, { label: e.target.value })} placeholder="Descrizione premio" className="flex-1 px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+                <button onClick={() => delReward(r.id)} className="p-2 text-stone-400 hover:text-red-500"><Trash2 size={16} /></button>
+              </div>
+            ))}</div>
+          </div>
+          <p className="text-xs text-stone-400">I clienti accumulano punti senza limiti. Dalla scheda di ogni cliente puoi riscattare un premio: i punti usati vengono scalati automaticamente.</p>
+        </div>
+      </section>
+      )}
+
+      <section className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-4 gap-2 flex-wrap"><h3 className="font-semibold flex items-center gap-2"><Sparkles size={16} className="brand-accent" /> Servizi, durate e prezzi</h3><div className="flex items-center gap-2"><button onClick={() => printPriceList(config)} className="flex items-center gap-1 text-sm border border-stone-300 text-stone-700 px-3 py-1.5 rounded-lg hover:bg-stone-50"><Printer size={15} /> Listino PDF</button><button onClick={addService} className="flex items-center gap-1 text-sm brand-bg px-3 py-1.5 rounded-lg"><Plus size={15} /> Aggiungi</button></div></div>
+        <div className="space-y-2">{services.map((s) => (
+          <div key={s.id} className="flex flex-wrap items-center gap-2">
+            <input value={s.name} onChange={(e) => editService(s.id, { name: e.target.value })} className="flex-1 min-w-[140px] px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+            <div className="flex items-center gap-1"><input type="number" min={5} step={5} value={s.durationMin} onChange={(e) => editService(s.id, { durationMin: Math.max(5, Number(e.target.value) || 5) })} className="w-16 px-2 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring" title="Durata" /><span className="text-xs text-stone-400">min</span></div>
+            <div className="flex items-center gap-1"><input type="number" min={0} step={0.5} value={s.price != null ? s.price : ""} onChange={(e) => editService(s.id, { price: e.target.value === "" ? null : Math.max(0, Number(e.target.value) || 0) })} placeholder="—" className="w-20 px-2 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring" title="Prezzo" /><span className="text-xs text-stone-400">€</span></div>
+            {F.fidelity && loyalty.mode === "perService" ? <div className="flex items-center gap-1"><input type="number" min={0} step={1} value={s.points != null ? s.points : 1} onChange={(e) => editService(s.id, { points: Math.max(0, Math.round(Number(e.target.value) || 0)) })} className="w-14 px-2 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring" title="Punti fedeltà" /><span className="text-xs text-stone-400">pt</span></div> : null}
+            <button onClick={() => delService(s.id)} className="p-2 text-stone-400 hover:text-red-500"><Trash2 size={16} /></button>
+          </div>
+        ))}</div>
+      </section>
+
+      <section className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-4"><h3 className="font-semibold flex items-center gap-2"><Users size={16} className="brand-accent" /> Operatori {F.maxOperatori !== Infinity ? <span className="text-xs font-normal text-stone-400">· max {F.maxOperatori}</span> : null}</h3><button onClick={addStaff} disabled={staff.length >= F.maxOperatori} title={staff.length >= F.maxOperatori ? "Limite operatori raggiunto per questo piano" : ""} className="flex items-center gap-1 text-sm brand-bg px-3 py-1.5 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"><Plus size={15} /> Aggiungi</button></div>
+        <div className="space-y-4">{staff.map((st) => <StaffEditor key={st.id} st={st} services={services} onEdit={(patch) => editStaff(st.id, patch)} onDelete={() => delStaff(st.id)} />)}</div>
+      </section>
+
+      {F.maxOperatori > 1 ? <OperatorAccounts staff={staff} /> : null}
+
+      <div className="text-center py-4 space-y-2">
+        <img src={LUCENTIA_LOGO} alt="Lucentia" className="h-6 w-auto mx-auto opacity-70" />
+        <div className="text-[11px] text-stone-300 flex items-center justify-center gap-1.5">Realizzato da <img src={MAKER_LOGO} alt="Office Solution" className="h-3.5 w-auto inline-block opacity-70" /></div>
+      </div>
+    </div>
+  );
+}
+
+function OperatorAccounts({ staff }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [staffId, setStaffId] = useState("");
+  const [email, setEmail] = useState("");
+  const [pw, setPw] = useState("");
+  const [msg, setMsg] = useState("");
+  const [resetFor, setResetFor] = useState(null);
+  const [resetPw, setResetPw] = useState("");
+  const flash = (t) => { setMsg(t); setTimeout(() => setMsg(""), 3000); };
+
+  const api = async (path, method, body) => {
+    try {
+      const r = await fetch("/api" + path, { method: method || "GET", credentials: "include", headers: body ? { "Content-Type": "application/json" } : undefined, body: body ? JSON.stringify(body) : undefined });
+      const data = await r.json().catch(() => ({}));
+      return { ok: r.ok, data };
+    } catch (e) { return { ok: false, data: {} }; }
+  };
+  const load = async () => { setLoading(true); const r = await api("/operatori"); setItems(r.ok && r.data.items ? r.data.items : []); setLoading(false); };
+  useEffect(() => { load(); }, []);
+
+  const crea = async () => {
+    if (!staffId) { flash("Scegli a quale operatore."); return; }
+    if (!email.trim() || pw.length < 6) { flash("Email e password (min 6)."); return; }
+    const r = await api("/operatori", "POST", { email: email.trim(), password: pw, staff_id: staffId });
+    if (r.ok) { setEmail(""); setPw(""); setStaffId(""); flash("Accesso creato."); load(); }
+    else flash(r.data.error || "Errore nella creazione.");
+  };
+  const reset = async (id) => { if (resetPw.length < 6) { flash("Password troppo corta."); return; } const r = await api(`/operatori/${id}`, "PATCH", { nuovaPassword: resetPw }); if (r.ok) { setResetFor(null); setResetPw(""); flash("Password aggiornata."); } else flash(r.data.error || "Errore."); };
+  const elimina = async (o) => { if (!confirm(`Eliminare l'accesso ${o.email}?`)) return; const r = await api(`/operatori/${o.id}`, "DELETE"); if (r.ok) { flash("Accesso eliminato."); load(); } else flash(r.data.error || "Errore."); };
+  const nameOf = (sid) => { const s = staff.find((x) => x.id === sid); return s ? s.name : "— (operatore rimosso)"; };
+
+  return (
+    <section className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+      <h3 className="font-semibold flex items-center gap-2 mb-1"><KeyRound size={16} className="brand-accent" /> Accessi operatori</h3>
+      <p className="text-sm text-stone-500 mb-3">Crea un accesso per ogni operatore: entrerà con le proprie credenziali e vedrà soltanto la propria agenda, in sola lettura.</p>
+      {msg ? <div className="text-sm bg-stone-800 text-white rounded-lg px-3 py-2 inline-flex items-center gap-2 mb-3"><Check size={14} /> {msg}</div> : null}
+
+      {loading ? <p className="text-sm text-stone-400">Caricamento…</p> : items.length === 0 ? <p className="text-sm text-stone-400 mb-3">Nessun accesso operatore creato.</p> : (
+        <div className="space-y-2 mb-4">{items.map((o) => (
+          <div key={o.id} className="border border-stone-200 rounded-xl p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0"><div className="font-medium truncate">{nameOf(o.staff_id)}</div><div className="text-xs text-stone-400 truncate flex items-center gap-1"><Mail size={12} /> {o.email}</div></div>
+              <div className="flex items-center gap-1 shrink-0">
+                <button onClick={() => { setResetFor(resetFor === o.id ? null : o.id); setResetPw(""); }} className="text-xs border border-stone-300 text-stone-600 px-2 py-1.5 rounded-lg inline-flex items-center gap-1 hover:bg-stone-50"><KeyRound size={13} /> Password</button>
+                <button onClick={() => elimina(o)} className="text-xs border border-red-300 text-red-600 px-2 py-1.5 rounded-lg inline-flex items-center gap-1 hover:bg-red-50"><Trash2 size={13} /> Elimina</button>
+              </div>
+            </div>
+            {resetFor === o.id ? (
+              <div className="mt-2 flex items-center gap-2">
+                <input value={resetPw} onChange={(e) => setResetPw(e.target.value)} placeholder="Nuova password (min 6)" className="flex-1 px-3 py-1.5 rounded-lg border border-stone-300 text-sm brand-ring" />
+                <button onClick={() => reset(o.id)} className="text-sm font-medium brand-bg px-3 py-1.5 rounded-lg">Salva</button>
+                <button onClick={() => { setResetFor(null); setResetPw(""); }} className="text-stone-400"><X size={16} /></button>
+              </div>
+            ) : null}
+          </div>
+        ))}</div>
+      )}
+
+      <div className="border-t border-stone-100 pt-3">
+        <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-2">Nuovo accesso</div>
+        <div className="grid sm:grid-cols-2 gap-2">
+          <select value={staffId} onChange={(e) => setStaffId(e.target.value)} className="px-3 py-2 rounded-lg border border-stone-300 text-sm bg-white brand-ring"><option value="">Operatore…</option>{staff.map((s) => { const used = items.some((o) => o.staff_id === s.id); return <option key={s.id} value={s.id} disabled={used}>{s.name}{used ? " (già attivo)" : ""}</option>; })}</select>
+          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email accesso" className="px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+          <input value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Password (min 6)" className="px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+          <button onClick={crea} className="brand-bg text-sm font-medium px-3 py-2 rounded-lg inline-flex items-center justify-center gap-1.5"><Plus size={15} /> Crea accesso</button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function StaffEditor({ st, services, onEdit, onDelete }) {
+  const F = useMods();
+  const toggleSvc = (id) => onEdit({ serviceIds: st.serviceIds.includes(id) ? st.serviceIds.filter((x) => x !== id) : [...st.serviceIds, id] });
+  const setRanges = (day, ranges) => onEdit({ availability: { ...st.availability, [day]: ranges } });
+  const addRange = (day) => setRanges(day, [...(st.availability[day] || []), [540, 780]]);
+  const editRange = (day, i, idx, val) => { const r = (st.availability[day] || []).map((x) => x.slice()); r[i][idx] = strToMin(val); setRanges(day, r); };
+  const delRange = (day, i) => setRanges(day, (st.availability[day] || []).filter((_, j) => j !== i));
+  const off = st.off || [];
+  const addOff = () => onEdit({ off: [...off, { id: uid(), from: todayStr(), to: todayStr() }] });
+  const editOff = (id, patch) => onEdit({ off: off.map((o) => (o.id === id ? { ...o, ...patch } : o)) });
+  const delOff = (id) => onEdit({ off: off.filter((o) => o.id !== id) });
+  return (
+    <div className="border border-stone-200 rounded-xl p-4">
+      <div className="flex items-center gap-2 mb-3"><input value={st.name} onChange={(e) => onEdit({ name: e.target.value })} className="font-medium px-2 py-1.5 rounded-lg border border-stone-300 text-sm brand-ring" /><input value={st.role} onChange={(e) => onEdit({ role: e.target.value })} placeholder="Ruolo" className="flex-1 text-sm px-2 py-1.5 rounded-lg border border-stone-300 text-stone-500 brand-ring" /><button onClick={onDelete} className="p-2 text-stone-400 hover:text-red-500"><Trash2 size={16} /></button></div>
+      <div className="mb-3">
+        <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Servizi eseguiti</div>
+        <div className="flex flex-wrap gap-1.5">{services.map((s) => { const on = st.serviceIds.includes(s.id); return <button key={s.id} onClick={() => toggleSvc(s.id)} className={`px-2.5 py-1 rounded-lg text-xs border transition ${on ? "brand-bg border-transparent" : "bg-white border-stone-200 text-stone-500 brand-hover"}`}>{s.name}</button>; })}</div>
+      </div>
+      <div>
+        <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Orari di disponibilità</div>
+        <div className="space-y-1.5">{DAYS.map((dd) => { const k = dd.k, l = dd.l; const ranges = st.availability[k] || []; return (
+          <div key={k} className="flex items-start gap-2 text-sm">
+            <span className="w-9 pt-1.5 text-stone-500 font-medium">{l}</span>
+            <div className="flex-1 flex flex-wrap items-center gap-2">
+              {ranges.length === 0 ? <span className="text-xs text-stone-300 pt-1.5">Chiuso</span> : null}
+              {ranges.map((r, i) => (
+                <div key={i} className="flex items-center gap-1 bg-stone-50 rounded-lg px-1.5 py-1">
+                  <input type="time" value={minToStr(r[0])} step={900} onChange={(e) => editRange(k, i, 0, e.target.value)} className="text-xs bg-transparent focus:outline-none" />
+                  <span className="text-stone-300">–</span>
+                  <input type="time" value={minToStr(r[1])} step={900} onChange={(e) => editRange(k, i, 1, e.target.value)} className="text-xs bg-transparent focus:outline-none" />
+                  <button onClick={() => delRange(k, i)} className="text-stone-300 hover:text-red-500"><X size={13} /></button>
+                </div>
+              ))}
+              <button onClick={() => addRange(k)} className="text-xs brand-accent hover:opacity-70 flex items-center gap-0.5 pt-1"><Plus size={13} /> fascia</button>
+            </div>
+          </div>
+        ); })}</div>
+      </div>
+      <div className="mt-3">
+        <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Assenze (malattia / ferie)</div>
+        <div className="space-y-1.5">
+          {off.length === 0 ? <span className="text-xs text-stone-300">Nessuna assenza programmata.</span> : null}
+          {off.map((o) => (
+            <div key={o.id} className="flex flex-wrap items-center gap-1.5 text-sm bg-stone-50 rounded-lg px-2 py-1.5">
+              <span className="text-xs text-stone-400">dal</span><input type="date" value={o.from} onChange={(e) => editOff(o.id, { from: e.target.value })} className="text-xs bg-transparent focus:outline-none" />
+              <span className="text-xs text-stone-400">al</span><input type="date" value={o.to} onChange={(e) => editOff(o.id, { to: e.target.value })} className="text-xs bg-transparent focus:outline-none" />
+              <button onClick={() => delOff(o.id)} className="text-stone-300 hover:text-red-500 ml-auto"><X size={14} /></button>
+            </div>
+          ))}
+        </div>
+        <button onClick={addOff} className="text-xs brand-accent hover:opacity-70 flex items-center gap-0.5 mt-1.5"><Plus size={13} /> aggiungi assenza</button>
+      </div>
+    </div>
+  );
+}
+
+function ShopView({ catalog, setCatalog, sales, setSales, clients, setClients, branding, loyalty, hidePartial, canAddClient }) {
+  const [tab, setTab] = useState("pos");
+  const TABS = [["pos", "Cassa", ShoppingCart], ["load", "Carico", PackagePlus], ["catalog", "Catalogo", Boxes], ["history", "Storico", Receipt]];
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap gap-1 bg-stone-100 rounded-lg p-1 w-fit">
+        {TABS.map((t) => { const k = t[0], l = t[1], Icon = t[2]; return (
+          <button key={k} onClick={() => setTab(k)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition ${tab === k ? "bg-white shadow-sm text-stone-800" : "text-stone-500"}`}><Icon size={15} /> {l}</button>
+        ); })}
+      </div>
+      {tab === "pos" ? <PosTab catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} clients={clients} setClients={setClients} branding={branding} loyalty={loyalty} hidePartial={hidePartial} canAddClient={canAddClient} /> : null}
+      {tab === "load" ? <LoadTab catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} /> : null}
+      {tab === "catalog" ? <CatalogTab catalog={catalog} setCatalog={setCatalog} loyalty={loyalty} /> : null}
+      {tab === "history" ? <SalesHistoryTab sales={sales} branding={branding} hidePartial={hidePartial} /> : null}
+    </div>
+  );
+}
+
+function PosTab({ catalog, setCatalog, sales, setSales, clients, setClients, branding, loyalty, hidePartial, canAddClient }) {
+  const F = useMods();
+  const cats = catalog.categories;
+  const [cat, setCat] = useState("all");
+  const [q, setQ] = useState("");
+  const [cart, setCart] = useState([]);
+  const [client, setClient] = useState(null);
+  const [lastSale, setLastSale] = useState(null);
+
+  const products = catalog.products.filter((p) => (cat === "all" || (p.categoryId || "") === cat) && (!q || p.name.toLowerCase().includes(q.toLowerCase())));
+  const inCart = (pid, fid) => { const it = cart.find((x) => x.productId === pid && x.formatId === fid); return it ? it.qty : 0; };
+  const add = (p, f) => {
+    const remaining = (Number(f.stock) || 0) - inCart(p.id, f.id);
+    if (remaining <= 0) return;
+    setLastSale(null);
+    setCart((c) => { const ex = c.find((x) => x.productId === p.id && x.formatId === f.id); if (ex) return c.map((x) => (x === ex ? { ...x, qty: x.qty + 1 } : x)); return [...c, { productId: p.id, formatId: f.id, name: p.name, label: f.label, price: Number(f.price) || 0, qty: 1 }]; });
+  };
+  const changeQty = (idx, delta) => setCart((c) => c.map((it, i) => { if (i !== idx) return it; const prod = catalog.products.find((p) => p.id === it.productId); const fmt = prod && prod.formats.find((f) => f.id === it.formatId); const max = fmt ? (Number(fmt.stock) || 0) : it.qty; return { ...it, qty: Math.min(max, Math.max(0, it.qty + delta)) }; }).filter((it) => it.qty > 0));
+  const removeItem = (idx) => setCart((c) => c.filter((_, i) => i !== idx));
+  const total = cartTotal(cart);
+  const count = cart.reduce((a, it) => a + it.qty, 0);
+  const salePoints = (loyalty && loyalty.fromSales) ? cart.reduce((a, it) => { const p = catalog.products.find((x) => x.id === it.productId); return a + ((p && p.points) || 0) * it.qty; }, 0) : 0;
+
+  const confirm = (partial) => {
+    if (!cart.length) return;
+    for (const it of cart) { const prod = catalog.products.find((p) => p.id === it.productId); const fmt = prod && prod.formats.find((f) => f.id === it.formatId); if (!fmt || (Number(fmt.stock) || 0) < it.qty) { alert(`Giacenza insufficiente per ${it.name}.`); return; } }
+    const sale = { id: uid(), ts: Date.now(), type: "sale", partial: !!partial, clientCode: client ? client.code : null, clientName: client ? (client.name || "") : "", items: cart.map((it) => ({ productId: it.productId, formatId: it.formatId, name: it.name, label: it.label, price: it.price, qty: it.qty })), total };
+    setCatalog(applySaleToCatalog(catalog, cart));
+    setSales([sale, ...sales]);
+    setCart([]); setClient(null); setLastSale(sale);
+  };
+
+  const chip = (on) => `px-3 py-1.5 rounded-lg text-sm border transition ${on ? "brand-bg border-transparent" : "bg-white border-stone-200 text-stone-600 brand-hover"}`;
+
+  return (
+    <div className="flex flex-col sm:flex-row gap-4 items-start">
+      <div className="w-full sm:flex-1 sm:min-w-0 space-y-3">
+        <div className="flex flex-wrap gap-1.5">
+          <button onClick={() => setCat("all")} className={chip(cat === "all")}>Tutti</button>
+          {cats.map((c) => <button key={c.id} onClick={() => setCat(c.id)} className={chip(cat === c.id)}>{c.name}</button>)}
+        </div>
+        <div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2 bg-white brand-ring"><Search size={16} className="text-stone-400" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cerca prodotto" className="flex-1 text-sm focus:outline-none" /></div>
+        {products.length === 0 ? <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center text-stone-400">Nessun prodotto. Aggiungilo dalla scheda Catalogo.</div> : (
+          <div className="grid sm:grid-cols-2 gap-3">{products.map((p) => (
+            <div key={p.id} className="bg-white rounded-xl border border-stone-200 p-3 shadow-sm">
+              <div className="font-medium leading-tight">{p.name}</div>
+              {p.description ? <div className="text-xs text-stone-400 mb-2 mt-0.5">{p.description}</div> : <div className="mb-2" />}
+              <div className="space-y-1.5">{p.formats.map((f) => { const remaining = (Number(f.stock) || 0) - inCart(p.id, f.id); const out = remaining <= 0; return (
+                <button key={f.id} onClick={() => add(p, f)} disabled={out} className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border text-sm transition ${out ? "border-stone-200 bg-stone-50 text-stone-300 cursor-not-allowed" : "border-stone-200 brand-hover"}`}>
+                  <span className="flex items-center gap-1.5 min-w-0"><Tag size={13} className={out ? "text-stone-300 shrink-0" : "brand-accent shrink-0"} /> <span className="truncate">{f.label}</span></span>
+                  <span className="flex items-center gap-2 shrink-0"><span className="font-medium">{eur(f.price)}</span><span className={`text-xs ${out ? "text-red-300" : "text-stone-400"}`}>{out ? "esaurito" : `${remaining} pz`}</span></span>
+                </button>
+              ); })}</div>
+            </div>
+          ))}</div>
+        )}
+      </div>
+
+      <div className="w-full sm:w-80 sm:shrink-0 sm:sticky sm:top-20">
+        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-4">
+          <h3 className="font-semibold flex items-center gap-2 mb-3"><ShoppingCart size={16} className="brand-accent" /> Carrello {count ? <span className="text-xs font-normal text-stone-400">· {count} pz</span> : null}</h3>
+          {lastSale && cart.length === 0 ? (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-sm text-green-700 mb-3">
+              <div className="flex items-center gap-1.5 font-medium"><Check size={15} /> Vendita {lastSale.partial ? "parziale " : ""}registrata · {eur(lastSale.total)}</div>
+              <div className="flex gap-2 mt-2">
+                <button onClick={() => printSale(lastSale, branding)} className="text-xs font-medium border border-green-300 text-green-700 px-2.5 py-1.5 rounded-lg hover:bg-green-100 inline-flex items-center gap-1"><Printer size={13} /> Scontrino</button>
+                <button onClick={() => setLastSale(null)} className="text-xs font-medium text-green-700 px-2.5 py-1.5 hover:underline">Nuova vendita</button>
+              </div>
+            </div>
+          ) : null}
+          {cart.length === 0 ? <p className="text-sm text-stone-400 text-center py-6">Tocca un prodotto per aggiungerlo.</p> : (
+            <>
+              <div>{cart.map((it, i) => (
+                <div key={i} className="flex items-center gap-2 py-2 border-b border-stone-100 last:border-0">
+                  <div className="flex-1 min-w-0"><div className="text-sm font-medium truncate">{it.name}</div><div className="text-xs text-stone-400">{it.label} · {eur(it.price)}</div></div>
+                  <div className="flex items-center gap-1.5">
+                    <button onClick={() => changeQty(i, -1)} className="w-6 h-6 rounded-md border border-stone-300 flex items-center justify-center text-stone-500 hover:bg-stone-50"><Minus size={13} /></button>
+                    <span className="w-5 text-center text-sm font-medium">{it.qty}</span>
+                    <button onClick={() => changeQty(i, 1)} className="w-6 h-6 rounded-md border border-stone-300 flex items-center justify-center text-stone-500 hover:bg-stone-50"><Plus size={13} /></button>
+                  </div>
+                  <div className="w-16 text-right text-sm font-medium">{eur(it.price * it.qty)}</div>
+                  <button onClick={() => removeItem(i)} className="text-stone-300 hover:text-red-500"><X size={15} /></button>
+                </div>
+              ))}</div>
+              <div className="border-t border-stone-200 pt-3 mt-2 space-y-3">
+                <ClientAssign clients={clients} setClients={setClients} client={client} setClient={setClient} canAddClient={canAddClient} />
+                <div className="flex items-center justify-between font-semibold"><span>Importo</span><span className="text-lg">{eur(total)}</span></div>
+                {F.fidelity && loyalty && loyalty.fromSales ? <div className="flex items-center justify-between text-sm"><span className="flex items-center gap-1.5 text-stone-500"><Star size={14} className="brand-accent" /> Punti generati</span><span className="font-medium brand-accent">+{salePoints}{client ? "" : " (assegna un cliente)"}</span></div> : null}
+                <div className={hidePartial ? "" : "grid grid-cols-2 gap-2"}>
+                  <button onClick={() => confirm(false)} className="w-full brand-bg font-medium py-2.5 rounded-lg flex items-center justify-center gap-1.5"><Check size={16} /> {hidePartial ? "Conferma vendita" : "Totale"}</button>
+                  {!hidePartial ? <button onClick={() => confirm(true)} className="font-medium py-2.5 rounded-lg flex items-center justify-center gap-1.5 border border-amber-300 text-amber-700 hover:bg-amber-50"><Timer size={16} /> Parziale</button> : null}
+                </div>
+                {!hidePartial ? <p className="text-xs text-stone-400 leading-relaxed">"Totale" registra la vendita completa. "Parziale" la registra comunque (scaricando le giacenze) ma la segna come parziale nello storico.</p> : null}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ClientAssign({ clients, setClients, client, setClient, canAddClient }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [nn, setNn] = useState("");
+  const [np, setNp] = useState("");
+  const nq = q.replace(/\s/g, "");
+  const matches = q ? clients.filter((c) => (c.name || "").toLowerCase().includes(q.toLowerCase()) || c.code.includes(nq) || (c.phone || "").replace(/\s/g, "").includes(nq) || (c.card || "").replace(/\s/g, "").toLowerCase().includes(nq.toLowerCase())).slice(0, 6) : [];
+  const reset = () => { setOpen(false); setQ(""); setCreating(false); setNn(""); setNp(""); };
+  const createClient = () => {
+    if (!nn.trim()) return;
+    if (canAddClient === false) { alert("Limite demo raggiunto: massimo 3 clienti."); return; }
+    const code = generateCode(clients);
+    const nc = { code, name: nn.trim(), email: "", phone: np.trim(), card: "", createdAt: Date.now() };
+    setClients([...clients, nc]); setClient(nc); reset();
+  };
+  if (client) return (
+    <div className="flex items-center justify-between bg-stone-50 rounded-lg px-3 py-2 text-sm">
+      <span className="flex items-center gap-1.5 min-w-0"><User size={14} className="text-stone-400 shrink-0" /> <span className="truncate">{client.name || "Cliente"} <span className="text-stone-400">#{client.code}</span></span></span>
+      <button onClick={() => setClient(null)} className="text-stone-400 hover:text-red-500 shrink-0"><X size={16} /></button>
+    </div>
+  );
+  return (
+    <div>
+      {!open ? <button onClick={() => setOpen(true)} className="w-full text-sm border border-dashed border-stone-300 text-stone-500 rounded-lg py-2 hover:bg-stone-50 flex items-center justify-center gap-1.5"><Plus size={14} /> Assegna cliente (facoltativo)</button> : (
+        <div className="border border-stone-200 rounded-lg p-2">
+          {!creating ? (
+            <>
+              <div className="flex items-center gap-2 border border-stone-300 rounded-lg px-2 py-1.5 brand-ring mb-1"><Search size={14} className="text-stone-400" /><input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Nome, codice, cellulare o tessera" className="flex-1 text-sm focus:outline-none" /><button onClick={reset} className="text-stone-400"><X size={15} /></button></div>
+              {matches.map((c) => <button key={c.code} onClick={() => { setClient(c); reset(); }} className="w-full text-left px-2 py-1.5 rounded-md hover:bg-stone-50 text-sm flex justify-between gap-2"><span className="truncate">{c.name || "Senza nome"} <span className="text-stone-400">#{c.code}</span></span>{c.phone ? <span className="text-stone-400 text-xs shrink-0">{c.phone}</span> : null}</button>)}
+              {q && matches.length === 0 ? <p className="text-xs text-stone-400 px-2 py-1.5">Nessun cliente trovato.</p> : null}
+              <button onClick={() => { setCreating(true); setNn(q); }} className="w-full mt-1 text-sm brand-accent flex items-center justify-center gap-1.5 py-1.5 hover:bg-stone-50 rounded-md"><Plus size={14} /> Nuovo cliente</button>
+            </>
+          ) : (
+            <div className="space-y-2">
+              <div className="text-xs font-medium text-stone-400 uppercase tracking-wide">Nuovo cliente</div>
+              <input autoFocus value={nn} onChange={(e) => setNn(e.target.value)} placeholder="Nome e cognome" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+              <input value={np} onChange={(e) => setNp(e.target.value)} placeholder="Telefono (facoltativo)" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+              <div className="flex gap-2"><button onClick={createClient} disabled={!nn.trim()} className="flex-1 brand-bg text-sm font-medium py-2 rounded-lg disabled:opacity-40">Crea e assegna</button><button onClick={() => setCreating(false)} className="text-sm text-stone-500 px-3 py-2 rounded-lg border border-stone-200">Indietro</button></div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CatalogTab({ catalog, setCatalog, loyalty }) {
+  const cats = catalog.categories;
+  const setCats = (categories) => setCatalog({ ...catalog, categories });
+  const setProds = (products) => setCatalog({ ...catalog, products });
+  const [newCat, setNewCat] = useState("");
+  const addCat = () => { const n = newCat.trim(); if (!n) return; setCats([...cats, { id: uid(), name: n }]); setNewCat(""); };
+  const renameCat = (id, name) => setCats(cats.map((c) => (c.id === id ? { ...c, name } : c)));
+  const delCat = (id) => { if (!confirm("Eliminare la categoria? I prodotti resteranno senza categoria.")) return; setCatalog({ ...catalog, categories: cats.filter((c) => c.id !== id), products: catalog.products.map((p) => (p.categoryId === id ? { ...p, categoryId: "" } : p)) }); };
+  const addProduct = () => setProds([...catalog.products, { id: uid(), name: "Nuovo prodotto", description: "", categoryId: cats[0] ? cats[0].id : "", formats: [{ id: uid(), label: "Standard", price: 0, stock: 0 }] }]);
+  const editProduct = (id, patch) => setProds(catalog.products.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  const delProduct = (id) => { if (confirm("Eliminare questo prodotto?")) setProds(catalog.products.filter((p) => p.id !== id)); };
+
+  const groups = [...cats, { id: "", name: "Senza categoria" }].map((c) => ({ cat: c, items: catalog.products.filter((p) => (p.categoryId || "") === c.id) })).filter((g) => g.items.length || g.cat.id);
+
+  return (
+    <div className="space-y-6">
+      <section className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+        <h3 className="font-semibold flex items-center gap-2 mb-3"><Layers size={16} className="brand-accent" /> Categorie</h3>
+        <div className="space-y-2">{cats.map((c) => (
+          <div key={c.id} className="flex items-center gap-2">
+            <input value={c.name} onChange={(e) => renameCat(c.id, e.target.value)} className="flex-1 px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+            <span className="text-xs text-stone-400 w-16 text-right">{catalog.products.filter((p) => p.categoryId === c.id).length} prod.</span>
+            <button onClick={() => delCat(c.id)} className="p-2 text-stone-400 hover:text-red-500"><Trash2 size={16} /></button>
+          </div>
+        ))}</div>
+        <div className="flex gap-2 mt-3"><input value={newCat} onChange={(e) => setNewCat(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addCat()} placeholder="Nuova categoria" className="flex-1 px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /><button onClick={addCat} className="brand-bg px-3 py-2 rounded-lg text-sm inline-flex items-center gap-1"><Plus size={15} /> Aggiungi</button></div>
+      </section>
+
+      <section>
+        <div className="flex items-center justify-between mb-3"><h3 className="font-semibold flex items-center gap-2"><Package size={16} className="brand-accent" /> Prodotti e giacenze</h3><button onClick={addProduct} className="flex items-center gap-1 text-sm brand-bg px-3 py-1.5 rounded-lg"><Plus size={15} /> Aggiungi prodotto</button></div>
+        {catalog.products.length === 0 ? <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center text-stone-400">Nessun prodotto. Aggiungine uno.</div> : groups.map((g) => (
+          <div key={g.cat.id || "none"} className="mb-4">
+            <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-2">{g.cat.name}</div>
+            <div className="space-y-2">{g.items.map((p) => <ProductEditor key={p.id} product={p} categories={cats} loyalty={loyalty} onChange={(patch) => editProduct(p.id, patch)} onDelete={() => delProduct(p.id)} />)}</div>
+          </div>
+        ))}
+      </section>
+    </div>
+  );
+}
+
+function ProductEditor({ product, categories, loyalty, onChange, onDelete }) {
+  const F = useMods();
+  const [open, setOpen] = useState(false);
+  const p = product;
+  const setFormat = (fid, patch) => onChange({ formats: p.formats.map((f) => (f.id === fid ? { ...f, ...patch } : f)) });
+  const addFormat = () => onChange({ formats: [...p.formats, { id: uid(), label: "Nuovo formato", price: 0, stock: 0 }] });
+  const delFormat = (fid) => { if (p.formats.length <= 1) return; onChange({ formats: p.formats.filter((f) => f.id !== fid) }); };
+  const totalStock = p.formats.reduce((a, f) => a + (Number(f.stock) || 0), 0);
+  const prices = p.formats.map((f) => Number(f.price) || 0);
+  const priceLabel = prices.length ? (Math.min(...prices) === Math.max(...prices) ? eur(prices[0]) : `${eur(Math.min(...prices))} – ${eur(Math.max(...prices))}`) : "";
+  return (
+    <div className="bg-white rounded-xl border border-stone-200 shadow-sm">
+      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-3 p-3 text-left">
+        <Package size={18} className="text-stone-400 shrink-0" />
+        <div className="flex-1 min-w-0"><div className="font-medium truncate">{p.name}</div><div className="text-xs text-stone-400">{priceLabel} · {p.formats.length} format{p.formats.length === 1 ? "o" : "i"} · giacenza {totalStock} pz</div></div>
+        <ChevronRight size={18} className={`text-stone-300 shrink-0 transition-transform ${open ? "rotate-90" : ""}`} />
+      </button>
+      {open ? (
+        <div className="px-3 pb-3 border-t border-stone-100 pt-3 space-y-3">
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label="Nome"><input value={p.name} onChange={(e) => onChange({ name: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
+            <Field label="Categoria"><select value={p.categoryId || ""} onChange={(e) => onChange({ categoryId: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm bg-white brand-ring"><option value="">Senza categoria</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
+          </div>
+          <Field label="Descrizione"><input value={p.description || ""} onChange={(e) => onChange({ description: e.target.value })} placeholder="Breve descrizione" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
+          {F.fidelity && loyalty && loyalty.fromSales ? <Field label="Punti fedeltà per pezzo venduto"><div className="flex items-center gap-1"><input type="number" min={0} step={1} value={p.points != null ? p.points : 0} onChange={(e) => onChange({ points: Math.max(0, Math.round(Number(e.target.value) || 0)) })} className="w-24 px-3 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring" /><span className="text-xs text-stone-400">punti</span></div></Field> : null}
+          <div>
+            <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Formati · prezzo · giacenza</div>
+            <div className="space-y-2">{p.formats.map((f) => (
+              <div key={f.id} className="flex items-center gap-2">
+                <input value={f.label} onChange={(e) => setFormat(f.id, { label: e.target.value })} placeholder="es. 300 ml" className="flex-1 min-w-0 px-2 py-1.5 rounded-lg border border-stone-300 text-sm brand-ring" />
+                <div className="flex items-center gap-1"><input type="number" min={0} step={0.5} value={f.price} onChange={(e) => setFormat(f.id, { price: Math.max(0, Number(e.target.value) || 0) })} className="w-20 px-2 py-1.5 rounded-lg border border-stone-300 text-sm text-right brand-ring" /><span className="text-xs text-stone-400">€</span></div>
+                <div className="flex items-center gap-1"><input type="number" min={0} step={1} value={f.stock} onChange={(e) => setFormat(f.id, { stock: Math.max(0, Math.round(Number(e.target.value) || 0)) })} className="w-16 px-2 py-1.5 rounded-lg border border-stone-300 text-sm text-right brand-ring" /><span className="text-xs text-stone-400">pz</span></div>
+                <button onClick={() => delFormat(f.id)} disabled={p.formats.length <= 1} className="p-1.5 text-stone-400 hover:text-red-500 disabled:opacity-30"><Trash2 size={15} /></button>
+              </div>
+            ))}</div>
+            <button onClick={addFormat} className="text-xs brand-accent hover:opacity-70 flex items-center gap-0.5 mt-2"><Plus size={13} /> formato</button>
+          </div>
+          <button onClick={onDelete} className="text-xs text-red-500 hover:underline flex items-center gap-1"><Trash2 size={13} /> Elimina prodotto</button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SalesHistoryTab({ sales, branding, hidePartial }) {
+  const [openId, setOpenId] = useState(null);
+  const [flt, setFlt] = useState("all");
+  const isLoad = (r) => r.type === "load";
+  const visible = hidePartial ? sales.filter((r) => !r.partial) : sales;
+  const startToday = new Date(); startToday.setHours(0, 0, 0, 0);
+  const onlySales = visible.filter((s) => !isLoad(s));
+  const todaySales = onlySales.filter((s) => s.ts >= startToday.getTime());
+  const todayTot = todaySales.reduce((a, s) => a + (s.total || 0), 0);
+  const allTot = onlySales.reduce((a, s) => a + (s.total || 0), 0);
+  const loadCount = visible.filter(isLoad).length;
+  const records = visible.filter((r) => flt === "all" || (flt === "sales" && !isLoad(r)) || (flt === "loads" && isLoad(r)));
+  const chip = (on) => `px-3 py-1.5 rounded-lg text-sm border transition ${on ? "brand-bg border-transparent" : "bg-white border-stone-200 text-stone-600 brand-hover"}`;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm"><div className="text-xs text-stone-400 uppercase tracking-wide">Incasso oggi</div><div className="text-xl font-semibold">{eur(todayTot)}</div><div className="text-xs text-stone-400">{todaySales.length} vendite</div></div>
+        <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm"><div className="text-xs text-stone-400 uppercase tracking-wide">Incasso totale</div><div className="text-xl font-semibold">{eur(allTot)}</div><div className="text-xs text-stone-400">{onlySales.length} vendite · {loadCount} carichi</div></div>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        <button onClick={() => setFlt("all")} className={chip(flt === "all")}>Tutti</button>
+        <button onClick={() => setFlt("sales")} className={chip(flt === "sales")}>Vendite</button>
+        <button onClick={() => setFlt("loads")} className={chip(flt === "loads")}>Carichi</button>
+      </div>
+      {records.length === 0 ? <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center text-stone-400">Nessun movimento.</div> : (
+        <div className="space-y-2">{records.map((s) => { const open = openId === s.id; const load = isLoad(s); const pieces = s.items.reduce((a, it) => a + it.qty, 0); return (
+          <div key={s.id} className="bg-white rounded-xl border border-stone-200 shadow-sm">
+            <button onClick={() => setOpenId(open ? null : s.id)} className="w-full flex items-center gap-3 p-3 text-left">
+              {load ? <PackagePlus size={18} className="text-emerald-500 shrink-0" /> : <Receipt size={18} className="text-stone-400 shrink-0" />}
+              <div className="flex-1 min-w-0">
+                <div className="font-medium truncate flex items-center gap-2">{load ? <span>Carico magazzino</span> : <span>{eur(s.total)}</span>}<span className="text-xs text-stone-400 font-normal">· {pieces} pz</span>{s.partial ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 inline-flex items-center gap-0.5"><Timer size={10} /> Parziale</span> : null}{load ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Carico</span> : null}</div>
+                <div className="text-xs text-stone-400 truncate">{fmtDateTime(s.ts)}{load ? "" : (s.clientName ? ` · ${s.clientName}` : " · Cliente occasionale")}</div>
+              </div>
+              <ChevronRight size={18} className={`text-stone-300 shrink-0 transition-transform ${open ? "rotate-90" : ""}`} />
+            </button>
+            {open ? (
+              <div className="px-3 pb-3 border-t border-stone-100 pt-2">
+                <div className="space-y-1 text-sm">{s.items.map((it, i) => (<div key={i} className="flex justify-between gap-2"><span className="text-stone-600">{load ? `+${it.qty}` : `${it.qty}×`} {it.name}{it.label ? ` (${it.label})` : ""}</span>{load ? <span className="text-emerald-600 shrink-0">+{it.qty} pz</span> : <span className="text-stone-500 shrink-0">{eur(it.price * it.qty)}</span>}</div>))}</div>
+                {!load ? <button onClick={() => printSale(s, branding)} className="mt-3 text-xs font-medium border border-stone-300 text-stone-600 px-3 py-1.5 rounded-lg hover:bg-stone-50 inline-flex items-center gap-1.5"><Printer size={14} /> Stampa scontrino</button> : null}
+              </div>
+            ) : null}
+          </div>
+        ); })}</div>
+      )}
+    </div>
+  );
+}
+
+function LoadTab({ catalog, setCatalog, sales, setSales }) {
+  const cats = catalog.categories;
+  const [cat, setCat] = useState("all");
+  const [q, setQ] = useState("");
+  const [list, setList] = useState([]);
+  const [done, setDone] = useState(null);
+
+  const products = catalog.products.filter((p) => (cat === "all" || (p.categoryId || "") === cat) && (!q || p.name.toLowerCase().includes(q.toLowerCase())));
+  const inList = (pid, fid) => { const it = list.find((x) => x.productId === pid && x.formatId === fid); return it ? it.qty : 0; };
+  const add = (p, f) => {
+    setDone(null);
+    setList((c) => { const ex = c.find((x) => x.productId === p.id && x.formatId === f.id); if (ex) return c.map((x) => (x === ex ? { ...x, qty: x.qty + 1 } : x)); return [...c, { productId: p.id, formatId: f.id, name: p.name, label: f.label, qty: 1 }]; });
+  };
+  const changeQty = (idx, delta) => setList((c) => c.map((it, i) => (i === idx ? { ...it, qty: Math.max(0, it.qty + delta) } : it)).filter((it) => it.qty > 0));
+  const setQtyDirect = (idx, val) => setList((c) => c.map((it, i) => (i === idx ? { ...it, qty: Math.max(0, Math.round(Number(val) || 0)) } : it)).filter((it) => it.qty > 0));
+  const removeItem = (idx) => setList((c) => c.filter((_, i) => i !== idx));
+  const totalPieces = list.reduce((a, it) => a + it.qty, 0);
+
+  const confirm = () => {
+    if (!list.length) return;
+    const rec = { id: uid(), ts: Date.now(), type: "load", items: list.map((it) => ({ productId: it.productId, formatId: it.formatId, name: it.name, label: it.label, qty: it.qty })), total: 0 };
+    setCatalog(applyLoadToCatalog(catalog, list));
+    setSales([rec, ...sales]);
+    setList([]); setDone(rec);
+  };
+
+  const chip = (on) => `px-3 py-1.5 rounded-lg text-sm border transition ${on ? "brand-bg border-transparent" : "bg-white border-stone-200 text-stone-600 brand-hover"}`;
+
+  return (
+    <div className="flex flex-col sm:flex-row gap-4 items-start">
+      <div className="w-full sm:flex-1 sm:min-w-0 space-y-3">
+        <div className="flex flex-wrap gap-1.5">
+          <button onClick={() => setCat("all")} className={chip(cat === "all")}>Tutti</button>
+          {cats.map((c) => <button key={c.id} onClick={() => setCat(c.id)} className={chip(cat === c.id)}>{c.name}</button>)}
+        </div>
+        <div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2 bg-white brand-ring"><Search size={16} className="text-stone-400" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cerca prodotto da rifornire" className="flex-1 text-sm focus:outline-none" /></div>
+        {products.length === 0 ? <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center text-stone-400">Nessun prodotto. Aggiungilo dalla scheda Catalogo.</div> : (
+          <div className="grid sm:grid-cols-2 gap-3">{products.map((p) => (
+            <div key={p.id} className="bg-white rounded-xl border border-stone-200 p-3 shadow-sm">
+              <div className="font-medium leading-tight">{p.name}</div>
+              {p.description ? <div className="text-xs text-stone-400 mb-2 mt-0.5">{p.description}</div> : <div className="mb-2" />}
+              <div className="space-y-1.5">{p.formats.map((f) => { const added = inList(p.id, f.id); return (
+                <button key={f.id} onClick={() => add(p, f)} className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border border-stone-200 text-sm transition brand-hover">
+                  <span className="flex items-center gap-1.5 min-w-0"><Tag size={13} className="brand-accent shrink-0" /> <span className="truncate">{f.label}</span></span>
+                  <span className="flex items-center gap-2 shrink-0"><span className="text-xs text-stone-400">giac. {Number(f.stock) || 0}{added ? ` +${added}` : ""}</span><PackagePlus size={15} className="brand-accent" /></span>
+                </button>
+              ); })}</div>
+            </div>
+          ))}</div>
+        )}
+      </div>
+
+      <div className="w-full sm:w-80 sm:shrink-0 sm:sticky sm:top-20">
+        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-4">
+          <h3 className="font-semibold flex items-center gap-2 mb-3"><PackagePlus size={16} className="brand-accent" /> Carico magazzino {totalPieces ? <span className="text-xs font-normal text-stone-400">· {totalPieces} pz</span> : null}</h3>
+          {done && list.length === 0 ? (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-sm text-green-700 mb-3">
+              <div className="flex items-center gap-1.5 font-medium"><Check size={15} /> Carico registrato · {done.items.reduce((a, it) => a + it.qty, 0)} pz</div>
+              <button onClick={() => setDone(null)} className="text-xs font-medium text-green-700 mt-1 hover:underline">Nuovo carico</button>
+            </div>
+          ) : null}
+          {list.length === 0 ? <p className="text-sm text-stone-400 text-center py-6">Tocca un prodotto per aggiungerlo al carico.</p> : (
+            <>
+              <div>{list.map((it, i) => (
+                <div key={i} className="flex items-center gap-2 py-2 border-b border-stone-100 last:border-0">
+                  <div className="flex-1 min-w-0"><div className="text-sm font-medium truncate">{it.name}</div><div className="text-xs text-stone-400">{it.label}</div></div>
+                  <div className="flex items-center gap-1.5">
+                    <button onClick={() => changeQty(i, -1)} className="w-6 h-6 rounded-md border border-stone-300 flex items-center justify-center text-stone-500 hover:bg-stone-50"><Minus size={13} /></button>
+                    <input value={it.qty} onChange={(e) => setQtyDirect(i, e.target.value)} className="w-10 text-center text-sm font-medium border border-stone-200 rounded-md py-0.5 brand-ring" />
+                    <button onClick={() => changeQty(i, 1)} className="w-6 h-6 rounded-md border border-stone-300 flex items-center justify-center text-stone-500 hover:bg-stone-50"><Plus size={13} /></button>
+                  </div>
+                  <button onClick={() => removeItem(i)} className="text-stone-300 hover:text-red-500"><X size={15} /></button>
+                </div>
+              ))}</div>
+              <div className="border-t border-stone-200 pt-3 mt-2 space-y-3">
+                <div className="flex items-center justify-between font-semibold"><span>Pezzi totali</span><span className="text-lg">{totalPieces}</span></div>
+                <button onClick={confirm} className="w-full brand-bg font-medium py-2.5 rounded-lg flex items-center justify-center gap-2"><PackagePlus size={16} /> Registra carico</button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,1 @@
+ALTER TABLE utenti ADD COLUMN staff_id TEXT;
