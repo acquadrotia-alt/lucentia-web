@@ -10,5 +10,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Python (cache generata dagli script delle skill)
+__pycache__/
+*.pyc
+
 # File di sistema
 .DS_Store

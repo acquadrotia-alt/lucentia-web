@@ -70,7 +70,7 @@ function LeadModal({ kind, piano, onClose, onLogin }) {
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 lc-fade-in" onClick={onClose}>
       <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-xl max-h-[90vh] overflow-auto lc-scale-in" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between mb-1">
-          <h3 className="font-semibold text-lg">{okDemo ? "Demo attivata!" : okLead ? "Richiesta inviata" : demo ? "Prova gratis 10 giorni" : "Richiedi informazioni"}</h3>
+          <h3 className="font-display font-semibold text-xl">{okDemo ? "Demo attivata!" : okLead ? "Richiesta inviata" : demo ? "Prova gratis 10 giorni" : "Richiedi informazioni"}</h3>
           <button onClick={onClose} className="text-stone-400 hover:text-stone-600"><X size={20} /></button>
         </div>
         {okDemo ? (
@@ -117,7 +117,7 @@ export default function Landing({ onLogin }) {
         <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5 group">
             <img src="/lucentia-mark.png" alt="Lucentia" className="h-9 w-9 rounded-lg transition-transform duration-500 group-hover:rotate-6 group-hover:scale-110" />
-            <span className="text-lg font-semibold tracking-wide">LUCENTIA</span>
+            <span className="font-display text-xl font-semibold tracking-[0.12em]">LUCENTIA</span>
           </div>
           <nav className="flex items-center gap-6">
             <a href="#funzionalita" className="hidden sm:inline text-sm text-stone-500 hover:text-stone-900">Funzionalità</a>
@@ -135,7 +135,7 @@ export default function Landing({ onLogin }) {
         <div className="relative max-w-4xl mx-auto px-5 pt-16 pb-20 text-center">
           <img src="/lucentia-logo.png" alt="Lucentia — Gestionale per parrucchieri ed estetisti" className="h-28 sm:h-36 w-auto mx-auto mb-8 lc-pop-in" />
           <div className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full mb-5 lc-fade-up" style={{ background: GOLD_SOFT, color: GOLD, animationDelay: "120ms" }}><Sparkles size={13} className="lc-float" /> Gestionale per parrucchieri ed estetisti</div>
-          <h1 className="text-3xl sm:text-5xl font-bold leading-tight tracking-tight text-stone-900 lc-fade-up" style={{ animationDelay: "200ms" }}>Tutto il tuo salone,<br className="hidden sm:block" /> in un'unica app elegante.</h1>
+          <h1 className="font-display text-4xl sm:text-6xl font-bold leading-[1.08] tracking-tight text-stone-900 lc-fade-up" style={{ animationDelay: "200ms" }}>Tutto il tuo salone,<br className="hidden sm:block" /> in un'unica app <span className="font-display-i" style={{ color: GOLD }}>elegante</span>.</h1>
           <p className="mt-5 text-base sm:text-lg text-stone-500 max-w-2xl mx-auto lc-fade-up" style={{ animationDelay: "300ms" }}>Agenda, clienti, fidelity, vendite, magazzino e statistiche. Sul cloud, sempre con te, semplice da usare ogni giorno.</p>
           <div className="mt-8 flex items-center justify-center gap-3 flex-wrap lc-fade-up" style={{ animationDelay: "400ms" }}>
             <button onClick={() => setLead({ kind: "demo" })} className="text-white font-semibold px-6 py-3 rounded-xl inline-flex items-center gap-2 shadow-sm lc-shine hover:shadow-lg hover:-translate-y-0.5 transition" style={{ background: GOLD }}><Sparkles size={17} /> Prova gratis 10 giorni</button>
@@ -153,7 +153,7 @@ export default function Landing({ onLogin }) {
       {/* COS'È */}
       <section className="max-w-4xl mx-auto px-5 py-14 text-center">
         <Reveal className="text-xs font-semibold tracking-[0.2em] uppercase mb-3" style={{ color: GOLD }}>Cos'è Lucentia</Reveal>
-        <Reveal as="p" delay={80} className="text-xl sm:text-2xl text-stone-700 leading-relaxed font-light">Lucentia è il gestionale pensato per <span className="font-medium text-stone-900">parrucchieri e centri estetici</span>: organizza gli appuntamenti, fidelizza i clienti, gestisci vendite e magazzino e tieni tutto sotto controllo da un'unica schermata, con un'interfaccia curata e immediata.</Reveal>
+        <Reveal as="p" delay={80} className="text-xl sm:text-[1.7rem] sm:leading-[1.5] text-stone-700 leading-relaxed font-light">Lucentia è il gestionale pensato per <span className="font-display-i font-medium text-stone-900">parrucchieri e centri estetici</span>: organizza gli appuntamenti, fidelizza i clienti, gestisci vendite e magazzino e tieni tutto sotto controllo da un'unica schermata, con un'interfaccia curata e immediata.</Reveal>
       </section>
 
       {/* FUNZIONALITÀ */}
@@ -161,7 +161,7 @@ export default function Landing({ onLogin }) {
         <div className="max-w-6xl mx-auto px-5 py-16">
           <div className="text-center mb-12">
             <Reveal className="text-xs font-semibold tracking-[0.2em] uppercase mb-3" style={{ color: GOLD }}>Funzionalità</Reveal>
-            <Reveal as="h2" delay={80} className="text-2xl sm:text-3xl font-bold text-stone-900">Tutto ciò che serve al tuo salone</Reveal>
+            <Reveal as="h2" delay={80} className="font-display text-3xl sm:text-4xl font-bold text-stone-900">Tutto ciò che serve al tuo salone</Reveal>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {FEATURES.map(([Icon, title, desc], i) => (
@@ -180,17 +180,17 @@ export default function Landing({ onLogin }) {
         <div className="max-w-6xl mx-auto px-5 py-16">
           <div className="text-center mb-12">
             <Reveal className="text-xs font-semibold tracking-[0.2em] uppercase mb-3" style={{ color: GOLD }}>Piani di licenza</Reveal>
-            <Reveal as="h2" delay={80} className="text-2xl sm:text-3xl font-bold">Scegli il piano su misura</Reveal>
+            <Reveal as="h2" delay={80} className="font-display text-3xl sm:text-4xl font-bold">Scegli il piano su misura</Reveal>
             <Reveal as="p" delay={160} className="mt-3 text-stone-400 text-sm">Canone mensile, IVA esclusa. Nessun vincolo nascosto.</Reveal>
           </div>
           <div className="grid sm:grid-cols-3 gap-5 max-w-4xl mx-auto">
             {PLANS.map((p, pi) => (
               <Reveal key={p.name} delay={pi * 110} className={`rounded-2xl p-6 flex flex-col lc-lift ${p.highlight ? "lc-glow-card sm:-translate-y-2" : ""}`} style={{ background: p.highlight ? "#26231f" : "#211e1b", border: `1px solid ${p.highlight ? GOLD : "#3a352f"}` }}>
                 {p.highlight ? <div className="self-start text-[11px] font-semibold px-2.5 py-1 rounded-full mb-3" style={{ background: GOLD, color: "#1c1917" }}>Consigliato</div> : <div className="h-[26px] mb-3" />}
-                <div className="text-lg font-semibold" style={{ color: p.highlight ? GOLD : "#fff" }}>{p.name}</div>
+                <div className="font-display text-2xl font-semibold" style={{ color: p.highlight ? GOLD : "#fff" }}>{p.name}</div>
                 {p.full ? <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "rgba(184,137,59,0.18)", color: GOLD }}>Prezzo di lancio −50%</div> : null}
                 <div className="mt-2 flex items-baseline gap-2">
-                  <span className="text-4xl font-bold">€{p.price}</span>
+                  <span className="font-display text-4xl font-bold">€{p.price}</span>
                   {p.full ? <span className="text-lg text-stone-500 line-through">€{p.full}</span> : null}
                   <span className="text-stone-400 text-sm">/mese</span>
                 </div>
@@ -211,7 +211,7 @@ export default function Landing({ onLogin }) {
       {/* CTA */}
       <section className="max-w-4xl mx-auto px-5 py-16 text-center">
         <Reveal as="img" src="/lucentia-mark.png" alt="Lucentia" className="h-14 w-14 rounded-2xl mx-auto mb-5 lc-float" />
-        <Reveal as="h2" delay={80} className="text-2xl sm:text-3xl font-bold text-stone-900">Pronto a far brillare il tuo salone?</Reveal>
+        <Reveal as="h2" delay={80} className="font-display text-3xl sm:text-4xl font-bold text-stone-900">Pronto a far brillare il tuo salone?</Reveal>
         <Reveal as="p" delay={160} className="mt-3 text-stone-500">Accedi con le credenziali ricevute dal tuo fornitore e inizia subito.</Reveal>
         <Reveal delay={240}>
           <button onClick={onLogin} className="mt-7 text-white font-semibold px-7 py-3 rounded-xl inline-flex items-center gap-2 lc-shine hover:-translate-y-0.5 hover:shadow-lg transition" style={{ background: "#1c1917" }}>Accedi a Lucentia <ArrowRight size={17} /></button>
