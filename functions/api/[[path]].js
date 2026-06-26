@@ -115,9 +115,9 @@ function demoSeed() {
     { seed: true, id: "v3", code: "BN-DEMO03", tipo: "pacchetto", descrizione: "Pacchetto colore", prezzo: 180, creato: now - 1 * DAY, stato: "attivo", clienteCode: null, clienteNome: null, riscattato: null, usi: [], serviceId: "s3", sedute: 5 },
   ];
   const sales = [
-    { id: "sl1", ts: now - 9 * DAY, type: "sale", partial: false, clientCode: "10001", clientName: "Maria Bianchi", items: [{ productId: "p1", formatId: "f1", name: "Shampoo idratante", label: "300 ml", price: 12.5, qty: 1 }], total: 12.5 },
-    { id: "sl2", ts: now - 5 * DAY, type: "sale", partial: false, clientCode: null, clientName: "", items: [{ productId: "p3", formatId: "f1", name: "Crema viso anti-age", label: "50 ml", price: 34, qty: 1 }], total: 34 },
-    { id: "sl3", ts: now - 2 * DAY, type: "sale", partial: false, clientCode: "10003", clientName: "Anna Russo", items: [{ productId: "p4", formatId: "f1", name: "Olio corpo", label: "100 ml", price: 15, qty: 2 }], total: 30 },
+    { seed: true, id: "sl1", ts: now - 9 * DAY, type: "sale", partial: false, clientCode: "10001", clientName: "Maria Bianchi", items: [{ productId: "p1", formatId: "f1", name: "Shampoo idratante", label: "300 ml", price: 12.5, qty: 1 }], total: 12.5 },
+    { seed: true, id: "sl2", ts: now - 5 * DAY, type: "sale", partial: false, clientCode: null, clientName: "", items: [{ productId: "p3", formatId: "f1", name: "Crema viso anti-age", label: "50 ml", price: 34, qty: 1 }], total: 34 },
+    { seed: true, id: "sl3", ts: now - 2 * DAY, type: "sale", partial: false, clientCode: "10003", clientName: "Anna Russo", items: [{ productId: "p4", formatId: "f1", name: "Olio corpo", label: "100 ml", price: 15, qty: 2 }], total: 30 },
   ];
   return { config, catalog, clients, bookings, vouchers, sales };
 }
