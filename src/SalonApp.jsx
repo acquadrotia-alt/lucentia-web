@@ -769,10 +769,10 @@ export default function SalonApp({ onLogout, moduli, azienda, demo }) {
   const ls = licenseState(license);
   const operatorWarn = session.role === "operator" && ls.state === "active" && !ls.unlimited && ls.days <= 30;
   const ALL_NAV = [["agenda", "Agenda", Calendar], ["clienti", "Clienti", Users], ["buoni", "Buoni", Gift], ["shop", "Vendite", ShoppingBag], ["stats", "Statistiche", BarChart3], ["marketing", "Marketing", MessageCircle], ["settings", "Impostazioni", Settings]];
-  const canAddVoucher = !isDemo || vouchers.length < 5;
+  const canAddVoucher = !isDemo || vouchers.filter((v) => !v.seed).length < 5;
   const NAV = ALL_NAV.filter((x) => enabledSections.includes(x[0]));
-  const canAddClient = !isDemo || clients.length < 2;
-  const canAddBooking = !isDemo || bookings.length < 20;
+  const canAddClient = !isDemo || clients.filter((c) => !c.seed).length < 2;
+  const canAddBooking = !isDemo || bookings.filter((b) => !b.seed).length < 20;
 
   return (
     <ModsCtx.Provider value={flags}>
