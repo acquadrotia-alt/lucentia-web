@@ -42,7 +42,7 @@ function ModuleEditor({ opt, setOpt, tier, setTier, onPrezzo, planOnly }) {
       <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Piano</div>
       <div className="flex flex-wrap items-center gap-2 mb-3">
         {PRESETS.map((p) => { const on = cur === p[0]; return (
-          <button key={p[0]} type="button" onClick={() => { setOpt(p[1].slice()); setTier(p[2]); if (onPrezzo && p[3] != null) onPrezzo(p[3]); }} className={`text-sm px-3 py-1.5 rounded-lg border transition ${on ? "text-white border-transparent" : "bg-white border-stone-300 text-stone-600"}`} style={on ? { background: "#0d9488" } : {}}>{p[0]}</button>
+          <button key={p[0]} type="button" onClick={() => { setOpt(p[1].slice()); setTier(p[2]); if (onPrezzo && p[3] != null) onPrezzo(p[3]); }} className={`text-sm px-3 py-1.5 rounded-lg border transition ${on ? "text-white border-transparent" : "bg-white border-stone-300 text-stone-600 hover:border-stone-400"}`} style={on ? { background: "var(--lc-ink)" } : {}}>{p[0]}</button>
         ); })}
         {cur === "Personalizzato" ? <span className="text-xs text-stone-400">· personalizzato</span> : null}
       </div>
@@ -51,7 +51,7 @@ function ModuleEditor({ opt, setOpt, tier, setTier, onPrezzo, planOnly }) {
           <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Moduli opzionali</div>
           <div className="flex flex-wrap gap-2">
             {OPT.map((m) => { const on = opt.includes(m[0]); return (
-              <button key={m[0]} type="button" onClick={() => toggle(m[0])} className={`text-sm px-3 py-1.5 rounded-lg border inline-flex items-center gap-1.5 transition ${on ? "text-white border-transparent" : "bg-white border-stone-300 text-stone-500"}`} style={on ? { background: "#e11d48" } : {}}>
+              <button key={m[0]} type="button" onClick={() => toggle(m[0])} className={`text-sm px-3 py-1.5 rounded-lg border inline-flex items-center gap-1.5 transition ${on ? "text-white border-transparent" : "bg-white border-stone-300 text-stone-500"}`} style={on ? { background: "var(--lc-accent)" } : {}}>
                 {on ? <Check size={14} /> : null} {m[1]}
               </button>
             ); })}
@@ -118,12 +118,12 @@ export default function ResellerPanel({ email, master, onLogout, apiGet, apiSend
   const showResellerBadge = master && filtro === "all";
 
   const TabBtn = ({ id, icon, label }) => (
-    <button onClick={() => setTab(id)} className={`flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg ${tab === id ? "text-white" : "text-stone-600 hover:bg-stone-100"}`} style={tab === id ? { background: "#e11d48" } : {}}>{icon} {label}</button>
+    <button onClick={() => setTab(id)} aria-current={tab === id ? "page" : undefined} className={`flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg transition ${tab === id ? "lc-navpill-active" : "text-stone-500 hover:bg-stone-100 hover:text-stone-800"}`}>{icon} {label}</button>
   );
 
   return (
     <div className="min-h-screen bg-stone-50 text-stone-800">
-      <header className="bg-white border-b border-stone-200 sticky top-0 z-10">
+      <header className="bg-white/80 backdrop-blur-xl border-b border-stone-200/70 sticky top-0 z-10" style={{ boxShadow: "var(--lc-shadow-xs)" }}>
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <img src="/lucentia-mark.png" alt="Lucentia" className="h-8 w-8 rounded-lg" />
@@ -150,8 +150,8 @@ export default function ResellerPanel({ email, master, onLogout, apiGet, apiSend
 
         {tab === "licenze" ? (
           <>
-            <section className="bg-white rounded-2xl border-2 p-5 shadow-sm" style={{ borderColor: "#e11d48" }}>
-              <h2 className="font-semibold flex items-center gap-2 mb-3"><Plus size={16} style={{ color: "#e11d48" }} /> Nuovo salone-cliente</h2>
+            <section className="lc-card p-5">
+              <h2 className="font-semibold flex items-center gap-2 mb-3"><Plus size={16} style={{ color: "var(--lc-accent)" }} /> Nuovo salone-cliente</h2>
               <div className="grid sm:grid-cols-2 gap-3">
                 <div><div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Nome salone</div><div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2"><Store size={15} className="text-stone-400" /><input value={den} onChange={(e) => setDen(e.target.value)} placeholder="Es. Salone Bellezza" className="flex-1 text-sm focus:outline-none" /></div></div>
                 <div><div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Email di accesso</div><div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2"><Mail size={15} className="text-stone-400" /><input value={em} onChange={(e) => setEm(e.target.value)} placeholder="cliente@email.it" className="flex-1 text-sm focus:outline-none" /></div></div>
@@ -168,7 +168,7 @@ export default function ResellerPanel({ email, master, onLogout, apiGet, apiSend
               {mesi > 0 && (num(pImp) != null || num(pFin) != null) ? (
                 <div className="mt-4 text-sm bg-stone-50 rounded-lg px-3 py-2.5 text-stone-700">Costo cliente per la durata della licenza ({mesi} mesi):{num(pImp) != null ? <> imponibile <b>{eur(totale(pImp, mesi))}</b></> : null}{num(pFin) != null ? <> · IVA incl. <b>{eur(totale(pFin, mesi))}</b></> : null}</div>
               ) : null}
-              <button onClick={crea} disabled={creating} className="mt-4 text-white font-medium px-4 py-2.5 rounded-lg inline-flex items-center gap-2 disabled:opacity-50" style={{ background: "#e11d48" }}><Plus size={16} /> {creating ? "Creazione…" : "Crea cliente"}</button>
+              <button onClick={crea} disabled={creating} className="mt-4 text-white font-medium px-4 py-2.5 rounded-lg inline-flex items-center gap-2 disabled:opacity-50" style={{ background: "var(--lc-accent)" }}><Plus size={16} /> {creating ? "Creazione…" : "Crea cliente"}</button>
             </section>
 
             <section>
@@ -220,7 +220,7 @@ function ClientRow({ a, onPatch, onDelete, showReseller, master }) {
 
       <div className="mt-3 pt-3 border-t border-stone-100 flex flex-wrap items-center gap-2">
         <select value={rinnovo} onChange={(e) => setRinnovo(Number(e.target.value))} className="px-2 py-1.5 rounded-lg border border-stone-300 text-sm bg-white">{DURATE.map((d) => <option key={d[0]} value={d[0]}>{d[1]}</option>)}</select>
-        <button onClick={() => onPatch(a.id, { rinnovaMesi: rinnovo }, "Licenza rinnovata.")} className="text-sm font-medium text-white px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5" style={{ background: "#e11d48" }}><CalendarClock size={14} /> Rinnova</button>
+        <button onClick={() => onPatch(a.id, { rinnovaMesi: rinnovo }, "Licenza rinnovata.")} className="text-sm font-medium text-white px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5" style={{ background: "var(--lc-accent)" }}><CalendarClock size={14} /> Rinnova</button>
 
         {a.attiva
           ? <button onClick={() => onPatch(a.id, { attiva: false }, "Cliente sospeso.")} className="text-sm font-medium border border-stone-300 text-stone-600 px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 hover:bg-stone-50"><Ban size={14} /> Sospendi</button>
@@ -235,7 +235,7 @@ function ClientRow({ a, onPatch, onDelete, showReseller, master }) {
       {pwOpen ? (
         <div className="mt-2 flex items-center gap-2">
           <input value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="Nuova password (min 6)" className="flex-1 px-3 py-1.5 rounded-lg border border-stone-300 text-sm" />
-          <button onClick={() => { if (newPw.length >= 6) { onPatch(a.id, { nuovaPassword: newPw }, "Password aggiornata."); setNewPw(""); setPwOpen(false); } }} className="text-sm font-medium text-white px-3 py-1.5 rounded-lg" style={{ background: "#e11d48" }}>Salva</button>
+          <button onClick={() => { if (newPw.length >= 6) { onPatch(a.id, { nuovaPassword: newPw }, "Password aggiornata."); setNewPw(""); setPwOpen(false); } }} className="text-sm font-medium text-white px-3 py-1.5 rounded-lg" style={{ background: "var(--lc-accent)" }}>Salva</button>
           <button onClick={() => { setPwOpen(false); setNewPw(""); }} className="text-stone-400"><X size={16} /></button>
         </div>
       ) : null}
@@ -243,7 +243,7 @@ function ClientRow({ a, onPatch, onDelete, showReseller, master }) {
       {modsOpen ? (
         <div className="mt-3 pt-3 border-t border-stone-100">
           <ModuleEditor opt={opt} setOpt={setOpt} tier={tier} setTier={setTier} planOnly={planOnly} onPrezzo={(price) => applyPlan(price, setPImp, setPFin)} />
-          <button onClick={() => { const extra = {}; if (planOnly) { const pr = planPrice(opt, tier); if (pr != null) { extra.prezzo_imponibile = toMoney(pr); extra.prezzo_finale = toMoney(pr * (1 + IVA)); } } onPatch(a.id, { moduli: buildModuli(opt, tier), ...extra }, "Piano aggiornato."); setModsOpen(false); }} className="mt-3 text-sm font-medium text-white px-3 py-1.5 rounded-lg" style={{ background: "#e11d48" }}>Salva {planOnly ? "piano" : "moduli"}</button>
+          <button onClick={() => { const extra = {}; if (planOnly) { const pr = planPrice(opt, tier); if (pr != null) { extra.prezzo_imponibile = toMoney(pr); extra.prezzo_finale = toMoney(pr * (1 + IVA)); } } onPatch(a.id, { moduli: buildModuli(opt, tier), ...extra }, "Piano aggiornato."); setModsOpen(false); }} className="mt-3 text-sm font-medium text-white px-3 py-1.5 rounded-lg" style={{ background: "var(--lc-accent)" }}>Salva {planOnly ? "piano" : "moduli"}</button>
         </div>
       ) : null}
 
@@ -253,7 +253,7 @@ function ClientRow({ a, onPatch, onDelete, showReseller, master }) {
             <div><div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Imponibile (IVA escl.) €/mese</div><input value={pImp} inputMode="decimal" onChange={(e) => setPImp(e.target.value)} placeholder="lascia vuoto" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm" /></div>
             <div><div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Prezzo finale mensile €</div><input value={pFin} inputMode="decimal" onChange={(e) => setPFin(e.target.value)} placeholder="lascia vuoto" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm" /></div>
           </div>
-          <button onClick={() => { onPatch(a.id, { prezzo_imponibile: pImp, prezzo_finale: pFin }, "Prezzo aggiornato."); setPrezzoOpen(false); }} className="mt-3 text-sm font-medium text-white px-3 py-1.5 rounded-lg" style={{ background: "#e11d48" }}>Salva prezzo</button>
+          <button onClick={() => { onPatch(a.id, { prezzo_imponibile: pImp, prezzo_finale: pFin }, "Prezzo aggiornato."); setPrezzoOpen(false); }} className="mt-3 text-sm font-medium text-white px-3 py-1.5 rounded-lg" style={{ background: "var(--lc-accent)" }}>Salva prezzo</button>
         </div>
       ) : null}
     </div>
@@ -296,15 +296,15 @@ function ResellerView({ items, apiSend, flash, reload }) {
 
   return (
     <div className="space-y-6">
-      <section className="bg-white rounded-2xl border-2 p-5 shadow-sm" style={{ borderColor: "#e11d48" }}>
-        <h2 className="font-semibold flex items-center gap-2 mb-1"><Building2 size={16} style={{ color: "#e11d48" }} /> Nuovo rivenditore</h2>
+      <section className="lc-card p-5">
+        <h2 className="font-semibold flex items-center gap-2 mb-1"><Building2 size={16} style={{ color: "var(--lc-accent)" }} /> Nuovo rivenditore</h2>
         <p className="text-sm text-stone-500 mb-3">Licenza annuale (12 mesi). Inserisci tutti i dati di fatturazione.</p>
         <div className="grid sm:grid-cols-2 gap-2 mb-2">
           <div><div className="text-[11px] text-stone-400 mb-1">Email di accesso</div><input value={em} onChange={(e) => setEm(e.target.value)} placeholder="rivenditore@email.it" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm" /></div>
           <div><div className="text-[11px] text-stone-400 mb-1">Password iniziale (min 6)</div><input value={pw} onChange={(e) => setPw(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm" /></div>
         </div>
         <BillingFields v={v} set={set} />
-        <button onClick={crea} disabled={busy} className="mt-4 text-white font-medium px-4 py-2.5 rounded-lg inline-flex items-center gap-2 disabled:opacity-50" style={{ background: "#e11d48" }}><Plus size={16} /> {busy ? "Creazione…" : "Crea rivenditore"}</button>
+        <button onClick={crea} disabled={busy} className="mt-4 text-white font-medium px-4 py-2.5 rounded-lg inline-flex items-center gap-2 disabled:opacity-50" style={{ background: "var(--lc-accent)" }}><Plus size={16} /> {busy ? "Creazione…" : "Crea rivenditore"}</button>
       </section>
 
       <section>
@@ -335,7 +335,7 @@ function ResellerRow({ r, onPatch, onDelete }) {
         <span className={`text-xs px-2 py-1 rounded-full shrink-0 ${badge.cls}`}>{badge.txt}</span>
       </div>
       <div className="mt-3 pt-3 border-t border-stone-100 flex flex-wrap items-center gap-2">
-        <button onClick={() => onPatch(r.id, { rinnova: true }, "Licenza rinnovata (12 mesi).")} className="text-sm font-medium text-white px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5" style={{ background: "#e11d48" }}><CalendarClock size={14} /> Rinnova 12 mesi</button>
+        <button onClick={() => onPatch(r.id, { rinnova: true }, "Licenza rinnovata (12 mesi).")} className="text-sm font-medium text-white px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5" style={{ background: "var(--lc-accent)" }}><CalendarClock size={14} /> Rinnova 12 mesi</button>
         {r.attiva
           ? <button onClick={() => onPatch(r.id, { attiva: false }, "Rivenditore sospeso.")} className="text-sm font-medium border border-stone-300 text-stone-600 px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 hover:bg-stone-50"><Ban size={14} /> Sospendi</button>
           : <button onClick={() => onPatch(r.id, { attiva: true }, "Rivenditore riattivato.")} className="text-sm font-medium border border-green-300 text-green-700 px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 hover:bg-green-50"><BadgeCheck size={14} /> Riattiva</button>}
@@ -346,7 +346,7 @@ function ResellerRow({ r, onPatch, onDelete }) {
       {pwOpen ? (
         <div className="mt-2 flex items-center gap-2">
           <input value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="Nuova password (min 6)" className="flex-1 px-3 py-1.5 rounded-lg border border-stone-300 text-sm" />
-          <button onClick={() => { if (newPw.length >= 6) { onPatch(r.id, { nuovaPassword: newPw }, "Password aggiornata."); setNewPw(""); setPwOpen(false); } }} className="text-sm font-medium text-white px-3 py-1.5 rounded-lg" style={{ background: "#e11d48" }}>Salva</button>
+          <button onClick={() => { if (newPw.length >= 6) { onPatch(r.id, { nuovaPassword: newPw }, "Password aggiornata."); setNewPw(""); setPwOpen(false); } }} className="text-sm font-medium text-white px-3 py-1.5 rounded-lg" style={{ background: "var(--lc-accent)" }}>Salva</button>
           <button onClick={() => { setPwOpen(false); setNewPw(""); }} className="text-stone-400"><X size={16} /></button>
         </div>
       ) : null}
@@ -354,7 +354,7 @@ function ResellerRow({ r, onPatch, onDelete }) {
         <div className="mt-3 pt-3 border-t border-stone-100">
           <BillingFields v={v} set={set} />
           <div className="mt-2 flex items-center gap-2"><span className="text-[11px] text-stone-400">Sconto sul canone</span><input type="number" min={0} max={100} value={sconto} onChange={(e) => setSconto(e.target.value)} className="w-20 px-2 py-1.5 rounded-lg border border-stone-300 text-sm text-right" /><span className="text-xs text-stone-400">%</span></div>
-          <button onClick={() => { const body = {}; BILL.forEach(([k]) => { body[k] = v[k] || ""; }); body.sconto = Number(sconto); onPatch(r.id, body, "Dati aggiornati."); setEditOpen(false); }} className="mt-3 text-sm font-medium text-white px-3 py-1.5 rounded-lg" style={{ background: "#e11d48" }}>Salva dati</button>
+          <button onClick={() => { const body = {}; BILL.forEach(([k]) => { body[k] = v[k] || ""; }); body.sconto = Number(sconto); onPatch(r.id, body, "Dati aggiornati."); setEditOpen(false); }} className="mt-3 text-sm font-medium text-white px-3 py-1.5 rounded-lg" style={{ background: "var(--lc-accent)" }}>Salva dati</button>
         </div>
       ) : null}
     </div>
@@ -444,7 +444,7 @@ function RichiesteView({ apiGet, apiSend, flash }) {
   return (
     <div className="space-y-6">
       <section className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
-        <h3 className="font-semibold flex items-center gap-2 mb-4"><Inbox size={16} style={{ color: "#e11d48" }} /> Richieste di licenza <span className="text-xs font-normal text-stone-400">· {licenze.length}</span></h3>
+        <h3 className="font-semibold flex items-center gap-2 mb-4"><Inbox size={16} style={{ color: "var(--lc-accent)" }} /> Richieste di licenza <span className="text-xs font-normal text-stone-400">· {licenze.length}</span></h3>
         {licenze.length === 0 ? <p className="text-sm text-stone-400">Nessuna richiesta dalla copertina.</p> : (
           <div className="space-y-2">{licenze.map((r) => (
             <div key={r.id} className="border border-stone-200 rounded-xl p-3">
@@ -474,7 +474,7 @@ function RichiesteView({ apiGet, apiSend, flash }) {
       </section>
 
       <section className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
-        <h3 className="font-semibold flex items-center gap-2 mb-4"><Sparkles size={16} style={{ color: "#e11d48" }} /> Demo attivate <span className="text-xs font-normal text-stone-400">· {demo.length}</span></h3>
+        <h3 className="font-semibold flex items-center gap-2 mb-4"><Sparkles size={16} style={{ color: "var(--lc-accent)" }} /> Demo attivate <span className="text-xs font-normal text-stone-400">· {demo.length}</span></h3>
         {demo.length === 0 ? <p className="text-sm text-stone-400">Nessuna demo attivata dai clienti.</p> : (
           <div className="space-y-2">{demo.map((r) => { const gg = giorniRimanenti(r.scadenza); const scaduta = r.stato_licenza && r.stato_licenza !== "active"; return (
             <div key={r.id} className="border border-stone-200 rounded-xl p-3">

@@ -49,7 +49,7 @@ export default function OperatorApp({ user, azienda, onLogout }) {
       <header className="bg-white border-b border-stone-200 sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="min-w-0">
-            <div className="text-lg font-bold leading-tight truncate" style={{ color: "#e11d48" }}>{brandName}</div>
+            <div className="text-lg font-bold leading-tight truncate" style={{ color: "var(--lc-accent)" }}>{brandName}</div>
             <div className="text-xs text-stone-400 truncate flex items-center gap-1"><User size={12} /> {opName} · la tua agenda</div>
           </div>
           <button onClick={onLogout} className="flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-700 shrink-0"><LogOut size={16} /> Esci</button>
@@ -60,14 +60,14 @@ export default function OperatorApp({ user, azienda, onLogout }) {
         <div className="flex items-center justify-between gap-2 mb-4">
           <button onClick={() => setDate(addDays(date, -1))} className="w-10 h-10 rounded-lg border border-stone-300 bg-white flex items-center justify-center text-stone-500 hover:bg-stone-50"><ChevronLeft size={18} /></button>
           <div className="text-center">
-            <div className="font-semibold capitalize flex items-center justify-center gap-1.5"><Calendar size={15} style={{ color: "#e11d48" }} /> {fmtLong(date)}</div>
+            <div className="font-semibold capitalize flex items-center justify-center gap-1.5"><Calendar size={15} style={{ color: "var(--lc-accent)" }} /> {fmtLong(date)}</div>
             {date !== todayStr() ? <button onClick={() => setDate(todayStr())} className="text-xs text-stone-400 hover:text-stone-600 underline">Torna a oggi</button> : <div className="text-xs text-stone-400">oggi</div>}
           </div>
           <button onClick={() => setDate(addDays(date, 1))} className="w-10 h-10 rounded-lg border border-stone-300 bg-white flex items-center justify-center text-stone-500 hover:bg-stone-50"><ChevronRight size={18} /></button>
         </div>
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-12 lc-fade-in"><div className="lc-spinner" style={{ borderTopColor: "#e11d48", borderColor: "rgba(225,29,72,0.2)" }} /><p className="text-sm text-stone-400">Caricamento…</p></div>
+          <div className="flex flex-col items-center justify-center gap-3 py-12 lc-fade-in"><div className="lc-spinner" style={{ borderTopColor: "var(--lc-accent)", borderColor: "rgba(225,29,72,0.2)" }} /><p className="text-sm text-stone-400">Caricamento…</p></div>
         ) : ofDay.length === 0 ? (
           <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center text-stone-400 lc-fade-up">Nessun appuntamento in questa giornata.</div>
         ) : (

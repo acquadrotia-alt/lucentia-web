@@ -42,17 +42,17 @@ function Login({ onLogged, onBack }) {
           <img src="/lucentia-logo.png" alt="Lucentia — Gestionale per parrucchieri ed estetisti" className="h-20 w-auto mx-auto lc-pop-in" />
         </div>
         <div className="p-6 space-y-3">
-          <div className="flex items-center gap-2 text-sm font-medium text-stone-600"><Lock size={15} style={{ color: "#e11d48" }} /> Accesso</div>
-          <div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2 transition focus-within:border-rose-400 focus-within:ring-2 focus-within:ring-rose-100">
+          <div className="flex items-center gap-2 text-sm font-medium text-stone-600"><Lock size={15} style={{ color: "var(--lc-accent)" }} /> Accesso</div>
+          <div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2 transition focus-within:border-[#b8893b] focus-within:ring-2 focus-within:ring-[#efe4cf]">
             <Mail size={16} className="text-stone-400" />
             <input type="email" value={email} autoFocus onChange={(e) => { setEmail(e.target.value); setErr(""); }} onKeyDown={(e) => e.key === "Enter" && submit()} placeholder="Email" className="flex-1 text-sm focus:outline-none bg-transparent" />
           </div>
-          <div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2 transition focus-within:border-rose-400 focus-within:ring-2 focus-within:ring-rose-100">
+          <div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2 transition focus-within:border-[#b8893b] focus-within:ring-2 focus-within:ring-[#efe4cf]">
             <Lock size={16} className="text-stone-400" />
             <input type="password" value={password} onChange={(e) => { setPassword(e.target.value); setErr(""); }} onKeyDown={(e) => e.key === "Enter" && submit()} placeholder="Password" className="flex-1 text-sm focus:outline-none bg-transparent" />
           </div>
           {err ? <p className="text-xs text-red-500 text-center lc-fade-up">{err}</p> : null}
-          <button onClick={submit} disabled={busy} className="w-full text-white font-medium py-2.5 rounded-lg transition disabled:opacity-50 lc-shine hover:shadow-md hover:brightness-105 inline-flex items-center justify-center gap-2" style={{ background: "#e11d48" }}>{busy ? <><span className="lc-spinner" style={{ width: 16, height: 16, borderWidth: 2, borderTopColor: "#fff", borderColor: "rgba(255,255,255,0.4)" }} /> Attendere…</> : "Entra"}</button>
+          <button onClick={submit} disabled={busy} className="w-full text-white font-medium py-2.5 rounded-lg transition disabled:opacity-50 lc-shine hover:shadow-md hover:brightness-105 inline-flex items-center justify-center gap-2" style={{ background: "var(--lc-accent)" }}>{busy ? <><span className="lc-spinner" style={{ width: 16, height: 16, borderWidth: 2, borderTopColor: "#fff", borderColor: "rgba(255,255,255,0.4)" }} /> Attendere…</> : "Entra"}</button>
           {onBack ? <button onClick={onBack} className="w-full text-xs text-stone-400 hover:text-stone-600 pt-1">← Torna alla home</button> : null}
           <p className="text-center text-[11px] text-stone-300 pt-2 select-none tracking-wide">V {APP_VERSION}</p>
         </div>

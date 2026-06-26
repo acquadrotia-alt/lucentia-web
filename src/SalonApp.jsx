@@ -52,7 +52,7 @@ const STAFF = [
   { id: "a2", name: "Sara", role: "Estetista", serviceIds: ["s9", "s10", "s11", "s6"], availability: { 2: [[600, 840], [900, 1140]], 3: [[600, 840], [900, 1140]], 4: [[600, 840], [900, 1140]], 5: [[600, 840], [900, 1140]], 6: [[600, 840], [900, 1140]] } },
   { id: "a3", name: "Marco", role: "Parrucchiere", serviceIds: ["s1", "s2", "s3", "s4", "s5"], availability: { 1: [[540, 780], [840, 1080]], 2: [[540, 780], [840, 1080]], 3: [[540, 780], [840, 1080]], 4: [[540, 780], [840, 1080]], 5: [[540, 780], [840, 1080]], 6: [[540, 780], [840, 1080]] } },
 ];
-const BRANDING = { name: "Bellezza & Stile", tagline: "Gestionale salone", logo: null, primary: "#e11d48", phone: "+39 070 123 4567", email: "info@bellezzaestile.it", address: "Via Roma 12, Cagliari" };
+const BRANDING = { name: "Bellezza & Stile", tagline: "Gestionale salone", logo: null, primary: "var(--lc-accent)", phone: "+39 070 123 4567", email: "info@bellezzaestile.it", address: "Via Roma 12, Cagliari" };
 const DEFAULT_LOYALTY = { mode: "flat", fromSales: false, rewards: [{ id: "rw5", points: 5, label: "Omaggio piccolo" }, { id: "rw10", points: 10, label: "Sconto 10%" }] };
 const DEFAULT_MARKETING = {
   msgInactive: "Ciao *{nome}*, come stai? Tutto bene? È un po' di tempo che non ci vediamo, volevo solo dirti che per questo mese abbiamo una promo dedicata!",
@@ -61,7 +61,7 @@ const DEFAULT_MARKETING = {
 };
 const DEFAULT_CONFIG = { services: SERVICES, staff: STAFF, branding: BRANDING, cancelHours: 6, loyalty: DEFAULT_LOYALTY, marketing: DEFAULT_MARKETING, closures: [], backup: { enabled: false, time: "20:00" } };
 const BLANK_BRANDING = { name: "", tagline: "Gestionale salone", logo: null, primary: "#6b50b8", phone: "", email: "", address: "" };
-const PRESETS = ["#e11d48", "#db2777", "#7c3aed", "#2563eb", "#0d9488", "#059669", "#d97706", "#475569"];
+const PRESETS = ["var(--lc-accent)", "#db2777", "#7c3aed", "#2563eb", "#0d9488", "#059669", "#d97706", "#475569"];
 
 // --- Catalogo prodotti (vendita + magazzino) ---
 const DEFAULT_CATALOG = {
@@ -381,7 +381,7 @@ function priceListHTML(config) {
   const services = config.services || [];
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
   const brand = branding.primary || "#7c3aed";
-  const PAL = ["#7c3aed", "#0d9488", "#e11d48", "#f59e0b", "#2563eb", "#16a34a", "#db2777", "#0891b2"];
+  const PAL = ["#7c3aed", "#0d9488", "var(--lc-accent)", "#f59e0b", "#2563eb", "#16a34a", "#db2777", "#0891b2"];
   const logo = branding.logo ? `<img class="logo" src="${branding.logo}" alt=""/>` : "";
   const contacts = [branding.address, branding.phone, branding.email].filter(Boolean).map(esc).join("&nbsp;&nbsp;&middot;&nbsp;&nbsp;");
   const cards = services.map((s, idx) => {
@@ -781,18 +781,18 @@ export default function SalonApp({ onLogout, moduli, azienda, demo }) {
     <ModsCtx.Provider value={flags}>
     <div className="min-h-screen bg-stone-50 text-stone-800 flex flex-col" style={themeVars(b.primary)}>
       <style>{BRAND_CSS}</style>
-      <header className="bg-white border-b border-stone-200 sticky top-0 z-20" style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 28px)" }}>
+      <header className="bg-white/80 backdrop-blur-xl border-b border-stone-200/70 sticky top-0 z-20" style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 28px)", boxShadow: "var(--lc-shadow-xs)" }}>
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            {b.logo ? <img src={b.logo} alt="logo" className="w-9 h-9 rounded-xl object-cover shrink-0" /> : <div className="w-9 h-9 rounded-xl brand-bg flex items-center justify-center shrink-0"><Sparkles size={18} /></div>}
+          <div className="flex items-center gap-2.5 min-w-0">
+            {b.logo ? <img src={b.logo} alt="logo" className="w-9 h-9 rounded-xl object-cover shrink-0 ring-1 ring-stone-200" /> : <div className="w-9 h-9 rounded-xl brand-bg flex items-center justify-center shrink-0"><Sparkles size={18} /></div>}
             <div className="min-w-0 hidden sm:block">
-              <div className="font-semibold leading-tight truncate">{b.name}</div>
+              <div className="font-semibold leading-tight truncate tracking-tight">{b.name}</div>
               {b.tagline ? <div className="text-xs text-stone-400 leading-tight truncate">{b.tagline}</div> : null}
             </div>
           </div>
           <nav className="flex items-center gap-0.5 shrink-0">
             {NAV.map((item) => { const k = item[0], label = item[1], Icon = item[2]; return (
-              <button key={k} onClick={() => setView(k)} className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-medium transition ${view === k ? "brand-soft brand-text" : "text-stone-500 hover:bg-stone-100"}`}>
+              <button key={k} onClick={() => setView(k)} aria-current={view === k ? "page" : undefined} className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-medium transition ${view === k ? "brand-soft brand-text" : "text-stone-500 hover:bg-stone-100 hover:text-stone-800"}`}>
                 <Icon size={16} /><span className="hidden md:inline">{label}</span>
               </button>
             ); })}

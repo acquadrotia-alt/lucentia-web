@@ -14,11 +14,38 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,500&display=swap" rel="stylesheet" />
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-      /* ===== Lucentia · animazioni e rifiniture grafiche globali ===== */
-      :root { --lc-ease: cubic-bezier(0.22, 1, 0.36, 1); }
+      /* ===== Lucentia · Design System (token + animazioni globali) ===== */
+      :root {
+        --lc-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+        /* Identità di brand: oro caldo. Tono "ink" deciso per le azioni primarie. */
+        --lc-accent: #8a6a2e;          /* accento funzionale, accessibile su bianco (AA) */
+        --lc-accent-strong: #6f5421;   /* hover/active */
+        --lc-accent-soft: #f5efe2;     /* tinta tenue per sfondi/badge */
+        --lc-accent-ring: rgba(138, 106, 46, 0.30);
+        --lc-brand: #b8893b;           /* oro luminoso per momenti di brand (vetrina) */
+        --lc-ink: #1c1917;             /* superfici scure / testo forte */
+
+        /* Scala di elevazione coerente (Linear/Stripe-like: ombre morbide e diffuse) */
+        --lc-shadow-xs: 0 1px 2px rgba(28, 25, 23, 0.05);
+        --lc-shadow-sm: 0 1px 3px rgba(28, 25, 23, 0.06), 0 1px 2px rgba(28, 25, 23, 0.04);
+        --lc-shadow-md: 0 6px 16px -6px rgba(28, 25, 23, 0.12), 0 2px 6px -2px rgba(28, 25, 23, 0.08);
+        --lc-shadow-lg: 0 18px 40px -18px rgba(28, 25, 23, 0.28);
+        --lc-shadow-xl: 0 30px 60px -24px rgba(28, 25, 23, 0.32);
+
+        /* Raggi */
+        --lc-radius-sm: 8px; --lc-radius: 12px; --lc-radius-lg: 16px; --lc-radius-xl: 20px;
+      }
 
       html { scroll-behavior: smooth; }
-      body { font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+      body { font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; color: #292524; letter-spacing: -0.006em; }
+
+      /* Anello di focus da tastiera coerente su tutta l'app (accessibilità + qualità) */
+      :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+        outline: 2px solid var(--lc-accent);
+        outline-offset: 2px;
+        border-radius: var(--lc-radius-sm);
+      }
 
       /* Titoli con serif elegante (stile luxury/beauty) */
       .font-display { font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; letter-spacing: -0.01em; }
@@ -71,11 +98,33 @@
       .lc-shine:hover::after { animation: lc-shimmer .9s ease; }
 
       /* Spinner di caricamento */
-      .lc-spinner { width: 38px; height: 38px; border-radius: 50%; border: 3px solid rgba(184,137,59,0.22); border-top-color: #b8893b; animation: lc-spin .8s linear infinite; }
+      .lc-spinner { width: 38px; height: 38px; border-radius: 50%; border: 3px solid var(--lc-accent-ring); border-top-color: var(--lc-accent); animation: lc-spin .8s linear infinite; }
 
       /* Skeleton shimmer per stati di caricamento */
-      .lc-skeleton { background: linear-gradient(90deg, #f1efed 25%, #e7e5e4 37%, #f1efed 63%); background-size: 400% 100%; animation: lc-shimmer-bg 1.4s ease infinite; }
+      .lc-skeleton { background: linear-gradient(90deg, #f1efed 25%, #e7e5e4 37%, #f1efed 63%); background-size: 400% 100%; animation: lc-shimmer-bg 1.4s ease infinite; border-radius: var(--lc-radius-sm); }
       @keyframes lc-shimmer-bg { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+
+      /* ===== Primitive del Design System (opt-in) ===== */
+      /* Card: superficie pulita con bordo tenue e ombra morbida, hover discreto */
+      .lc-card { background: #fff; border: 1px solid #ececea; border-radius: var(--lc-radius-lg); box-shadow: var(--lc-shadow-sm); transition: box-shadow .25s var(--lc-ease), border-color .25s var(--lc-ease), transform .25s var(--lc-ease); }
+      .lc-card-hover:hover { box-shadow: var(--lc-shadow-md); border-color: #e0ddd9; }
+
+      /* Pulsanti del design system */
+      .lc-btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; font-weight: 600; font-size: 0.875rem; line-height: 1; border-radius: var(--lc-radius); padding: 0.625rem 1rem; transition: background-color .18s ease, color .18s ease, box-shadow .2s var(--lc-ease), transform .15s var(--lc-ease); cursor: pointer; }
+      .lc-btn:active:not(:disabled) { transform: translateY(1px) scale(0.985); }
+      .lc-btn:disabled { opacity: .5; cursor: not-allowed; }
+      .lc-btn-accent { background: var(--lc-accent); color: #fff; box-shadow: var(--lc-shadow-xs); }
+      .lc-btn-accent:hover:not(:disabled) { background: var(--lc-accent-strong); box-shadow: var(--lc-shadow-sm); }
+      .lc-btn-ink { background: var(--lc-ink); color: #fff; }
+      .lc-btn-ink:hover:not(:disabled) { background: #000; }
+      .lc-btn-ghost { background: transparent; color: #57534e; }
+      .lc-btn-ghost:hover:not(:disabled) { background: #f5f5f4; color: #1c1917; }
+
+      /* Badge tenue in tinta accento */
+      .lc-badge-accent { background: var(--lc-accent-soft); color: var(--lc-accent-strong); }
+
+      /* Pillola di navigazione (stato attivo) */
+      .lc-navpill-active { background: var(--lc-accent-soft); color: var(--lc-accent-strong); }
 
       /* Rispetta chi preferisce ridurre il movimento */
       @media (prefers-reduced-motion: reduce) {
