@@ -2190,9 +2190,9 @@ function ShopView({ catalog, setCatalog, sales, setSales, clients, setClients, b
   );
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap gap-1 bg-stone-100 rounded-lg p-1 w-fit">
+      <div className="flex flex-wrap gap-1 bg-stone-100/80 rounded-xl p-1 w-fit">
         {TABS.map((t) => { const k = t[0], l = t[1], Icon = t[2]; return (
-          <button key={k} onClick={() => setTab(k)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition ${tab === k ? "bg-white shadow-sm text-stone-800" : "text-stone-500"}`}><Icon size={15} /> {l}</button>
+          <button key={k} onClick={() => setTab(k)} aria-current={tab === k ? "true" : undefined} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-[background-color,color,box-shadow] duration-200 ${tab === k ? "bg-white shadow-[var(--lc-shadow-xs)] text-stone-900" : "text-stone-500 hover:text-stone-700"}`}><Icon size={15} /> {l}</button>
         ); })}
       </div>
       {tab === "pos" ? <PosTab catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} clients={clients} setClients={setClients} branding={branding} loyalty={loyalty} hidePartial={hidePartial} canAddClient={canAddClient} /> : null}
@@ -2244,16 +2244,22 @@ function PosTab({ catalog, setCatalog, sales, setSales, clients, setClients, bra
           <button onClick={() => setCat("all")} className={chip(cat === "all")}>Tutti</button>
           {cats.map((c) => <button key={c.id} onClick={() => setCat(c.id)} className={chip(cat === c.id)}>{c.name}</button>)}
         </div>
-        <div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2 bg-white brand-ring"><Search size={16} className="text-stone-400" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cerca prodotto" className="flex-1 text-sm focus:outline-none" /></div>
-        {products.length === 0 ? <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center text-stone-400">Nessun prodotto. Aggiungilo dalla scheda Catalogo.</div> : (
-          <div className="grid sm:grid-cols-2 gap-3">{products.map((p) => (
-            <div key={p.id} className="bg-white rounded-xl border border-stone-200 p-3 shadow-sm">
-              <div className="font-medium leading-tight">{p.name}</div>
-              {p.description ? <div className="text-xs text-stone-400 mb-2 mt-0.5">{p.description}</div> : <div className="mb-2" />}
-              <div className="space-y-1.5">{p.formats.map((f) => { const remaining = (Number(f.stock) || 0) - inCart(p.id, f.id); const out = remaining <= 0; return (
-                <button key={f.id} onClick={() => add(p, f)} disabled={out} className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border text-sm transition ${out ? "border-stone-200 bg-stone-50 text-stone-300 cursor-not-allowed" : "border-stone-200 brand-hover"}`}>
+        <div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2 bg-white brand-ring transition-colors hover:border-stone-400 focus-within:border-stone-400"><Search size={16} className="text-stone-400" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cerca prodotto" className="flex-1 text-sm focus:outline-none bg-transparent" /></div>
+        {products.length === 0 ? (
+          <div className="lc-card p-10 text-center">
+            <div className="w-11 h-11 rounded-full bg-stone-100 flex items-center justify-center mx-auto mb-3"><Boxes size={20} className="text-stone-400" /></div>
+            <p className="text-sm font-medium text-stone-600">Nessun prodotto</p>
+            <p className="text-xs text-stone-400 mt-1">Aggiungilo dalla scheda Catalogo.</p>
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-2 gap-3">{products.map((p, pi) => (
+            <div key={p.id} className="lc-card lc-card-hover lc-fade-up p-3.5 flex flex-col" style={{ animationDelay: `${Math.min(pi * 35, 280)}ms` }}>
+              <div className="font-semibold leading-tight text-stone-900">{p.name}</div>
+              {p.description ? <div className="text-xs text-stone-400 mb-2.5 mt-0.5 leading-relaxed">{p.description}</div> : <div className="mb-2.5" />}
+              <div className="space-y-1.5 mt-auto">{p.formats.map((f) => { const remaining = (Number(f.stock) || 0) - inCart(p.id, f.id); const out = remaining <= 0; return (
+                <button key={f.id} onClick={() => add(p, f)} disabled={out} className={`w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg border text-sm transition ${out ? "border-stone-200 bg-stone-50 text-stone-300 cursor-not-allowed" : "border-stone-200 hover:border-stone-300 hover:bg-stone-50 active:scale-[0.99]"}`}>
                   <span className="flex items-center gap-1.5 min-w-0"><Tag size={13} className={out ? "text-stone-300 shrink-0" : "brand-accent shrink-0"} /> <span className="truncate">{f.label}</span></span>
-                  <span className="flex items-center gap-2 shrink-0"><span className="font-medium">{eur(f.price)}</span><span className={`text-xs ${out ? "text-red-300" : "text-stone-400"}`}>{out ? "esaurito" : `${remaining} pz`}</span></span>
+                  <span className="flex items-center gap-2 shrink-0"><span className="font-semibold text-stone-800">{eur(f.price)}</span><span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${out ? "bg-red-50 text-red-500" : "bg-stone-100 text-stone-500"}`}>{out ? "esaurito" : `${remaining} pz`}</span></span>
                 </button>
               ); })}</div>
             </div>
@@ -2262,8 +2268,8 @@ function PosTab({ catalog, setCatalog, sales, setSales, clients, setClients, bra
       </div>
 
       <div className="w-full sm:w-80 sm:shrink-0 sm:sticky sm:top-20">
-        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-4">
-          <h3 className="font-semibold flex items-center gap-2 mb-3"><ShoppingCart size={16} className="brand-accent" /> Carrello {count ? <span className="text-xs font-normal text-stone-400">· {count} pz</span> : null}</h3>
+        <div className="lc-card p-4">
+          <h3 className="font-semibold flex items-center gap-2 mb-3 text-stone-900 tracking-tight"><ShoppingCart size={16} className="brand-accent" /> Carrello {count ? <span className="text-xs font-normal text-stone-400">· {count} pz</span> : null}</h3>
           {lastSale && cart.length === 0 ? (
             <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-sm text-green-700 mb-3">
               <div className="flex items-center gap-1.5 font-medium"><Check size={15} /> Vendita {lastSale.partial ? "parziale " : ""}registrata · {eur(lastSale.total)}</div>
@@ -2273,27 +2279,27 @@ function PosTab({ catalog, setCatalog, sales, setSales, clients, setClients, bra
               </div>
             </div>
           ) : null}
-          {cart.length === 0 ? <p className="text-sm text-stone-400 text-center py-6">Tocca un prodotto per aggiungerlo.</p> : (
+          {cart.length === 0 ? <div className="text-center py-8"><ShoppingCart size={26} className="mx-auto text-stone-300 mb-2" /><p className="text-sm text-stone-400">Tocca un prodotto per aggiungerlo.</p></div> : (
             <>
               <div>{cart.map((it, i) => (
                 <div key={i} className="flex items-center gap-2 py-2 border-b border-stone-100 last:border-0">
-                  <div className="flex-1 min-w-0"><div className="text-sm font-medium truncate">{it.name}</div><div className="text-xs text-stone-400">{it.label} · {eur(it.price)}</div></div>
-                  <div className="flex items-center gap-1.5">
-                    <button onClick={() => changeQty(i, -1)} className="w-6 h-6 rounded-md border border-stone-300 flex items-center justify-center text-stone-500 hover:bg-stone-50"><Minus size={13} /></button>
-                    <span className="w-5 text-center text-sm font-medium">{it.qty}</span>
-                    <button onClick={() => changeQty(i, 1)} className="w-6 h-6 rounded-md border border-stone-300 flex items-center justify-center text-stone-500 hover:bg-stone-50"><Plus size={13} /></button>
+                  <div className="flex-1 min-w-0"><div className="text-sm font-medium truncate">{it.name}</div><div className="text-xs text-stone-400 truncate">{it.label} · {eur(it.price)}</div></div>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => changeQty(i, -1)} className="w-7 h-7 rounded-lg border border-stone-200 flex items-center justify-center text-stone-500 hover:bg-stone-100 hover:text-stone-800 active:scale-90 transition"><Minus size={13} /></button>
+                    <span className="w-6 text-center text-sm font-semibold tabular-nums">{it.qty}</span>
+                    <button onClick={() => changeQty(i, 1)} className="w-7 h-7 rounded-lg border border-stone-200 flex items-center justify-center text-stone-500 hover:bg-stone-100 hover:text-stone-800 active:scale-90 transition"><Plus size={13} /></button>
                   </div>
-                  <div className="w-16 text-right text-sm font-medium">{eur(it.price * it.qty)}</div>
-                  <button onClick={() => removeItem(i)} className="text-stone-300 hover:text-red-500"><X size={15} /></button>
+                  <div className="w-16 text-right text-sm font-semibold tabular-nums">{eur(it.price * it.qty)}</div>
+                  <button onClick={() => removeItem(i)} aria-label="Rimuovi" className="text-stone-300 hover:text-red-500 transition-colors"><X size={15} /></button>
                 </div>
               ))}</div>
               <div className="border-t border-stone-200 pt-3 mt-2 space-y-3">
                 <ClientAssign clients={clients} setClients={setClients} client={client} setClient={setClient} canAddClient={canAddClient} />
-                <div className="flex items-center justify-between font-semibold"><span>Importo</span><span className="text-lg">{eur(total)}</span></div>
+                <div className="flex items-baseline justify-between"><span className="text-sm font-medium text-stone-500">Importo</span><span className="text-2xl font-semibold tracking-tight tabular-nums text-stone-900">{eur(total)}</span></div>
                 {F.fidelity && loyalty && loyalty.fromSales ? <div className="flex items-center justify-between text-sm"><span className="flex items-center gap-1.5 text-stone-500"><Star size={14} className="brand-accent" /> Punti generati</span><span className="font-medium brand-accent">+{salePoints}{client ? "" : " (assegna un cliente)"}</span></div> : null}
                 <div className={hidePartial ? "" : "grid grid-cols-2 gap-2"}>
-                  <button onClick={() => confirm(false)} className="w-full brand-bg font-medium py-2.5 rounded-lg flex items-center justify-center gap-1.5"><Check size={16} /> {hidePartial ? "Conferma vendita" : "Totale"}</button>
-                  {!hidePartial ? <button onClick={() => confirm(true)} className="font-medium py-2.5 rounded-lg flex items-center justify-center gap-1.5 border border-amber-300 text-amber-700 hover:bg-amber-50"><Timer size={16} /> Parziale</button> : null}
+                  <button onClick={() => confirm(false)} className="w-full brand-bg font-medium py-2.5 rounded-xl flex items-center justify-center gap-1.5 shadow-[var(--lc-shadow-xs)] hover:shadow-[var(--lc-shadow-sm)]"><Check size={16} /> {hidePartial ? "Conferma vendita" : "Totale"}</button>
+                  {!hidePartial ? <button onClick={() => confirm(true)} className="font-medium py-2.5 rounded-xl flex items-center justify-center gap-1.5 border border-amber-300 text-amber-700 hover:bg-amber-50 transition"><Timer size={16} /> Parziale</button> : null}
                 </div>
                 {!hidePartial ? <p className="text-xs text-stone-400 leading-relaxed">"Totale" registra la vendita completa. "Parziale" la registra comunque (scaricando le giacenze) ma la segna come parziale nello storico.</p> : null}
               </div>
