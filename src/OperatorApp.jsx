@@ -67,15 +67,15 @@ export default function OperatorApp({ user, azienda, onLogout }) {
         </div>
 
         {loading ? (
-          <p className="text-sm text-stone-400 text-center py-10">Caricamento…</p>
+          <div className="flex flex-col items-center justify-center gap-3 py-12 lc-fade-in"><div className="lc-spinner" style={{ borderTopColor: "#e11d48", borderColor: "rgba(225,29,72,0.2)" }} /><p className="text-sm text-stone-400">Caricamento…</p></div>
         ) : ofDay.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center text-stone-400">Nessun appuntamento in questa giornata.</div>
+          <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center text-stone-400 lc-fade-up">Nessun appuntamento in questa giornata.</div>
         ) : (
-          <div className="space-y-2">
-            {ofDay.map((b) => {
+          <div key={date} className="space-y-2">
+            {ofDay.map((b, bi) => {
               const done = b.status === "done";
               return (
-                <div key={b.id} className="bg-white rounded-xl border border-stone-200 p-4 shadow-sm flex items-start gap-3">
+                <div key={b.id} className="bg-white rounded-xl border border-stone-200 p-4 shadow-sm flex items-start gap-3 lc-fade-up" style={{ animationDelay: `${Math.min(bi * 50, 400)}ms` }}>
                   <div className="flex flex-col items-center shrink-0 w-16">
                     <div className="font-semibold text-sm">{hhmm(b.startMin)}</div>
                     <div className="text-xs text-stone-400">{hhmm(b.endMin)}</div>

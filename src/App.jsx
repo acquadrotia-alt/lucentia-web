@@ -32,23 +32,23 @@ function Login({ onLogged, onBack }) {
     else setErr(r.data && r.data.error ? r.data.error : "Accesso non riuscito.");
   };
   return (
-    <div className="min-h-screen bg-stone-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+    <div className="min-h-screen bg-stone-50 flex items-center justify-center p-4 lc-fade-in">
+      <div className="w-full max-w-sm bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden lc-scale-in">
         <div className="px-6 pt-8 pb-5 text-center border-b border-stone-100">
-          <img src="/lucentia-logo.png" alt="Lucentia — Gestionale per parrucchieri ed estetisti" className="h-20 w-auto mx-auto" />
+          <img src="/lucentia-logo.png" alt="Lucentia — Gestionale per parrucchieri ed estetisti" className="h-20 w-auto mx-auto lc-pop-in" />
         </div>
         <div className="p-6 space-y-3">
           <div className="flex items-center gap-2 text-sm font-medium text-stone-600"><Lock size={15} style={{ color: "#e11d48" }} /> Accesso</div>
-          <div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2">
+          <div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2 transition focus-within:border-rose-400 focus-within:ring-2 focus-within:ring-rose-100">
             <Mail size={16} className="text-stone-400" />
-            <input type="email" value={email} autoFocus onChange={(e) => { setEmail(e.target.value); setErr(""); }} onKeyDown={(e) => e.key === "Enter" && submit()} placeholder="Email" className="flex-1 text-sm focus:outline-none" />
+            <input type="email" value={email} autoFocus onChange={(e) => { setEmail(e.target.value); setErr(""); }} onKeyDown={(e) => e.key === "Enter" && submit()} placeholder="Email" className="flex-1 text-sm focus:outline-none bg-transparent" />
           </div>
-          <div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2">
+          <div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2 transition focus-within:border-rose-400 focus-within:ring-2 focus-within:ring-rose-100">
             <Lock size={16} className="text-stone-400" />
-            <input type="password" value={password} onChange={(e) => { setPassword(e.target.value); setErr(""); }} onKeyDown={(e) => e.key === "Enter" && submit()} placeholder="Password" className="flex-1 text-sm focus:outline-none" />
+            <input type="password" value={password} onChange={(e) => { setPassword(e.target.value); setErr(""); }} onKeyDown={(e) => e.key === "Enter" && submit()} placeholder="Password" className="flex-1 text-sm focus:outline-none bg-transparent" />
           </div>
-          {err ? <p className="text-xs text-red-500 text-center">{err}</p> : null}
-          <button onClick={submit} disabled={busy} className="w-full text-white font-medium py-2.5 rounded-lg transition disabled:opacity-50" style={{ background: "#e11d48" }}>{busy ? "Attendere…" : "Entra"}</button>
+          {err ? <p className="text-xs text-red-500 text-center lc-fade-up">{err}</p> : null}
+          <button onClick={submit} disabled={busy} className="w-full text-white font-medium py-2.5 rounded-lg transition disabled:opacity-50 lc-shine hover:shadow-md hover:brightness-105 inline-flex items-center justify-center gap-2" style={{ background: "#e11d48" }}>{busy ? <><span className="lc-spinner" style={{ width: 16, height: 16, borderWidth: 2, borderTopColor: "#fff", borderColor: "rgba(255,255,255,0.4)" }} /> Attendere…</> : "Entra"}</button>
           {onBack ? <button onClick={onBack} className="w-full text-xs text-stone-400 hover:text-stone-600 pt-1">← Torna alla home</button> : null}
         </div>
       </div>
@@ -59,9 +59,9 @@ function Login({ onLogged, onBack }) {
 function Blocked({ stato, denominazione, onLogout }) {
   const msg = stato === "expired" ? "La licenza di questo salone è scaduta." : stato === "disabled" ? "L'accesso a questo salone è stato sospeso." : "Licenza non attiva.";
   return (
-    <div className="min-h-screen bg-stone-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm bg-white rounded-2xl border border-stone-200 shadow-sm p-6 text-center">
-        <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto mb-3"><AlertTriangle size={22} /></div>
+    <div className="min-h-screen bg-stone-50 flex items-center justify-center p-4 lc-fade-in">
+      <div className="w-full max-w-sm bg-white rounded-2xl border border-stone-200 shadow-sm p-6 text-center lc-scale-in">
+        <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto mb-3 lc-pop-in"><AlertTriangle size={22} /></div>
         <h2 className="font-semibold text-lg">{denominazione || "Lucentia"}</h2>
         <p className="text-sm text-stone-500 mt-2">{msg}</p>
         <p className="text-sm text-stone-500 mt-1">Contatta il fornitore per il rinnovo.</p>
@@ -76,20 +76,20 @@ const CONTACTS = { nome: "Office Solution", tel: "3920241955", email: "Amministr
 function DemoExpired({ denominazione, onLogout }) {
   const wa = "39" + CONTACTS.tel.replace(/\D/g, "");
   return (
-    <div className="min-h-screen bg-stone-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+    <div className="min-h-screen bg-stone-50 flex items-center justify-center p-4 lc-fade-in">
+      <div className="w-full max-w-md bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden lc-scale-in">
         <div className="px-6 pt-8 pb-5 text-center border-b border-stone-100">
-          <img src="/lucentia-logo.png" alt="Lucentia" className="h-16 w-auto mx-auto" />
+          <img src="/lucentia-logo.png" alt="Lucentia" className="h-16 w-auto mx-auto lc-pop-in" />
         </div>
         <div className="p-6 text-center">
-          <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto mb-3"><Sparkles size={22} /></div>
+          <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto mb-3 lc-float"><Sparkles size={22} /></div>
           <h2 className="font-semibold text-lg">La tua prova demo è terminata</h2>
           <p className="text-sm text-stone-500 mt-2">Grazie per aver provato Lucentia{denominazione ? `, ${denominazione}` : ""}. Per continuare e attivare una licenza completa, contattaci:</p>
           <div className="mt-5 space-y-2 text-left">
-            <a href={`tel:+${wa}`} className="flex items-center gap-3 border border-stone-200 rounded-xl p-3 hover:bg-stone-50"><Phone size={18} className="text-stone-500" /><span className="text-sm"><b>Telefono</b><br />{CONTACTS.tel}</span></a>
-            <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="flex items-center gap-3 border border-stone-200 rounded-xl p-3 hover:bg-stone-50"><MessageCircle size={18} className="text-green-600" /><span className="text-sm"><b>WhatsApp</b><br />Scrivici subito</span></a>
-            <a href={`mailto:${CONTACTS.email}`} className="flex items-center gap-3 border border-stone-200 rounded-xl p-3 hover:bg-stone-50"><Mail size={18} className="text-stone-500" /><span className="text-sm"><b>Email</b><br />{CONTACTS.email}</span></a>
-            <a href={`https://${CONTACTS.sito}`} target="_blank" rel="noreferrer" className="flex items-center gap-3 border border-stone-200 rounded-xl p-3 hover:bg-stone-50"><Globe size={18} className="text-stone-500" /><span className="text-sm"><b>Sito web</b><br />{CONTACTS.sito}</span></a>
+            <a href={`tel:+${wa}`} className="flex items-center gap-3 border border-stone-200 rounded-xl p-3 hover:bg-stone-50 hover:border-stone-300 hover:translate-x-1 transition"><Phone size={18} className="text-stone-500" /><span className="text-sm"><b>Telefono</b><br />{CONTACTS.tel}</span></a>
+            <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="flex items-center gap-3 border border-stone-200 rounded-xl p-3 hover:bg-stone-50 hover:border-stone-300 hover:translate-x-1 transition"><MessageCircle size={18} className="text-green-600" /><span className="text-sm"><b>WhatsApp</b><br />Scrivici subito</span></a>
+            <a href={`mailto:${CONTACTS.email}`} className="flex items-center gap-3 border border-stone-200 rounded-xl p-3 hover:bg-stone-50 hover:border-stone-300 hover:translate-x-1 transition"><Mail size={18} className="text-stone-500" /><span className="text-sm"><b>Email</b><br />{CONTACTS.email}</span></a>
+            <a href={`https://${CONTACTS.sito}`} target="_blank" rel="noreferrer" className="flex items-center gap-3 border border-stone-200 rounded-xl p-3 hover:bg-stone-50 hover:border-stone-300 hover:translate-x-1 transition"><Globe size={18} className="text-stone-500" /><span className="text-sm"><b>Sito web</b><br />{CONTACTS.sito}</span></a>
           </div>
           <button onClick={onLogout} className="mt-5 w-full border border-stone-300 text-stone-600 font-medium py-2.5 rounded-lg hover:bg-stone-50 inline-flex items-center justify-center gap-2"><LogOut size={16} /> Esci</button>
         </div>
@@ -121,7 +121,10 @@ export default function App() {
   const logout = async () => { await apiSend("/logout", "POST"); setMe(null); closeLogin(); setStato("login"); };
 
   if (stato === "loading") return (
-    <div className="min-h-screen bg-stone-50 flex items-center justify-center text-stone-400 text-sm">Caricamento…</div>
+    <div className="min-h-screen bg-stone-50 flex flex-col items-center justify-center gap-4 lc-fade-in">
+      <div className="lc-spinner" />
+      <div className="text-stone-400 text-sm">Caricamento…</div>
+    </div>
   );
   if (stato === "login" || !me) {
     if (showLogin) return <Login onLogged={refresh} onBack={closeLogin} />;

@@ -145,7 +145,8 @@ export default function ResellerPanel({ email, master, onLogout, apiGet, apiSend
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-6 space-y-6">
-        {msg ? <div className="bg-stone-800 text-white text-sm rounded-lg px-3 py-2 inline-flex items-center gap-2"><Check size={15} /> {msg}</div> : null}
+        {msg ? <div className="bg-stone-800 text-white text-sm rounded-lg px-3 py-2 inline-flex items-center gap-2 lc-pop-in fixed bottom-5 left-1/2 -translate-x-1/2 z-40 shadow-lg"><Check size={15} /> {msg}</div> : null}
+        <div key={tab} className="space-y-6 lc-fade-up">
 
         {tab === "licenze" ? (
           <>
@@ -187,6 +188,7 @@ export default function ResellerPanel({ email, master, onLogout, apiGet, apiSend
         {master && tab === "rivenditori" ? <ResellerView items={resellers} apiSend={apiSend} flash={flash} reload={loadResellers} /> : null}
         {master && tab === "fatturazione" ? <FatturazioneView apiGet={apiGet} apiSend={apiSend} flash={flash} resellers={resellers} /> : null}
         {master && tab === "richieste" ? <RichiesteView apiGet={apiGet} apiSend={apiSend} flash={flash} /> : null}
+        </div>
       </main>
     </div>
   );

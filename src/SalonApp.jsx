@@ -801,7 +801,7 @@ export default function SalonApp({ onLogout, moduli, azienda, demo }) {
         {operatorWarn ? <div className="bg-amber-50 border-t border-amber-200 text-amber-700 text-xs text-center py-1.5 flex items-center justify-center gap-1.5"><AlertTriangle size={13} /> Licenza in scadenza tra {ls.days} giorn{ls.days === 1 ? "o" : "i"}. Contatta il rivenditore per il rinnovo.</div> : null}
       </header>
 
-      <main className="max-w-5xl w-full mx-auto px-4 py-6 flex-1">
+      <main key={view} className="max-w-5xl w-full mx-auto px-4 py-6 flex-1 lc-fade-up">
         {view === "agenda" && <AgendaPage config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={session.hidePartial} canAddBooking={canAddBooking} canAddClient={canAddClient} />}
         {view === "clienti" && <ClientsView config={config} bookings={bookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} vouchers={vouchers} setVouchers={setVouchers} />}
         {view === "buoni" && <GiftCardsView config={config} vouchers={vouchers} setVouchers={setVouchers} clients={clients} canAddVoucher={canAddVoucher} />}
@@ -821,9 +821,9 @@ export default function SalonApp({ onLogout, moduli, azienda, demo }) {
       </main>
 
       {isDemo && demoBanner ? (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl">
-            <h3 className="font-semibold text-lg flex items-center gap-2"><Sparkles size={18} className="brand-accent" /> Demo gratuita</h3>
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 lc-fade-in">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl lc-scale-in">
+            <h3 className="font-semibold text-lg flex items-center gap-2"><Sparkles size={18} className="brand-accent lc-float" /> Demo gratuita</h3>
             <p className="text-sm text-stone-600 mt-3">Stai provando Lucentia in versione dimostrativa per <b>10 giorni</b>. Cosa tenere presente:</p>
             <ul className="text-sm text-stone-600 mt-3 space-y-2">
               <li className="flex gap-2"><AlertCircle size={16} className="text-amber-500 shrink-0 mt-0.5" /><span>I tuoi dati <b>vengono salvati</b> e li ritrovi a ogni accesso entro i 10 giorni.</span></li>
@@ -873,10 +873,10 @@ function LoginGate({ branding, license, onUnlock }) {
     setErr("wrong"); setV("");
   };
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="w-full max-w-sm bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center p-4 lc-fade-in">
+      <div className="w-full max-w-sm bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden lc-scale-in">
         <div className="px-6 pt-8 pb-5 text-center border-b border-stone-100">
-          <img src={LUCENTIA_LOGO} alt="Lucentia" className="h-11 w-auto mx-auto" />
+          <img src={LUCENTIA_LOGO} alt="Lucentia" className="h-11 w-auto mx-auto lc-pop-in" />
           <div className="text-xs text-stone-400 mt-2">Gestionale per centri estetici e parrucchieri</div>
           {branding.name ? <div className="text-xs text-stone-300 mt-0.5">per {branding.name}</div> : null}
         </div>

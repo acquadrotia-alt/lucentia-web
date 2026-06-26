@@ -9,6 +9,73 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      /* ===== Lucentia · animazioni e rifiniture grafiche globali ===== */
+      :root { --lc-ease: cubic-bezier(0.22, 1, 0.36, 1); }
+
+      html { scroll-behavior: smooth; }
+      body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+      /* Micro-interazioni: pulsanti e link reattivi al tocco/hover */
+      button:not(:disabled) { transition: transform .15s var(--lc-ease), box-shadow .2s var(--lc-ease), background-color .2s ease, color .2s ease, border-color .2s ease, opacity .2s ease; }
+      button:not(:disabled):active { transform: translateY(1px) scale(0.985); }
+      a { transition: color .2s ease, opacity .2s ease, transform .15s var(--lc-ease); }
+
+      /* Selezione testo in tinta calda col brand */
+      ::selection { background: rgba(184, 137, 59, 0.22); }
+
+      /* Scrollbar discreta */
+      * { scrollbar-width: thin; scrollbar-color: #d6d3d1 transparent; }
+      *::-webkit-scrollbar { width: 9px; height: 9px; }
+      *::-webkit-scrollbar-thumb { background: #d6d3d1; border-radius: 9px; border: 2px solid transparent; background-clip: content-box; }
+      *::-webkit-scrollbar-thumb:hover { background: #a8a29e; background-clip: content-box; }
+
+      /* ===== Keyframes ===== */
+      @keyframes lc-fade-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+      @keyframes lc-fade-in { from { opacity: 0; } to { opacity: 1; } }
+      @keyframes lc-scale-in { from { opacity: 0; transform: scale(0.94) translateY(8px); } to { opacity: 1; transform: none; } }
+      @keyframes lc-pop-in { 0% { opacity: 0; transform: scale(0.8); } 60% { transform: scale(1.04); } 100% { opacity: 1; transform: scale(1); } }
+      @keyframes lc-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+      @keyframes lc-spin { to { transform: rotate(360deg); } }
+      @keyframes lc-shimmer { 100% { transform: translateX(100%); } }
+      @keyframes lc-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(184,137,59,0.0); } 50% { box-shadow: 0 0 24px 2px rgba(184,137,59,0.35); } }
+      @keyframes lc-ring { 0% { opacity: .5; transform: scale(0.6); } 100% { opacity: 0; transform: scale(1.6); } }
+
+      /* ===== Classi di utilità ===== */
+      .lc-fade-up { animation: lc-fade-up .6s var(--lc-ease) both; }
+      .lc-fade-in { animation: lc-fade-in .6s ease both; }
+      .lc-scale-in { animation: lc-scale-in .35s var(--lc-ease) both; }
+      .lc-pop-in { animation: lc-pop-in .5s var(--lc-ease) both; }
+      .lc-float { animation: lc-float 5s ease-in-out infinite; }
+      .lc-glow-card { animation: lc-glow 4s ease-in-out infinite; }
+
+      /* Entrata a comparsa allo scroll (attivata via IntersectionObserver) */
+      .lc-reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s var(--lc-ease), transform .7s var(--lc-ease); will-change: opacity, transform; }
+      .lc-reveal.lc-in { opacity: 1; transform: none; }
+
+      /* Sollevamento al passaggio del mouse per le card */
+      .lc-lift { transition: transform .3s var(--lc-ease), box-shadow .3s var(--lc-ease); }
+      .lc-lift:hover { transform: translateY(-5px); box-shadow: 0 18px 40px -18px rgba(28, 25, 23, 0.28); }
+
+      /* Pulsante con riflesso luminoso al passaggio */
+      .lc-shine { position: relative; overflow: hidden; }
+      .lc-shine::after { content: ""; position: absolute; top: 0; left: 0; width: 60%; height: 100%; transform: translateX(-130%); background: linear-gradient(100deg, transparent, rgba(255,255,255,0.35), transparent); pointer-events: none; }
+      .lc-shine:hover::after { animation: lc-shimmer .9s ease; }
+
+      /* Spinner di caricamento */
+      .lc-spinner { width: 38px; height: 38px; border-radius: 50%; border: 3px solid rgba(184,137,59,0.22); border-top-color: #b8893b; animation: lc-spin .8s linear infinite; }
+
+      /* Skeleton shimmer per stati di caricamento */
+      .lc-skeleton { background: linear-gradient(90deg, #f1efed 25%, #e7e5e4 37%, #f1efed 63%); background-size: 400% 100%; animation: lc-shimmer-bg 1.4s ease infinite; }
+      @keyframes lc-shimmer-bg { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+
+      /* Rispetta chi preferisce ridurre il movimento */
+      @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; }
+        *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+        .lc-reveal { opacity: 1; transform: none; }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

@@ -1,5 +1,26 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Calendar, Users, Star, Layers, ShoppingBag, BarChart3, MessageCircle, HeartPulse, KeyRound, Cloud, FileText, Check, ArrowRight, Sparkles, ShieldCheck, Smartphone, X, Gift } from "lucide-react";
+
+// Rivela il contenuto con un'animazione quando entra nello schermo (scroll reveal).
+function Reveal({ children, delay = 0, className = "", as: Tag = "div", ...rest }) {
+  const ref = useRef(null);
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || shown) return;
+    if (typeof IntersectionObserver === "undefined") { setShown(true); return; }
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => { if (e.isIntersecting) { setShown(true); io.disconnect(); } });
+    }, { threshold: 0.12, rootMargin: "0px 0px -8% 0px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [shown]);
+  return (
+    <Tag ref={ref} className={`lc-reveal ${shown ? "lc-in" : ""} ${className}`} style={{ transitionDelay: `${delay}ms` }} {...rest}>
+      {children}
+    </Tag>
+  );
+}
 
 const GOLD = "#b8893b";
 const GOLD_SOFT = "#f3e9d6";
@@ -46,8 +67,8 @@ function LeadModal({ kind, piano, onClose, onLogin }) {
   };
   const GOLD = "#b8893b";
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-xl max-h-[90vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 lc-fade-in" onClick={onClose}>
+      <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-xl max-h-[90vh] overflow-auto lc-scale-in" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between mb-1">
           <h3 className="font-semibold text-lg">{okDemo ? "Demo attivata!" : okLead ? "Richiesta inviata" : demo ? "Prova gratis 10 giorni" : "Richiedi informazioni"}</h3>
           <button onClick={onClose} className="text-stone-400 hover:text-stone-600"><X size={20} /></button>
@@ -91,37 +112,37 @@ export default function Landing({ onLogin }) {
   const [lead, setLead] = useState(null);
   return (
     <div className="min-h-screen bg-white text-stone-800">
-      <style>{`html{scroll-behavior:smooth}`}</style>
-
       {/* NAV */}
-      <header className="sticky top-0 z-30 bg-white/85 backdrop-blur border-b border-stone-100">
+      <header className="sticky top-0 z-30 bg-white/85 backdrop-blur border-b border-stone-100 lc-fade-in">
         <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <img src="/lucentia-mark.png" alt="Lucentia" className="h-9 w-9 rounded-lg" />
+          <div className="flex items-center gap-2.5 group">
+            <img src="/lucentia-mark.png" alt="Lucentia" className="h-9 w-9 rounded-lg transition-transform duration-500 group-hover:rotate-6 group-hover:scale-110" />
             <span className="text-lg font-semibold tracking-wide">LUCENTIA</span>
           </div>
           <nav className="flex items-center gap-6">
             <a href="#funzionalita" className="hidden sm:inline text-sm text-stone-500 hover:text-stone-900">Funzionalità</a>
             <a href="#piani" className="hidden sm:inline text-sm text-stone-500 hover:text-stone-900">Piani</a>
-            <button onClick={onLogin} className="text-sm font-semibold text-white px-4 py-2 rounded-lg inline-flex items-center gap-1.5" style={{ background: "#1c1917" }}><KeyRound size={15} /> Login</button>
+            <button onClick={onLogin} className="text-sm font-semibold text-white px-4 py-2 rounded-lg inline-flex items-center gap-1.5 lc-shine" style={{ background: "#1c1917" }}><KeyRound size={15} /> Login</button>
           </nav>
         </div>
       </header>
 
       {/* HERO */}
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0" style={{ background: `radial-gradient(60% 60% at 50% 0%, ${GOLD_SOFT} 0%, #ffffff 70%)` }} />
+        <div className="absolute inset-0 lc-fade-in" style={{ background: `radial-gradient(60% 60% at 50% 0%, ${GOLD_SOFT} 0%, #ffffff 70%)` }} />
+        <div className="pointer-events-none absolute -top-24 -left-24 w-72 h-72 rounded-full opacity-50 lc-float" style={{ background: `radial-gradient(circle, ${GOLD_SOFT} 0%, transparent 70%)` }} />
+        <div className="pointer-events-none absolute top-10 -right-20 w-80 h-80 rounded-full opacity-40 lc-float" style={{ background: `radial-gradient(circle, ${GOLD_SOFT} 0%, transparent 70%)`, animationDelay: "1.4s" }} />
         <div className="relative max-w-4xl mx-auto px-5 pt-16 pb-20 text-center">
-          <img src="/lucentia-logo.png" alt="Lucentia — Gestionale per parrucchieri ed estetisti" className="h-28 sm:h-36 w-auto mx-auto mb-8" />
-          <div className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full mb-5" style={{ background: GOLD_SOFT, color: GOLD }}><Sparkles size={13} /> Gestionale per parrucchieri ed estetisti</div>
-          <h1 className="text-3xl sm:text-5xl font-bold leading-tight tracking-tight text-stone-900">Tutto il tuo salone,<br className="hidden sm:block" /> in un'unica app elegante.</h1>
-          <p className="mt-5 text-base sm:text-lg text-stone-500 max-w-2xl mx-auto">Agenda, clienti, fidelity, vendite, magazzino e statistiche. Sul cloud, sempre con te, semplice da usare ogni giorno.</p>
-          <div className="mt-8 flex items-center justify-center gap-3 flex-wrap">
-            <button onClick={() => setLead({ kind: "demo" })} className="text-white font-semibold px-6 py-3 rounded-xl inline-flex items-center gap-2 shadow-sm" style={{ background: GOLD }}><Sparkles size={17} /> Prova gratis 10 giorni</button>
-            <button onClick={onLogin} className="font-semibold px-6 py-3 rounded-xl inline-flex items-center gap-2 border" style={{ borderColor: "#1c1917", color: "#1c1917" }}>Accedi <ArrowRight size={17} /></button>
+          <img src="/lucentia-logo.png" alt="Lucentia — Gestionale per parrucchieri ed estetisti" className="h-28 sm:h-36 w-auto mx-auto mb-8 lc-pop-in" />
+          <div className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full mb-5 lc-fade-up" style={{ background: GOLD_SOFT, color: GOLD, animationDelay: "120ms" }}><Sparkles size={13} className="lc-float" /> Gestionale per parrucchieri ed estetisti</div>
+          <h1 className="text-3xl sm:text-5xl font-bold leading-tight tracking-tight text-stone-900 lc-fade-up" style={{ animationDelay: "200ms" }}>Tutto il tuo salone,<br className="hidden sm:block" /> in un'unica app elegante.</h1>
+          <p className="mt-5 text-base sm:text-lg text-stone-500 max-w-2xl mx-auto lc-fade-up" style={{ animationDelay: "300ms" }}>Agenda, clienti, fidelity, vendite, magazzino e statistiche. Sul cloud, sempre con te, semplice da usare ogni giorno.</p>
+          <div className="mt-8 flex items-center justify-center gap-3 flex-wrap lc-fade-up" style={{ animationDelay: "400ms" }}>
+            <button onClick={() => setLead({ kind: "demo" })} className="text-white font-semibold px-6 py-3 rounded-xl inline-flex items-center gap-2 shadow-sm lc-shine hover:shadow-lg hover:-translate-y-0.5 transition" style={{ background: GOLD }}><Sparkles size={17} /> Prova gratis 10 giorni</button>
+            <button onClick={onLogin} className="font-semibold px-6 py-3 rounded-xl inline-flex items-center gap-2 border hover:-translate-y-0.5 hover:bg-stone-900 hover:text-white transition" style={{ borderColor: "#1c1917", color: "#1c1917" }}>Accedi <ArrowRight size={17} /></button>
             <a href="#piani" className="font-semibold px-6 py-3 rounded-xl inline-flex items-center gap-2 text-stone-500 hover:text-stone-800">Vedi i piani</a>
           </div>
-          <div className="mt-8 flex items-center justify-center gap-5 text-xs text-stone-400 flex-wrap">
+          <div className="mt-8 flex items-center justify-center gap-5 text-xs text-stone-400 flex-wrap lc-fade-up" style={{ animationDelay: "500ms" }}>
             <span className="inline-flex items-center gap-1.5"><Cloud size={14} /> Sul cloud</span>
             <span className="inline-flex items-center gap-1.5"><Smartphone size={14} /> Multi-dispositivo</span>
             <span className="inline-flex items-center gap-1.5"><ShieldCheck size={14} /> Dati protetti</span>
@@ -131,24 +152,24 @@ export default function Landing({ onLogin }) {
 
       {/* COS'È */}
       <section className="max-w-4xl mx-auto px-5 py-14 text-center">
-        <div className="text-xs font-semibold tracking-[0.2em] uppercase mb-3" style={{ color: GOLD }}>Cos'è Lucentia</div>
-        <p className="text-xl sm:text-2xl text-stone-700 leading-relaxed font-light">Lucentia è il gestionale pensato per <span className="font-medium text-stone-900">parrucchieri e centri estetici</span>: organizza gli appuntamenti, fidelizza i clienti, gestisci vendite e magazzino e tieni tutto sotto controllo da un'unica schermata, con un'interfaccia curata e immediata.</p>
+        <Reveal className="text-xs font-semibold tracking-[0.2em] uppercase mb-3" style={{ color: GOLD }}>Cos'è Lucentia</Reveal>
+        <Reveal as="p" delay={80} className="text-xl sm:text-2xl text-stone-700 leading-relaxed font-light">Lucentia è il gestionale pensato per <span className="font-medium text-stone-900">parrucchieri e centri estetici</span>: organizza gli appuntamenti, fidelizza i clienti, gestisci vendite e magazzino e tieni tutto sotto controllo da un'unica schermata, con un'interfaccia curata e immediata.</Reveal>
       </section>
 
       {/* FUNZIONALITÀ */}
       <section id="funzionalita" className="bg-stone-50 border-y border-stone-100">
         <div className="max-w-6xl mx-auto px-5 py-16">
           <div className="text-center mb-12">
-            <div className="text-xs font-semibold tracking-[0.2em] uppercase mb-3" style={{ color: GOLD }}>Funzionalità</div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-stone-900">Tutto ciò che serve al tuo salone</h2>
+            <Reveal className="text-xs font-semibold tracking-[0.2em] uppercase mb-3" style={{ color: GOLD }}>Funzionalità</Reveal>
+            <Reveal as="h2" delay={80} className="text-2xl sm:text-3xl font-bold text-stone-900">Tutto ciò che serve al tuo salone</Reveal>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {FEATURES.map(([Icon, title, desc], i) => (
-              <div key={i} className="bg-white rounded-2xl border border-stone-200 p-6 hover:shadow-md transition">
-                <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-4" style={{ background: GOLD_SOFT, color: GOLD }}><Icon size={20} /></div>
+              <Reveal key={i} delay={(i % 3) * 90} className="group bg-white rounded-2xl border border-stone-200 p-6 lc-lift">
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-4 transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3" style={{ background: GOLD_SOFT, color: GOLD }}><Icon size={20} /></div>
                 <h3 className="font-semibold text-stone-900 mb-1.5">{title}</h3>
                 <p className="text-sm text-stone-500 leading-relaxed">{desc}</p>
-              </div>
+              </Reveal>
             ))}
           </div>
         </div>
@@ -158,13 +179,13 @@ export default function Landing({ onLogin }) {
       <section id="piani" style={{ background: "#1c1917" }} className="text-white">
         <div className="max-w-6xl mx-auto px-5 py-16">
           <div className="text-center mb-12">
-            <div className="text-xs font-semibold tracking-[0.2em] uppercase mb-3" style={{ color: GOLD }}>Piani di licenza</div>
-            <h2 className="text-2xl sm:text-3xl font-bold">Scegli il piano su misura</h2>
-            <p className="mt-3 text-stone-400 text-sm">Canone mensile, IVA esclusa. Nessun vincolo nascosto.</p>
+            <Reveal className="text-xs font-semibold tracking-[0.2em] uppercase mb-3" style={{ color: GOLD }}>Piani di licenza</Reveal>
+            <Reveal as="h2" delay={80} className="text-2xl sm:text-3xl font-bold">Scegli il piano su misura</Reveal>
+            <Reveal as="p" delay={160} className="mt-3 text-stone-400 text-sm">Canone mensile, IVA esclusa. Nessun vincolo nascosto.</Reveal>
           </div>
           <div className="grid sm:grid-cols-3 gap-5 max-w-4xl mx-auto">
-            {PLANS.map((p) => (
-              <div key={p.name} className="rounded-2xl p-6 flex flex-col" style={{ background: p.highlight ? "#26231f" : "#211e1b", border: `1px solid ${p.highlight ? GOLD : "#3a352f"}` }}>
+            {PLANS.map((p, pi) => (
+              <Reveal key={p.name} delay={pi * 110} className={`rounded-2xl p-6 flex flex-col lc-lift ${p.highlight ? "lc-glow-card sm:-translate-y-2" : ""}`} style={{ background: p.highlight ? "#26231f" : "#211e1b", border: `1px solid ${p.highlight ? GOLD : "#3a352f"}` }}>
                 {p.highlight ? <div className="self-start text-[11px] font-semibold px-2.5 py-1 rounded-full mb-3" style={{ background: GOLD, color: "#1c1917" }}>Consigliato</div> : <div className="h-[26px] mb-3" />}
                 <div className="text-lg font-semibold" style={{ color: p.highlight ? GOLD : "#fff" }}>{p.name}</div>
                 {p.full ? <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "rgba(184,137,59,0.18)", color: GOLD }}>Prezzo di lancio −50%</div> : null}
@@ -179,8 +200,8 @@ export default function Landing({ onLogin }) {
                     <li key={i} className="flex items-start gap-2 text-sm text-stone-200"><Check size={16} style={{ color: GOLD }} className="mt-0.5 shrink-0" /> {f}</li>
                   ))}
                 </ul>
-                <button onClick={() => setLead({ kind: "licenza", piano: p.name })} className="mt-6 w-full font-semibold py-2.5 rounded-xl transition" style={p.highlight ? { background: GOLD, color: "#1c1917" } : { background: "transparent", color: "#fff", border: "1px solid #4a443d" }}>Inizia ora</button>
-              </div>
+                <button onClick={() => setLead({ kind: "licenza", piano: p.name })} className={`mt-6 w-full font-semibold py-2.5 rounded-xl transition hover:-translate-y-0.5 ${p.highlight ? "lc-shine" : "hover:bg-white/5"}`} style={p.highlight ? { background: GOLD, color: "#1c1917" } : { background: "transparent", color: "#fff", border: "1px solid #4a443d" }}>Inizia ora</button>
+              </Reveal>
             ))}
           </div>
           <p className="text-center text-xs text-stone-500 mt-8">Tutti i piani includono Agenda e Scheda cliente. Gli operatori e i moduli si attivano in base al piano scelto.</p>
@@ -189,10 +210,12 @@ export default function Landing({ onLogin }) {
 
       {/* CTA */}
       <section className="max-w-4xl mx-auto px-5 py-16 text-center">
-        <img src="/lucentia-mark.png" alt="Lucentia" className="h-14 w-14 rounded-2xl mx-auto mb-5" />
-        <h2 className="text-2xl sm:text-3xl font-bold text-stone-900">Pronto a far brillare il tuo salone?</h2>
-        <p className="mt-3 text-stone-500">Accedi con le credenziali ricevute dal tuo fornitore e inizia subito.</p>
-        <button onClick={onLogin} className="mt-7 text-white font-semibold px-7 py-3 rounded-xl inline-flex items-center gap-2" style={{ background: "#1c1917" }}>Accedi a Lucentia <ArrowRight size={17} /></button>
+        <Reveal as="img" src="/lucentia-mark.png" alt="Lucentia" className="h-14 w-14 rounded-2xl mx-auto mb-5 lc-float" />
+        <Reveal as="h2" delay={80} className="text-2xl sm:text-3xl font-bold text-stone-900">Pronto a far brillare il tuo salone?</Reveal>
+        <Reveal as="p" delay={160} className="mt-3 text-stone-500">Accedi con le credenziali ricevute dal tuo fornitore e inizia subito.</Reveal>
+        <Reveal delay={240}>
+          <button onClick={onLogin} className="mt-7 text-white font-semibold px-7 py-3 rounded-xl inline-flex items-center gap-2 lc-shine hover:-translate-y-0.5 hover:shadow-lg transition" style={{ background: "#1c1917" }}>Accedi a Lucentia <ArrowRight size={17} /></button>
+        </Reveal>
       </section>
 
       {/* FOOTER */}
