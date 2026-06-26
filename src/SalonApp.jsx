@@ -1,6 +1,9 @@
 import { useState, useEffect, useMemo, useRef, createContext, useContext } from "react";
 import { Sparkles, Calendar, Clock, User, Mail, Lock, Settings, LayoutDashboard, Plus, Trash2, Check, ChevronLeft, ChevronRight, X, Users, CalendarPlus, Phone, MapPin, Image as ImageIcon, Palette, Store, Sunrise, Sun, Moon, History, Search, Gift, Star, Hash, LogOut, Ban, UserX, Undo2, Timer, CalendarClock, Wallet, RefreshCw, Printer, Download, Upload, KeyRound, ShieldCheck, CalendarX2, AlertTriangle, BadgeCheck, ShoppingCart, ShoppingBag, Package, Tag, Minus, Boxes, Receipt, Layers, AlertCircle, CalendarRange, CalendarDays, PackagePlus, BarChart3, TrendingUp, MessageCircle, FolderOpen } from "lucide-react";
 
+// Versione dell'app (da package.json, iniettata da Vite) mostrata nel login.
+const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
+
 const CFG_KEY = "salon-config-v3";
 const BK_KEY = "salon-bookings-v2";
 const CLIENTS_KEY = "salon-clients-v1";
@@ -891,6 +894,7 @@ function LoginGate({ branding, license, onUnlock }) {
         <div className="px-6 pb-5 pt-1 text-center border-t border-stone-100">
           <div className="text-[10px] uppercase tracking-widest text-stone-300 mb-1.5 mt-3">Realizzato da</div>
           <img src={MAKER_LOGO} alt="Office Solution" className="h-7 w-auto mx-auto opacity-80" />
+          <p className="text-[11px] text-stone-300 mt-3 select-none tracking-wide">V {APP_VERSION}</p>
         </div>
       </div>
     </div>

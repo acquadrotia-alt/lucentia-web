@@ -5,6 +5,10 @@ import ResellerPanel from "./ResellerPanel.jsx";
 import OperatorApp from "./OperatorApp.jsx";
 import Landing from "./Landing.jsx";
 
+// Versione dell'app (da package.json, iniettata da Vite). Serve per verificare
+// che il deploy si sia aggiornato: per cambiarla basta aggiornare "version" in package.json.
+const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
+
 async function apiGet(path) {
   const r = await fetch("/api" + path, { credentials: "include" });
   return { ok: r.ok, status: r.status, data: await r.json().catch(() => ({})) };
@@ -50,6 +54,7 @@ function Login({ onLogged, onBack }) {
           {err ? <p className="text-xs text-red-500 text-center lc-fade-up">{err}</p> : null}
           <button onClick={submit} disabled={busy} className="w-full text-white font-medium py-2.5 rounded-lg transition disabled:opacity-50 lc-shine hover:shadow-md hover:brightness-105 inline-flex items-center justify-center gap-2" style={{ background: "#e11d48" }}>{busy ? <><span className="lc-spinner" style={{ width: 16, height: 16, borderWidth: 2, borderTopColor: "#fff", borderColor: "rgba(255,255,255,0.4)" }} /> Attendere…</> : "Entra"}</button>
           {onBack ? <button onClick={onBack} className="w-full text-xs text-stone-400 hover:text-stone-600 pt-1">← Torna alla home</button> : null}
+          <p className="text-center text-[11px] text-stone-300 pt-2 select-none tracking-wide">V {APP_VERSION}</p>
         </div>
       </div>
     </div>
