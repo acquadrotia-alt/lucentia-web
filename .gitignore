@@ -1,0 +1,14 @@
+# Dipendenze
+node_modules/
+package-lock.json
+
+# Build
+dist/
+
+# Log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# File di sistema
+.DS_Store
