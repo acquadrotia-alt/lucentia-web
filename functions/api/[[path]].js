@@ -63,6 +63,31 @@ async function verifyPassword(password, stored) {
 function pad2(n) { return String(n).padStart(2, "0"); }
 function todayISO() { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
 function addMonthsISO(months) { const d = new Date(); d.setMonth(d.getMonth() + Number(months || 0)); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
+function addDaysISO(days) { const d = new Date(); d.setDate(d.getDate() + Number(days || 0)); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
+function demoSeed() {
+  const W = { 1: [[540, 780], [840, 1080]], 2: [[540, 780], [840, 1080]], 3: [[540, 780], [840, 1080]], 4: [[540, 780], [840, 1080]], 5: [[540, 780], [840, 1080]], 6: [[540, 780]] };
+  const services = [
+    { id: "s1", name: "Taglio donna", durationMin: 45, price: 25 },
+    { id: "s2", name: "Piega", durationMin: 30, price: 18 },
+    { id: "s3", name: "Colore", durationMin: 90, price: 45 },
+    { id: "s4", name: "Taglio uomo", durationMin: 30, price: 18 },
+    { id: "s5", name: "Manicure", durationMin: 45, price: 20 },
+    { id: "s6", name: "Pulizia viso", durationMin: 50, price: 35 },
+  ];
+  const staff = [
+    { id: "a1", name: "Giulia", role: "Parrucchiera", serviceIds: ["s1", "s2", "s3", "s4"], availability: W },
+    { id: "a2", name: "Sara", role: "Estetista", serviceIds: ["s5", "s6"], availability: W },
+  ];
+  const branding = { name: "Salone Demo", tagline: "Versione dimostrativa", logo: null, primary: "#e11d48", phone: "", email: "", address: "" };
+  const config = { services, staff, branding, cancelHours: 6, closures: [] };
+  const catalog = { categories: [{ id: "c-cap", name: "Capelli" }, { id: "c-viso", name: "Viso" }, { id: "c-corpo", name: "Corpo" }], products: [
+    { id: "p1", name: "Shampoo idratante", description: "Per capelli secchi", categoryId: "c-cap", formats: [{ id: "f1", label: "300 ml", price: 12.5, stock: 8 }] },
+    { id: "p2", name: "Maschera nutriente", description: "Trattamento settimanale", categoryId: "c-cap", formats: [{ id: "f1", label: "250 ml", price: 18, stock: 5 }] },
+    { id: "p3", name: "Crema viso anti-age", description: "Uso quotidiano", categoryId: "c-viso", formats: [{ id: "f1", label: "50 ml", price: 34, stock: 6 }] },
+    { id: "p4", name: "Olio corpo", description: "Mandorle dolci", categoryId: "c-corpo", formats: [{ id: "f1", label: "100 ml", price: 15, stock: 4 }] },
+  ] };
+  return { config, catalog };
+}
 function licStatus(az) {
   if (!az) return "none";
   if (!az.attiva) return "disabled";
@@ -139,6 +164,39 @@ export async function onRequest(context) {
     return json({ ok: true }, 200, { "Set-Cookie": CLEAR_COOKIE });
   }
 
+  // ---- /api/richiesta (pubblica: richiesta di contatto / licenza dalla copertina) ----
+  if (segs[0] === "richiesta" && method === "POST") {
+    const b = await request.json().catch(() => ({}));
+    const email = String(b.email || "").trim().toLowerCase();
+    const rs = String(b.ragione_sociale || "").trim();
+    if (!rs || !email) return json({ error: "Ragione sociale ed email sono richieste" }, 400);
+    await env.DB.prepare("INSERT INTO richieste (id, tipo, ragione_sociale, piva, email, telefono, messaggio, piano, azienda_id, stato) VALUES (?, 'licenza', ?, ?, ?, ?, ?, ?, NULL, 'nuova')").bind(crypto.randomUUID(), rs, String(b.piva || "").trim(), email, String(b.telefono || "").trim(), String(b.messaggio || "").trim(), String(b.piano || "").trim()).run();
+    return json({ ok: true });
+  }
+
+  // ---- /api/demo (pubblica: attiva una prova demo di 10 giorni) ----
+  if (segs[0] === "demo" && method === "POST") {
+    const b = await request.json().catch(() => ({}));
+    const email = String(b.email || "").trim().toLowerCase();
+    const rs = String(b.ragione_sociale || "").trim();
+    const tel = String(b.telefono || "").trim();
+    const piva = String(b.piva || "").trim();
+    if (!rs || !email || !tel) return json({ error: "Ragione sociale, email e telefono sono richiesti" }, 400);
+    const dup = await env.DB.prepare("SELECT id FROM utenti WHERE email = ?").bind(email).first();
+    if (dup) return json({ error: "Questa email è già registrata: usala per accedere oppure contattaci." }, 409);
+    const aid = crypto.randomUUID(); const uidv = crypto.randomUUID();
+    const ph = await hashPassword("demo");
+    const scad = addDaysISO(10);
+    const moduli = JSON.stringify(MODULI.slice());
+    await env.DB.prepare("INSERT INTO aziende (id, denominazione, licenza_scadenza, attiva, note, moduli, demo) VALUES (?, ?, ?, 1, 'DEMO', ?, 1)").bind(aid, rs, scad, moduli).run();
+    await env.DB.prepare("INSERT INTO utenti (id, email, password_hash, ruolo, azienda_id, nome) VALUES (?, ?, ?, 'azienda', ?, ?)").bind(uidv, email, ph, aid, rs).run();
+    const seed = demoSeed();
+    await env.DB.prepare("INSERT INTO dati_app (id, azienda_id, collezione, dati) VALUES (?, ?, 'config', ?)").bind(aid + ":config", aid, JSON.stringify(seed.config)).run();
+    await env.DB.prepare("INSERT INTO dati_app (id, azienda_id, collezione, dati) VALUES (?, ?, 'catalog', ?)").bind(aid + ":catalog", aid, JSON.stringify(seed.catalog)).run();
+    await env.DB.prepare("INSERT INTO richieste (id, tipo, ragione_sociale, piva, email, telefono, messaggio, azienda_id, stato) VALUES (?, 'demo', ?, ?, ?, ?, '', ?, 'attiva')").bind(crypto.randomUUID(), rs, piva, email, tel, aid).run();
+    return json({ ok: true, email });
+  }
+
   // ---- da qui in poi serve la sessione ----
   const sess = await getSession(env, request);
   if (!sess) return json({ error: "non autenticato" }, 401);
@@ -153,7 +211,7 @@ export async function onRequest(context) {
     }
     return json({
       user: { email: sess.email, ruolo: sess.ruolo, nome: sess.nome, azienda_id: sess.azienda_id, staff_id: sess.staff_id || null, master: isMaster(sess) },
-      azienda: az ? { id: az.id, denominazione: az.denominazione, licenza_scadenza: az.licenza_scadenza, attiva: !!az.attiva, stato: licStatus(az), moduli: parseModuli(az.moduli), prezzo_imponibile: az.prezzo_imponibile || null, prezzo_finale: az.prezzo_finale || null } : null,
+      azienda: az ? { id: az.id, denominazione: az.denominazione, licenza_scadenza: az.licenza_scadenza, attiva: !!az.attiva, stato: licStatus(az), demo: !!az.demo, moduli: parseModuli(az.moduli), prezzo_imponibile: az.prezzo_imponibile || null, prezzo_finale: az.prezzo_finale || null } : null,
       reseller,
     });
   }
@@ -330,6 +388,23 @@ export async function onRequest(context) {
       await env.DB.prepare("UPDATE licenze_eventi SET fatturato = ?, fatturato_il = ? WHERE id = ?").bind(fatt, fatt ? new Date().toISOString() : null, eid).run();
       return json({ ok: true });
     }
+    return json({ error: "metodo non consentito" }, 405);
+  }
+
+  // ---- /api/richieste  (solo master: richieste licenza + demo attivate) ----
+  if (segs[0] === "richieste") {
+    if (!isMaster(sess)) return json({ error: "riservato al rivenditore principale" }, 403);
+    if (!segs[1]) {
+      if (method === "GET") {
+        const res = await env.DB.prepare("SELECT r.*, a.licenza_scadenza AS scadenza, a.attiva AS az_attiva, a.demo AS az_demo FROM richieste r LEFT JOIN aziende a ON a.id = r.azienda_id ORDER BY r.creato_il DESC").all();
+        const items = (res.results || []).map((r) => ({ ...r, stato_licenza: r.azienda_id ? licStatus({ attiva: r.az_attiva, licenza_scadenza: r.scadenza }) : null }));
+        return json({ items });
+      }
+      return json({ error: "metodo non consentito" }, 405);
+    }
+    const id = segs[1];
+    if (method === "PATCH") { const b = await request.json().catch(() => ({})); await env.DB.prepare("UPDATE richieste SET stato = ? WHERE id = ?").bind(String(b.stato || "gestita"), id).run(); return json({ ok: true }); }
+    if (method === "DELETE") { await env.DB.prepare("DELETE FROM richieste WHERE id = ?").bind(id).run(); return json({ ok: true }); }
     return json({ error: "metodo non consentito" }, 405);
   }
 

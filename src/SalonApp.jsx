@@ -651,7 +651,7 @@ function planName(moduli) {
   if (tier === "inf" && sk(opt, KEYS)) return "Pro";
   return "Personalizzato";
 }
-export default function SalonApp({ onLogout, moduli, azienda }) {
+export default function SalonApp({ onLogout, moduli, azienda, demo }) {
   const flags = flagsFromModuli(moduli);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [bookings, setBookings] = useState([]);
@@ -666,9 +666,9 @@ export default function SalonApp({ onLogout, moduli, azienda }) {
   const [view, setView] = useState("agenda");
   const enabledSections = ["agenda", "clienti", "buoni", ...(flags.vendite ? ["shop"] : []), ...(flags.statistiche ? ["stats"] : []), ...(flags.marketing ? ["marketing"] : []), "settings"];
   useEffect(() => { if (!enabledSections.includes(view)) setView("agenda"); }, [moduli, view]);
-  const [demoBanner, setDemoBanner] = useState(false);
-  const isDemo = !!(session && session.role === "demo");
-  const demoRef = useRef(false); demoRef.current = isDemo;
+  const [demoBanner, setDemoBanner] = useState(!!demo);
+  const isDemo = !!demo;
+  const demoRef = useRef(false); demoRef.current = false;
   const [backupDir, setBackupDir] = useState(null);
   const [backupDirName, setBackupDirName] = useState("");
   const [lastBackup, setLastBackup] = useState(() => loadKey(BACKUP_KEY, null));
@@ -771,8 +771,8 @@ export default function SalonApp({ onLogout, moduli, azienda }) {
   const ALL_NAV = [["agenda", "Agenda", Calendar], ["clienti", "Clienti", Users], ["buoni", "Buoni", Gift], ["shop", "Vendite", ShoppingBag], ["stats", "Statistiche", BarChart3], ["marketing", "Marketing", MessageCircle], ["settings", "Impostazioni", Settings]];
   const canAddVoucher = !isDemo || vouchers.length < 5;
   const NAV = ALL_NAV.filter((x) => enabledSections.includes(x[0]));
-  const canAddClient = !isDemo || clients.length < DEMO_MAX_CLIENTS;
-  const canAddBooking = !isDemo || bookings.length < DEMO_MAX_BOOKINGS;
+  const canAddClient = !isDemo || clients.length < 2;
+  const canAddBooking = !isDemo || bookings.length < 20;
 
   return (
     <ModsCtx.Provider value={flags}>
@@ -805,21 +805,30 @@ export default function SalonApp({ onLogout, moduli, azienda }) {
         {view === "agenda" && <AgendaPage config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={session.hidePartial} canAddBooking={canAddBooking} canAddClient={canAddClient} />}
         {view === "clienti" && <ClientsView config={config} bookings={bookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} vouchers={vouchers} setVouchers={setVouchers} />}
         {view === "buoni" && <GiftCardsView config={config} vouchers={vouchers} setVouchers={setVouchers} clients={clients} canAddVoucher={canAddVoucher} />}
-        {view === "shop" && <ShopView catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} clients={clients} setClients={setClients} branding={b} loyalty={config.loyalty} hidePartial={session.hidePartial} canAddClient={canAddClient} />}
+        {view === "shop" && <ShopView catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} clients={clients} setClients={setClients} branding={b} loyalty={config.loyalty} hidePartial={session.hidePartial} canAddClient={canAddClient} demo={isDemo} />}
         {view === "stats" && <StatsView config={config} bookings={bookings} clients={clients} sales={sales} catalog={catalog} vouchers={vouchers} />}
         {view === "marketing" && <MarketingView config={config} saveConfig={saveConfig} bookings={bookings} clients={clients} sales={sales} catalog={catalog} />}
-        {view === "settings" && !isDemo && <SettingsView config={config} saveConfig={saveConfig} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} session={session} license={license} onSaveLicense={updateLicense} backupDirName={backupDirName} onPickBackupDir={pickBackupDir} onClearBackupDir={clearBackupDir} onBackupNow={backupNow} lastBackup={lastBackup} licenza={{ plan: planName(moduli), prezzo_finale: azienda && azienda.prezzo_finale, scadenza: azienda && azienda.licenza_scadenza }} />}
+        {view === "settings" && (isDemo ? (
+          <div>
+            <div className="mb-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2"><AlertCircle size={16} className="shrink-0 mt-0.5" /> In versione demo le impostazioni sono <b>visibili ma non modificabili</b>.</div>
+            <fieldset disabled style={{ border: 0, margin: 0, padding: 0, minInlineSize: "auto" }}>
+              <SettingsView config={config} saveConfig={saveConfig} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} session={session} license={license} onSaveLicense={updateLicense} backupDirName={backupDirName} onPickBackupDir={pickBackupDir} onClearBackupDir={clearBackupDir} onBackupNow={backupNow} lastBackup={lastBackup} licenza={{ plan: planName(moduli), prezzo_finale: azienda && azienda.prezzo_finale, scadenza: azienda && azienda.licenza_scadenza }} />
+            </fieldset>
+          </div>
+        ) : (
+          <SettingsView config={config} saveConfig={saveConfig} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} session={session} license={license} onSaveLicense={updateLicense} backupDirName={backupDirName} onPickBackupDir={pickBackupDir} onClearBackupDir={clearBackupDir} onBackupNow={backupNow} lastBackup={lastBackup} licenza={{ plan: planName(moduli), prezzo_finale: azienda && azienda.prezzo_finale, scadenza: azienda && azienda.licenza_scadenza }} />
+        ))}
       </main>
 
       {isDemo && demoBanner ? (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl">
             <h3 className="font-semibold text-lg flex items-center gap-2"><Sparkles size={18} className="brand-accent" /> Demo gratuita</h3>
-            <p className="text-sm text-stone-600 mt-3">Stai provando Lucentia in versione dimostrativa. Da tenere presente:</p>
+            <p className="text-sm text-stone-600 mt-3">Stai provando Lucentia in versione dimostrativa per <b>10 giorni</b>. Cosa tenere presente:</p>
             <ul className="text-sm text-stone-600 mt-3 space-y-2">
-              <li className="flex gap-2"><AlertCircle size={16} className="text-amber-500 shrink-0 mt-0.5" /><span>I dati <b>non vengono salvati</b>: alla chiusura dell'app tutto si azzera.</span></li>
-              <li className="flex gap-2"><AlertCircle size={16} className="text-amber-500 shrink-0 mt-0.5" /><span>Puoi creare al massimo <b>3 clienti</b> e <b>20 appuntamenti</b>.</span></li>
-              <li className="flex gap-2"><AlertCircle size={16} className="text-amber-500 shrink-0 mt-0.5" /><span>Le <b>Impostazioni</b> non sono disponibili in demo.</span></li>
+              <li className="flex gap-2"><AlertCircle size={16} className="text-amber-500 shrink-0 mt-0.5" /><span>I tuoi dati <b>vengono salvati</b> e li ritrovi a ogni accesso entro i 10 giorni.</span></li>
+              <li className="flex gap-2"><AlertCircle size={16} className="text-amber-500 shrink-0 mt-0.5" /><span>Puoi creare fino a <b>2 clienti</b>, <b>20 appuntamenti</b> e <b>5 buoni</b>.</span></li>
+              <li className="flex gap-2"><AlertCircle size={16} className="text-amber-500 shrink-0 mt-0.5" /><span>Puoi vendere i <b>prodotti già caricati</b>; le <b>Impostazioni</b> sono in sola lettura.</span></li>
             </ul>
             <button onClick={() => setDemoBanner(false)} className="mt-5 w-full brand-bg font-medium py-2.5 rounded-lg">Ho capito, inizia</button>
           </div>
@@ -2128,9 +2137,15 @@ function StaffEditor({ st, services, onEdit, onDelete }) {
   );
 }
 
-function ShopView({ catalog, setCatalog, sales, setSales, clients, setClients, branding, loyalty, hidePartial, canAddClient }) {
+function ShopView({ catalog, setCatalog, sales, setSales, clients, setClients, branding, loyalty, hidePartial, canAddClient, demo }) {
   const [tab, setTab] = useState("pos");
   const TABS = [["pos", "Cassa", ShoppingCart], ["load", "Carico", PackagePlus], ["catalog", "Catalogo", Boxes], ["history", "Storico", Receipt]];
+  const lock = (node) => (
+    <div>
+      <div className="mb-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2"><AlertCircle size={16} className="shrink-0 mt-0.5" /> In demo puoi vendere i prodotti già caricati, ma non modificare il magazzino.</div>
+      <fieldset disabled style={{ border: 0, margin: 0, padding: 0, minInlineSize: "auto" }}>{node}</fieldset>
+    </div>
+  );
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap gap-1 bg-stone-100 rounded-lg p-1 w-fit">
@@ -2139,8 +2154,8 @@ function ShopView({ catalog, setCatalog, sales, setSales, clients, setClients, b
         ); })}
       </div>
       {tab === "pos" ? <PosTab catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} clients={clients} setClients={setClients} branding={branding} loyalty={loyalty} hidePartial={hidePartial} canAddClient={canAddClient} /> : null}
-      {tab === "load" ? <LoadTab catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} /> : null}
-      {tab === "catalog" ? <CatalogTab catalog={catalog} setCatalog={setCatalog} loyalty={loyalty} /> : null}
+      {tab === "load" ? (demo ? lock(<LoadTab catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} />) : <LoadTab catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} />) : null}
+      {tab === "catalog" ? (demo ? lock(<CatalogTab catalog={catalog} setCatalog={setCatalog} loyalty={loyalty} />) : <CatalogTab catalog={catalog} setCatalog={setCatalog} loyalty={loyalty} />) : null}
       {tab === "history" ? <SalesHistoryTab sales={sales} branding={branding} hidePartial={hidePartial} /> : null}
     </div>
   );

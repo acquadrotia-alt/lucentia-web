@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { ShieldCheck, LogOut, Plus, KeyRound, Ban, BadgeCheck, Trash2, CalendarClock, Store, Mail, Boxes, X, Check, Users, Tag, Building2, Receipt, Filter } from "lucide-react";
+import { ShieldCheck, LogOut, Plus, KeyRound, Ban, BadgeCheck, Trash2, CalendarClock, Store, Mail, Boxes, X, Check, Users, Tag, Building2, Receipt, Filter, Inbox, Phone, Sparkles, Clock } from "lucide-react";
 
 const DURATE = [[1, "1 mese"], [3, "3 mesi"], [6, "6 mesi"], [12, "12 mesi"], [24, "24 mesi"], [0, "Illimitata"]];
 const OPT = [["fidelity", "Fidelity"], ["vendite", "Vendite"], ["statistiche", "Statistiche"], ["marketing", "Marketing"], ["allergeni", "Allergeni e patologie"], ["pacchetti", "Pacchetti sedute"]];
@@ -8,8 +8,8 @@ const OPER = [["1", "1 operatore (base)"], ["3", "Fino a 3 operatori"], ["inf", 
 const IVA = 0.22;
 const PRESETS = [
   ["Basic", [], "1", 9],
-  ["Smart", ["fidelity", "pacchetti", "vendite"], "3", 11.5],
-  ["Pro", OPT_KEYS.slice(), "inf", 12.5],
+  ["Smart", ["fidelity", "pacchetti", "vendite"], "3", 12],
+  ["Pro", OPT_KEYS.slice(), "inf", 19.5],
 ];
 const sameSet = (a, b) => a.length === b.length && a.slice().sort().join(",") === b.slice().sort().join(",");
 const presetName = (opt, tier) => { const p = PRESETS.find((x) => x[2] === tier && sameSet(x[1], opt)); return p ? p[0] : "Personalizzato"; };
@@ -139,6 +139,7 @@ export default function ResellerPanel({ email, master, onLogout, apiGet, apiSend
             <TabBtn id="licenze" icon={<Store size={15} />} label="Licenze" />
             <TabBtn id="rivenditori" icon={<Building2 size={15} />} label="Rivenditori" />
             <TabBtn id="fatturazione" icon={<Receipt size={15} />} label="Fatturazione" />
+            <TabBtn id="richieste" icon={<Inbox size={15} />} label="Richieste" />
           </div>
         ) : null}
       </header>
@@ -185,6 +186,7 @@ export default function ResellerPanel({ email, master, onLogout, apiGet, apiSend
 
         {master && tab === "rivenditori" ? <ResellerView items={resellers} apiSend={apiSend} flash={flash} reload={loadResellers} /> : null}
         {master && tab === "fatturazione" ? <FatturazioneView apiGet={apiGet} apiSend={apiSend} flash={flash} resellers={resellers} /> : null}
+        {master && tab === "richieste" ? <RichiesteView apiGet={apiGet} apiSend={apiSend} flash={flash} /> : null}
       </main>
     </div>
   );
@@ -415,6 +417,87 @@ function FatturazioneView({ apiGet, apiSend, flash, resellers }) {
           {rinnovi.length ? <div><div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-2">Rinnovi</div><div className="space-y-2">{rinnovi.map((e) => <Riga key={e.id} e={e} />)}</div></div> : null}
         </div>
       )}
+    </div>
+  );
+}
+
+function giorniRimanenti(scad) {
+  if (!scad) return null;
+  const exp = new Date(scad + "T23:59:59").getTime();
+  return Math.ceil((exp - Date.now()) / 86400000);
+}
+function waLink(tel) { let d = String(tel || "").replace(/\D/g, ""); if (!d) return ""; if (d.startsWith("00")) d = d.slice(2); if (!d.startsWith("39") && d.length <= 11) d = "39" + d; return "https://wa.me/" + d; }
+function RichiesteView({ apiGet, apiSend, flash }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const load = useCallback(async () => { setLoading(true); const r = await apiGet("/richieste"); setItems(r.ok && r.data.items ? r.data.items : []); setLoading(false); }, [apiGet]);
+  useEffect(() => { load(); }, [load]);
+  const segna = async (id, stato) => { const r = await apiSend(`/richieste/${id}`, "PATCH", { stato }); if (r.ok) { flash("Aggiornato."); load(); } };
+  const elimina = async (id) => { if (!confirm("Eliminare questa voce dall'elenco? (Non elimina l'eventuale account demo collegato.)")) return; const r = await apiSend(`/richieste/${id}`, "DELETE"); if (r.ok) { flash("Eliminata."); load(); } };
+  const licenze = items.filter((x) => x.tipo === "licenza");
+  const demo = items.filter((x) => x.tipo === "demo");
+
+  if (loading) return <p className="text-sm text-stone-400">Caricamento…</p>;
+
+  return (
+    <div className="space-y-6">
+      <section className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+        <h3 className="font-semibold flex items-center gap-2 mb-4"><Inbox size={16} style={{ color: "#e11d48" }} /> Richieste di licenza <span className="text-xs font-normal text-stone-400">· {licenze.length}</span></h3>
+        {licenze.length === 0 ? <p className="text-sm text-stone-400">Nessuna richiesta dalla copertina.</p> : (
+          <div className="space-y-2">{licenze.map((r) => (
+            <div key={r.id} className="border border-stone-200 rounded-xl p-3">
+              <div className="flex items-start justify-between gap-2 flex-wrap">
+                <div className="min-w-0">
+                  <div className="font-medium">{r.ragione_sociale}{r.piano ? <span className="text-xs text-stone-400 font-normal"> · piano {r.piano}</span> : null}</div>
+                  <div className="text-xs text-stone-500 mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                    <a href={`mailto:${r.email}`} className="inline-flex items-center gap-1 hover:underline"><Mail size={12} /> {r.email}</a>
+                    {r.telefono ? <a href={`tel:${r.telefono}`} className="inline-flex items-center gap-1 hover:underline"><Phone size={12} /> {r.telefono}</a> : null}
+                    {r.piva ? <span>P.IVA {r.piva}</span> : null}
+                  </div>
+                  {r.messaggio ? <div className="text-sm text-stone-600 mt-1.5 bg-stone-50 rounded-lg p-2">{r.messaggio}</div> : null}
+                  <div className="text-[11px] text-stone-400 mt-1">{fmt((r.creato_il || "").slice(0, 10))}</div>
+                </div>
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  <span className={`text-[11px] px-2 py-1 rounded-full ${r.stato === "gestita" ? "bg-stone-100 text-stone-500" : "bg-amber-100 text-amber-700"}`}>{r.stato === "gestita" ? "Gestita" : "Nuova"}</span>
+                  <div className="flex items-center gap-1">
+                    {r.telefono ? <a href={waLink(r.telefono)} target="_blank" rel="noreferrer" className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg" title="WhatsApp"><Phone size={15} /></a> : null}
+                    {r.stato === "gestita" ? <button onClick={() => segna(r.id, "nuova")} className="text-xs px-2 py-1 rounded-lg border border-stone-300 text-stone-600">Riapri</button> : <button onClick={() => segna(r.id, "gestita")} className="text-xs px-2 py-1 rounded-lg border border-stone-300 text-stone-600">Segna gestita</button>}
+                    <button onClick={() => elimina(r.id)} className="p-1.5 text-stone-400 hover:text-red-500 rounded-lg"><Trash2 size={15} /></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}</div>
+        )}
+      </section>
+
+      <section className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+        <h3 className="font-semibold flex items-center gap-2 mb-4"><Sparkles size={16} style={{ color: "#e11d48" }} /> Demo attivate <span className="text-xs font-normal text-stone-400">· {demo.length}</span></h3>
+        {demo.length === 0 ? <p className="text-sm text-stone-400">Nessuna demo attivata dai clienti.</p> : (
+          <div className="space-y-2">{demo.map((r) => { const gg = giorniRimanenti(r.scadenza); const scaduta = r.stato_licenza && r.stato_licenza !== "active"; return (
+            <div key={r.id} className="border border-stone-200 rounded-xl p-3">
+              <div className="flex items-start justify-between gap-2 flex-wrap">
+                <div className="min-w-0">
+                  <div className="font-medium">{r.ragione_sociale}</div>
+                  <div className="text-xs text-stone-500 mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                    <a href={`mailto:${r.email}`} className="inline-flex items-center gap-1 hover:underline"><Mail size={12} /> {r.email}</a>
+                    {r.telefono ? <a href={`tel:${r.telefono}`} className="inline-flex items-center gap-1 hover:underline"><Phone size={12} /> {r.telefono}</a> : null}
+                    {r.piva ? <span>P.IVA {r.piva}</span> : null}
+                  </div>
+                  <div className="text-[11px] text-stone-400 mt-1 flex items-center gap-1"><Clock size={11} /> Attivata {fmt((r.creato_il || "").slice(0, 10))} · scade {fmt(r.scadenza)}</div>
+                </div>
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  <span className={`text-[11px] px-2 py-1 rounded-full ${scaduta ? "bg-stone-100 text-stone-500" : "bg-green-100 text-green-700"}`}>{scaduta ? "Scaduta" : (gg != null ? `${gg} giorni` : "Attiva")}</span>
+                  <div className="flex items-center gap-1">
+                    {r.telefono ? <a href={waLink(r.telefono)} target="_blank" rel="noreferrer" className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg" title="WhatsApp"><Phone size={15} /></a> : null}
+                    <button onClick={() => elimina(r.id)} className="p-1.5 text-stone-400 hover:text-red-500 rounded-lg" title="Rimuovi dall'elenco"><Trash2 size={15} /></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ); })}</div>
+        )}
+      </section>
     </div>
   );
 }

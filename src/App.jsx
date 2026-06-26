@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Lock, Mail, LogOut, AlertTriangle, ShieldCheck } from "lucide-react";
+import { Lock, Mail, LogOut, AlertTriangle, ShieldCheck, Phone, MessageCircle, Globe, Sparkles } from "lucide-react";
 import SalonApp from "./SalonApp.jsx";
 import ResellerPanel from "./ResellerPanel.jsx";
 import OperatorApp from "./OperatorApp.jsx";
@@ -71,10 +71,41 @@ function Blocked({ stato, denominazione, onLogout }) {
   );
 }
 
+const CONTACTS = { nome: "Office Solution", tel: "3920241955", email: "Amministrazione@cmav.it", sito: "officesolutionoleggio.com" };
+
+function DemoExpired({ denominazione, onLogout }) {
+  const wa = "39" + CONTACTS.tel.replace(/\D/g, "");
+  return (
+    <div className="min-h-screen bg-stone-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+        <div className="px-6 pt-8 pb-5 text-center border-b border-stone-100">
+          <img src="/lucentia-logo.png" alt="Lucentia" className="h-16 w-auto mx-auto" />
+        </div>
+        <div className="p-6 text-center">
+          <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto mb-3"><Sparkles size={22} /></div>
+          <h2 className="font-semibold text-lg">La tua prova demo è terminata</h2>
+          <p className="text-sm text-stone-500 mt-2">Grazie per aver provato Lucentia{denominazione ? `, ${denominazione}` : ""}. Per continuare e attivare una licenza completa, contattaci:</p>
+          <div className="mt-5 space-y-2 text-left">
+            <a href={`tel:+${wa}`} className="flex items-center gap-3 border border-stone-200 rounded-xl p-3 hover:bg-stone-50"><Phone size={18} className="text-stone-500" /><span className="text-sm"><b>Telefono</b><br />{CONTACTS.tel}</span></a>
+            <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="flex items-center gap-3 border border-stone-200 rounded-xl p-3 hover:bg-stone-50"><MessageCircle size={18} className="text-green-600" /><span className="text-sm"><b>WhatsApp</b><br />Scrivici subito</span></a>
+            <a href={`mailto:${CONTACTS.email}`} className="flex items-center gap-3 border border-stone-200 rounded-xl p-3 hover:bg-stone-50"><Mail size={18} className="text-stone-500" /><span className="text-sm"><b>Email</b><br />{CONTACTS.email}</span></a>
+            <a href={`https://${CONTACTS.sito}`} target="_blank" rel="noreferrer" className="flex items-center gap-3 border border-stone-200 rounded-xl p-3 hover:bg-stone-50"><Globe size={18} className="text-stone-500" /><span className="text-sm"><b>Sito web</b><br />{CONTACTS.sito}</span></a>
+          </div>
+          <button onClick={onLogout} className="mt-5 w-full border border-stone-300 text-stone-600 font-medium py-2.5 rounded-lg hover:bg-stone-50 inline-flex items-center justify-center gap-2"><LogOut size={16} /> Esci</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [stato, setStato] = useState("loading"); // loading | login | ready
   const [me, setMe] = useState(null);
-  const [showLogin, setShowLogin] = useState(false);
+  const [showLogin, setShowLogin] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const h = (window.location.hash || "").toLowerCase();
+    return h === "#login" || h === "#accedi" || new URLSearchParams(window.location.search).has("login");
+  });
 
   const refresh = useCallback(async () => {
     const r = await apiGet("/me");
@@ -84,14 +115,17 @@ export default function App() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  const logout = async () => { await apiSend("/logout", "POST"); setMe(null); setShowLogin(false); setStato("login"); };
+  const openLogin = () => { setShowLogin(true); if (typeof window !== "undefined") window.history.replaceState(null, "", "#login"); };
+  const closeLogin = () => { setShowLogin(false); if (typeof window !== "undefined") window.history.replaceState(null, "", window.location.pathname + window.location.search); };
+
+  const logout = async () => { await apiSend("/logout", "POST"); setMe(null); closeLogin(); setStato("login"); };
 
   if (stato === "loading") return (
     <div className="min-h-screen bg-stone-50 flex items-center justify-center text-stone-400 text-sm">Caricamento…</div>
   );
   if (stato === "login" || !me) {
-    if (showLogin) return <Login onLogged={refresh} onBack={() => setShowLogin(false)} />;
-    return <Landing onLogin={() => setShowLogin(true)} />;
+    if (showLogin) return <Login onLogged={refresh} onBack={closeLogin} />;
+    return <Landing onLogin={openLogin} />;
   }
 
   if (me.user.ruolo === "reseller") {
@@ -107,6 +141,7 @@ export default function App() {
 
   // ruolo azienda
   const az = me.azienda;
+  if (az && az.demo && az.stato !== "active") return <DemoExpired denominazione={az.denominazione} onLogout={logout} />;
   if (!az || az.stato !== "active") return <Blocked stato={az ? az.stato : "none"} denominazione={az ? az.denominazione : ""} onLogout={logout} />;
-  return <SalonApp onLogout={logout} moduli={az.moduli} azienda={az} />;
+  return <SalonApp onLogout={logout} moduli={az.moduli} azienda={az} demo={!!az.demo} />;
 }
