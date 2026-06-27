@@ -6,6 +6,7 @@ e le loro licenze da un pannello dedicato. Ogni salone vede solo i propri dati.
 ## Struttura
 - src/App.jsx        → schermata di accesso + instradamento (login, rivenditore, salone, avviso licenza)
 - src/SalonApp.jsx   → l'app del salone (agenda, clienti, vendite…)
+- src/BookingPage.jsx → pagina pubblica di prenotazione online (link ?prenota=…, senza login)
 - src/ResellerPanel.jsx → pannello rivenditore (crea clienti, rinnova/sospendi licenze)
 - src/main.jsx, index.html, package.json, vite.config.js
 - functions/api/[[path]].js → API con login, sessioni, licenze, isolamento per azienda
@@ -17,9 +18,11 @@ e le loro licenze da un pannello dedicato. Ogni salone vede solo i propri dati.
    (in src/ ora ci sono 3 file: App.jsx, SalonApp.jsx, ResellerPanel.jsx).
 2. D1: apri la Console del database ed esegui di nuovo schema.sql
    (crea le nuove tabelle; quelle esistenti restano, è sicuro rieseguirlo).
-   Poi esegui migrazione-moduli.sql, migrazione-prezzi.sql, migrazione-operatori.sql
-   e migrazione-rivenditori.sql. Se danno errore "duplicate column name" c'erano
-   già: ignoralo (è normale).
+   Poi esegui migrazione-moduli.sql, migrazione-prezzi.sql, migrazione-operatori.sql,
+   migrazione-rivenditori.sql e migrazione-prenotazioni.sql. Se danno errore
+   "duplicate column name" / "table already exists" c'erano già: ignoralo (è normale).
+   NB: migrazione-prenotazioni.sql crea la tabella delle prenotazioni online ed è
+   obbligatoria se usi quel modulo, altrimenti il link di prenotazione dà errore.
 3. Cloudflare → Settings → Environment variables → Production → Add:
    SETUP_TOKEN = una stringa lunga e segreta a tua scelta.
 4. Fai ripartire una pubblicazione con un piccolo commit su GitHub
@@ -52,6 +55,9 @@ BASE (sempre incluso): Agenda con 1 operatore + Clienti (solo anagrafica e stori
 ADD-ON attivabili dal pannello, alla creazione o dopo (riga cliente -> "Moduli"):
   Fidelity · Vendite · Statistiche · Marketing · Allergeni e patologie · Pacchetti sedute
 OPERATORI: livello a scelta -> 1 (base) / fino a 3 / illimitati.
+PRENOTAZIONI ONLINE: add-on separato (+ € 4/mese), NON incluso in nessun piano e
+  NON attivabile col Basic (richiede un piano con più operatori). Si attiva con
+  l'interruttore "Add-on" nell'editor moduli. Dettagli sotto.
 
 Note:
 - I clienti creati prima dei moduli hanno tutto attivo (nessuna regressione).
@@ -97,3 +103,39 @@ i suoi saloni passano al principale.
   i punti); ripristino totale (clienti, operatori, fidelity, ecc.).
 Nessuna nuova migrazione: lo sconto è incluso nella tabella rivenditori (esegui
 migrazione-rivenditori.sql se non l'hai ancora fatto).
+
+## PRENOTAZIONI ONLINE (add-on, + € 4/mese)
+Permette ai clienti del salone di prenotarsi da soli, senza login, tramite un link.
+
+PRIMA DEL DEPLOY (una volta sola): esegui in Console D1 la migrazione che crea la
+tabella delle prenotazioni online (vedi anche migrazione-prenotazioni.sql):
+
+  CREATE TABLE IF NOT EXISTS prenotazioni_online (id TEXT PRIMARY KEY, azienda_id TEXT NOT NULL,
+    data TEXT NOT NULL, start_min INTEGER NOT NULL, end_min INTEGER NOT NULL, service_id TEXT,
+    staff_id TEXT, client_code TEXT, client_name TEXT, client_phone TEXT, client_email TEXT,
+    note TEXT, stato TEXT DEFAULT 'attiva', creato_il TEXT DEFAULT (datetime('now')));
+  CREATE INDEX IF NOT EXISTS idx_prenotazioni_azienda ON prenotazioni_online(azienda_id, data);
+
+ATTIVAZIONE (rivenditore): nell'editor moduli del salone attiva l'add-on
+"Prenotazioni online" (disabilitato col piano Basic).
+
+DOVE TROVA IL LINK il salone: nel gestionale -> Impostazioni -> card
+"Prenotazioni online". C'è il link già pronto (Copia / Apri), nella forma
+https://IL-DOMINIO/?prenota=<ID-ATTIVITÀ>. La card compare solo se il modulo è
+attivo E la migrazione è stata eseguita.
+
+COME LO USA IL CLIENTE: il salone condivide il link (WhatsApp, Instagram/Facebook,
+profilo Google Business, pulsante sul sito, QR code stampato). Aperto il link, il
+cliente vede una pagina col brand del salone e prenota in 3 passi: servizio ->
+data e ora -> nome e telefono. Se il telefono è già in anagrafica viene
+riconosciuto, altrimenti viene creata una nuova scheda cliente.
+
+LATO SALONE: le prenotazioni online appaiono in Agenda con un'etichetta "Online";
+toccandole si possono "Aggiungere all'agenda" (diventano appuntamenti normali) o
+annullare, con telefono/WhatsApp del cliente a portata di mano.
+
+IMPOSTAZIONI (card "Prenotazioni online"):
+- Modalità orari: "Anti-vuoto" (gli orari partono dall'apertura e si incastrano
+  subito dopo gli appuntamenti -> niente buchi in agenda) oppure "A griglia"
+  (orari liberi a intervalli fissi: il cliente sceglie l'ora, può lasciare buchi).
+- Preavviso minimo, giorni prenotabili in avanti, e interruttore per sospendere.
