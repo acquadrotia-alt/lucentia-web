@@ -1376,13 +1376,29 @@ function ClientsView({ config, bookings, clients, setClients, sales, catalog, vo
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2 bg-white brand-ring"><Search size={16} className="text-stone-400" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cerca per nome, codice, cellulare o tessera" className="flex-1 text-sm focus:outline-none" /></div>
-      {filtered.length === 0 ? <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center text-stone-400">{clients.length === 0 ? "Ancora nessun cliente." : "Nessun risultato."}</div> : (
-        <div className="space-y-2">{filtered.map((c) => { const stats = clientStats(c.code, bookings); const bal = clientBalance(c, bookings, sales, config, catalog); return (
-          <button key={c.code} onClick={() => setSel(c.code)} className="w-full text-left bg-white rounded-xl border border-stone-200 p-4 flex items-center gap-3 shadow-sm brand-hover transition">
-            <div className="w-10 h-10 rounded-full brand-soft brand-accent flex items-center justify-center font-semibold shrink-0">{(c.name || "?").slice(0, 1).toUpperCase()}</div>
-            <div className="flex-1 min-w-0"><div className="font-medium truncate">{c.name || "Senza nome"} <span className="text-xs text-stone-400 font-normal">#{c.code}</span></div><div className="text-xs text-stone-400">{stats.all.length} prenotazioni · {stats.servicesUsed} servizi{F.fidelity ? ` · ${bal} punti` : ""}</div></div>
-            <ChevronRight size={18} className="text-stone-300 shrink-0" />
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight text-stone-900 leading-none">Clienti</h2>
+          <p className="text-[13px] text-stone-400 mt-1">{clients.length} sched{clients.length === 1 ? "a" : "e"}{q ? ` · ${filtered.length} risultat${filtered.length === 1 ? "o" : "i"}` : ""}</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2 bg-white brand-ring transition-colors hover:border-stone-400 focus-within:border-stone-400"><Search size={16} className="text-stone-400" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cerca per nome, codice, cellulare o tessera" className="flex-1 text-sm focus:outline-none bg-transparent" /></div>
+      {filtered.length === 0 ? (
+        <div className="lc-card p-10 text-center">
+          <div className="w-11 h-11 rounded-full bg-stone-100 flex items-center justify-center mx-auto mb-3"><Users size={20} className="text-stone-400" /></div>
+          <p className="text-sm font-medium text-stone-600">{clients.length === 0 ? "Ancora nessun cliente" : "Nessun risultato"}</p>
+          <p className="text-xs text-stone-400 mt-1">{clients.length === 0 ? "I clienti si creano da un appuntamento o dalla cassa." : "Prova con un altro nome, codice o numero."}</p>
+        </div>
+      ) : (
+        <div className="space-y-2">{filtered.map((c, ci) => { const stats = clientStats(c.code, bookings); const bal = clientBalance(c, bookings, sales, config, catalog); return (
+          <button key={c.code} onClick={() => setSel(c.code)} style={{ animationDelay: `${Math.min(ci * 30, 300)}ms` }} className="lc-fade-up group w-full text-left lc-card lc-card-hover p-3.5 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full brand-soft brand-text flex items-center justify-center text-sm font-semibold shrink-0">{initials(c.name)}</div>
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-stone-900 truncate leading-tight">{c.name || "Senza nome"} <span className="text-xs text-stone-400 font-normal">#{c.code}</span></div>
+              <div className="text-[13px] text-stone-500 truncate mt-0.5 flex items-center gap-1.5"><span>{stats.all.length} appuntament{stats.all.length === 1 ? "o" : "i"}</span><span className="text-stone-300">·</span><span>{stats.servicesUsed} servizi</span></div>
+            </div>
+            {F.fidelity ? <span className="hidden sm:inline-flex items-center gap-1 text-xs font-medium brand-soft brand-text px-2 py-1 rounded-full shrink-0"><Star size={12} className="brand-accent" /> {bal} pt</span> : null}
+            <ChevronRight size={18} className="text-stone-300 group-hover:text-stone-500 group-hover:translate-x-0.5 transition shrink-0" />
           </button>
         ); })}</div>
       )}
