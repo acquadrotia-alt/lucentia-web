@@ -127,6 +127,10 @@
       /* Pillola di navigazione (stato attivo) */
       .lc-navpill-active { background: var(--lc-accent-soft); color: var(--lc-accent-strong); }
 
+      /* Scroller orizzontale senza barra visibile (es. filtri categorie) */
+      .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+
       /* Rispetta chi preferisce ridurre il movimento */
       @media (prefers-reduced-motion: reduce) {
         html { scroll-behavior: auto; }
