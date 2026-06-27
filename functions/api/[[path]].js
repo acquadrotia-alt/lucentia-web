@@ -149,7 +149,7 @@ async function onlineBookingsOf(env, aziendaId, dateStr) {
 // (orario di apertura, oppure subito dopo un appuntamento esistente). Così le
 // prenotazioni si impacchettano una dopo l'altra senza lasciare buchi: se apri
 // alle 10:00 viene offerto 10:00, mai 10:15.
-function gapFreeStarts(config, bookingsAll, dateStr, serviceId, leadMin) {
+function gapFreeStarts(config, bookingsAll, dateStr, serviceId, leadMin, staffFilter) {
   const closures = (config && config.closures) || [];
   if (closures.some((r) => inRange(dateStr, r.from, r.to))) return [];
   const svc = (config.services || []).find((s) => s.id === serviceId);
@@ -163,6 +163,7 @@ function gapFreeStarts(config, bookingsAll, dateStr, serviceId, leadMin) {
   const wd = weekdayOf(dateStr);
   const byStart = {};
   (config.staff || []).forEach((st) => {
+    if (staffFilter && st.id !== staffFilter) return;
     if (!(st.serviceIds || []).includes(serviceId)) return;
     if (staffOff(st, dateStr)) return;
     const windows = (st.availability && st.availability[wd]) || [];
@@ -183,7 +184,7 @@ function gapFreeStarts(config, bookingsAll, dateStr, serviceId, leadMin) {
 function staffOff(st, date) { return Array.isArray(st && st.off) && st.off.some((r) => inRange(date, r.from, r.to)); }
 // Modalità "a griglia": orari liberi a passo fisso (il cliente sceglie l'ora);
 // può lasciare buchi tra le prenotazioni, ma dà più libertà di scelta.
-function gridStarts(config, bookingsAll, dateStr, serviceId, leadMin) {
+function gridStarts(config, bookingsAll, dateStr, serviceId, leadMin, staffFilter) {
   const closures = (config && config.closures) || [];
   if (closures.some((r) => inRange(dateStr, r.from, r.to))) return [];
   const svc = (config.services || []).find((s) => s.id === serviceId);
@@ -197,6 +198,7 @@ function gridStarts(config, bookingsAll, dateStr, serviceId, leadMin) {
   const wd = weekdayOf(dateStr);
   const byStart = {};
   (config.staff || []).forEach((st) => {
+    if (staffFilter && st.id !== staffFilter) return;
     if (!(st.serviceIds || []).includes(serviceId)) return;
     if (staffOff(st, dateStr)) return;
     const windows = (st.availability && st.availability[wd]) || [];
@@ -212,8 +214,8 @@ function gridStarts(config, bookingsAll, dateStr, serviceId, leadMin) {
   return Object.keys(byStart).map(Number).sort((a, b) => a - b).map((start) => ({ start, staffId: byStart[start] }));
 }
 // Sceglie l'algoritmo in base alla modalità configurata dal salone.
-function computeStarts(config, bookingsAll, dateStr, serviceId, leadMin, mode) {
-  return (mode === "griglia" ? gridStarts : gapFreeStarts)(config, bookingsAll, dateStr, serviceId, leadMin);
+function computeStarts(config, bookingsAll, dateStr, serviceId, leadMin, mode, staffFilter) {
+  return (mode === "griglia" ? gridStarts : gapFreeStarts)(config, bookingsAll, dateStr, serviceId, leadMin, staffFilter);
 }
 
 async function getSession(env, request) {
@@ -335,22 +337,25 @@ export async function onRequest(context) {
     // info attività + servizi prenotabili
     if (segs[2] == null && method === "GET") {
       const b = config.branding || {};
+      const staffPub = (config.staff || []).filter((st) => st.availability && Object.keys(st.availability).length && (st.serviceIds || []).some((sid) => services.find((s) => s.id === sid))).map((st) => ({ id: st.id, name: st.name, role: st.role || "", avatar: st.avatar || null, photo: st.photo || null, serviceIds: st.serviceIds || [] }));
       return json({
         ok: true,
         salone: { nome: az.denominazione, brandName: b.name || az.denominazione, tagline: b.tagline || "", logo: b.logo || null, primary: b.primary || "#b8893b", phone: b.phone || "", email: b.email || "", address: b.address || "" },
         services: services.map((s) => ({ id: s.id, name: s.name, durationMin: s.durationMin, price: s.price != null ? s.price : null })),
+        staff: staffPub,
         horizonDays,
       });
     }
 
-    // slot disponibili per data + servizio (anti-vuoto)
+    // slot disponibili per data + servizio (+ operatore opzionale)
     if (segs[2] === "slots" && method === "GET") {
       const date = url.searchParams.get("date") || "";
       const serviceId = url.searchParams.get("service") || "";
+      const staffSel = url.searchParams.get("staff") || "";
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !serviceId) return json({ slots: [] });
       const bookings = (await getCollezione(env, aid, "bookings")) || [];
       const online = await onlineBookingsOf(env, aid, date);
-      const slots = computeStarts(config, [...(Array.isArray(bookings) ? bookings : []), ...online], date, serviceId, leadMin, mode);
+      const slots = computeStarts(config, [...(Array.isArray(bookings) ? bookings : []), ...online], date, serviceId, leadMin, mode, staffSel || undefined);
       return json({ slots: slots.map((s) => ({ start: s.start, label: `${pad2(Math.floor(s.start / 60))}:${pad2(s.start % 60)}` })) });
     }
 
@@ -369,9 +374,10 @@ export async function onRequest(context) {
       }
       const svc = services.find((s) => s.id === serviceId);
       if (!svc) return json({ error: "Servizio non valido." }, 400);
+      const staffSel = String(body.staff || "");
       const bookings = (await getCollezione(env, aid, "bookings")) || [];
       const online = await onlineBookingsOf(env, aid, date);
-      const slots = computeStarts(config, [...(Array.isArray(bookings) ? bookings : []), ...online], date, serviceId, leadMin, mode);
+      const slots = computeStarts(config, [...(Array.isArray(bookings) ? bookings : []), ...online], date, serviceId, leadMin, mode, staffSel || undefined);
       const slot = slots.find((s) => s.start === start);
       if (!slot) return json({ error: "Questo orario non è più disponibile. Scegline un altro." }, 409);
       const end = start + (Number(svc.durationMin) || 0);

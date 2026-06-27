@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback, createContext, useContext } from "react";
 import { Sparkles, Calendar, Clock, User, Mail, Lock, Settings, LayoutDashboard, Plus, Trash2, Check, ChevronLeft, ChevronRight, X, Users, CalendarPlus, Phone, MapPin, Image as ImageIcon, Palette, Store, Sunrise, Sun, Moon, History, Search, Gift, Star, Hash, LogOut, Ban, UserX, Undo2, Timer, CalendarClock, Wallet, RefreshCw, Printer, Download, Upload, KeyRound, ShieldCheck, CalendarX2, AlertTriangle, BadgeCheck, ShoppingCart, ShoppingBag, Package, Tag, Minus, Boxes, Receipt, Layers, AlertCircle, CalendarRange, CalendarDays, PackagePlus, BarChart3, TrendingUp, MessageCircle, FolderOpen } from "lucide-react";
+import { AvatarSvg, AVATAR_IDS, avatarIdFor } from "./avatars.jsx";
 
 // Versione dell'app (da package.json, iniettata da Vite) mostrata nel login.
 const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
@@ -2285,6 +2286,8 @@ function OperatorAccounts({ staff }) {
 
 function StaffEditor({ st, services, onEdit, onDelete }) {
   const F = useMods();
+  const [picker, setPicker] = useState(false);
+  const onPhoto = async (e) => { const file = e.target.files && e.target.files[0]; if (!file) return; try { const url = await fileToResizedDataURL(file, 256); onEdit({ photo: url }); } catch (err) {} };
   const toggleSvc = (id) => onEdit({ serviceIds: st.serviceIds.includes(id) ? st.serviceIds.filter((x) => x !== id) : [...st.serviceIds, id] });
   const setRanges = (day, ranges) => onEdit({ availability: { ...st.availability, [day]: ranges } });
   const addRange = (day) => setRanges(day, [...(st.availability[day] || []), [540, 780]]);
@@ -2296,7 +2299,24 @@ function StaffEditor({ st, services, onEdit, onDelete }) {
   const delOff = (id) => onEdit({ off: off.filter((o) => o.id !== id) });
   return (
     <div className="border border-stone-200 rounded-xl p-4">
-      <div className="flex items-center gap-2 mb-3"><input value={st.name} onChange={(e) => onEdit({ name: e.target.value })} className="font-medium px-2 py-1.5 rounded-lg border border-stone-300 text-sm brand-ring" /><input value={st.role} onChange={(e) => onEdit({ role: e.target.value })} placeholder="Ruolo" className="flex-1 text-sm px-2 py-1.5 rounded-lg border border-stone-300 text-stone-500 brand-ring" /><button onClick={onDelete} className="p-2 text-stone-400 hover:text-red-500"><Trash2 size={16} /></button></div>
+      <div className="flex items-center gap-2 mb-3">
+        <button type="button" onClick={() => setPicker((p) => !p)} title="Avatar / foto (prenotazioni online)" className="shrink-0 rounded-full transition hover:opacity-90 active:scale-95"><AvatarSvg id={avatarIdFor(st)} photo={st.photo} size={40} /></button>
+        <input value={st.name} onChange={(e) => onEdit({ name: e.target.value })} className="font-medium px-2 py-1.5 rounded-lg border border-stone-300 text-sm brand-ring min-w-0 flex-1" /><input value={st.role} onChange={(e) => onEdit({ role: e.target.value })} placeholder="Ruolo" className="flex-1 text-sm px-2 py-1.5 rounded-lg border border-stone-300 text-stone-500 brand-ring min-w-0" /><button onClick={onDelete} className="p-2 text-stone-400 hover:text-red-500 shrink-0"><Trash2 size={16} /></button>
+      </div>
+      {picker ? (
+        <div className="mb-3 rounded-xl border border-stone-200 p-3 bg-stone-50/70">
+          <div className="flex items-center justify-between gap-2 mb-2.5">
+            <div className="text-xs font-medium text-stone-500">Avatar / foto per le prenotazioni online</div>
+            <div className="flex items-center gap-2">
+              {st.photo ? <button onClick={() => onEdit({ photo: null })} className="text-xs text-stone-500 hover:text-red-500 inline-flex items-center gap-1"><X size={12} /> Rimuovi foto</button> : null}
+              <label className="cursor-pointer text-xs font-medium brand-bg px-2.5 py-1 rounded-lg inline-flex items-center gap-1"><ImageIcon size={13} /> Carica foto<input type="file" accept="image/*" onChange={onPhoto} className="hidden" /></label>
+            </div>
+          </div>
+          <div className="grid grid-cols-6 sm:grid-cols-8 gap-2">{AVATAR_IDS.map((aid) => { const on = !st.photo && avatarIdFor(st) === aid; return (
+            <button key={aid} type="button" onClick={() => onEdit({ avatar: aid, photo: null })} className="rounded-full transition hover:scale-105" style={on ? { boxShadow: "0 0 0 2px var(--brand)" } : {}}><AvatarSvg id={aid} size={38} /></button>
+          ); })}</div>
+        </div>
+      ) : null}
       <div className="mb-3">
         <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Servizi eseguiti</div>
         <div className="flex flex-wrap gap-1.5">{services.map((s) => { const on = st.serviceIds.includes(s.id); return <button key={s.id} onClick={() => toggleSvc(s.id)} className={`px-2.5 py-1 rounded-lg text-xs border transition ${on ? "brand-bg border-transparent" : "bg-white border-stone-200 text-stone-500 brand-hover"}`}>{s.name}</button>; })}</div>

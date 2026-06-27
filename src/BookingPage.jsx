@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { Calendar, Clock, Check, ChevronRight, ChevronLeft, User, Phone, Mail, Sparkles, MapPin, ArrowRight, Scissors, AlertCircle } from "lucide-react";
+import { Calendar, Clock, Check, ChevronRight, ChevronLeft, User, Users, Phone, Mail, Sparkles, MapPin, ArrowRight, Scissors, AlertCircle } from "lucide-react";
+import { AvatarSvg, avatarIdFor } from "./avatars.jsx";
 
 const pad2 = (n) => String(n).padStart(2, "0");
 const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; };
@@ -20,6 +21,7 @@ export default function BookingPage({ aid }) {
   const [info, setInfo] = useState(null);
   const [state, setState] = useState("loading"); // loading | error | ready
   const [service, setService] = useState(null);
+  const [staffSel, setStaffSel] = useState(""); // "" = qualsiasi operatore
   const [date, setDate] = useState(todayStr());
   const [slots, setSlots] = useState(null); // null=loading, []=none
   const [slot, setSlot] = useState(null);
@@ -36,13 +38,18 @@ export default function BookingPage({ aid }) {
     })();
   }, [aid]);
 
-  const loadSlots = useCallback(async (svcId, d) => {
+  const loadSlots = useCallback(async (svcId, d, staff) => {
     setSlots(null); setSlot(null);
-    const r = await api(`${aid}/slots?date=${d}&service=${svcId}`);
+    const r = await api(`${aid}/slots?date=${d}&service=${svcId}&staff=${staff || ""}`);
     setSlots(r.ok && Array.isArray(r.data.slots) ? r.data.slots : []);
   }, [aid]);
 
-  useEffect(() => { if (service) loadSlots(service.id, date); }, [service, date, loadSlots]);
+  useEffect(() => { if (service) loadSlots(service.id, date, staffSel); }, [service, date, staffSel, loadSlots]);
+
+  const operators = (info && service && Array.isArray(info.staff)) ? info.staff.filter((st) => (st.serviceIds || []).includes(service.id)) : [];
+  const showOps = operators.length > 1;
+  const stepDate = showOps ? 3 : 2;
+  const stepData = showOps ? 4 : 3;
 
   const primary = (info && info.salone.primary) || "#b8893b";
   const horizon = (info && info.horizonDays) || 30;
@@ -53,10 +60,10 @@ export default function BookingPage({ aid }) {
     if (!f.name.trim() || f.phone.replace(/\D/g, "").length < 6) { setErr("Inserisci nome e un numero di telefono valido."); return; }
     setBusy(true); setErr("");
     try {
-      const r = await fetch("/api/prenota/" + aid, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date, start: slot.start, service: service.id, name: f.name.trim(), phone: f.phone.trim(), email: f.email.trim(), note: f.note.trim() }) });
+      const r = await fetch("/api/prenota/" + aid, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date, start: slot.start, service: service.id, staff: staffSel, name: f.name.trim(), phone: f.phone.trim(), email: f.email.trim(), note: f.note.trim() }) });
       const j = await r.json().catch(() => ({}));
       setBusy(false);
-      if (!r.ok) { setErr(j.error || "Si è verificato un errore. Riprova."); if (r.status === 409) loadSlots(service.id, date); return; }
+      if (!r.ok) { setErr(j.error || "Si è verificato un errore. Riprova."); if (r.status === 409) loadSlots(service.id, date, staffSel); return; }
       setDone(j.conferma || {});
     } catch (e) { setBusy(false); setErr("Errore di rete. Riprova."); }
   };
@@ -120,7 +127,7 @@ export default function BookingPage({ aid }) {
           <div className="flex items-center gap-2 mb-3"><span className="w-6 h-6 rounded-full text-xs font-semibold flex items-center justify-center" style={accent}>1</span><h2 className="font-semibold text-stone-900 tracking-tight">Scegli il servizio</h2></div>
           {info.services.length === 0 ? <p className="text-sm text-stone-400">Nessun servizio prenotabile online al momento.</p> : (
             <div className="grid sm:grid-cols-2 gap-2">{info.services.map((s) => { const on = service && service.id === s.id; return (
-              <button key={s.id} onClick={() => setService(s)} className="text-left rounded-xl border p-3 transition" style={on ? { borderColor: primary, background: `${primary}0d` } : { borderColor: "#e7e5e4" }}>
+              <button key={s.id} onClick={() => { setService(s); setStaffSel(""); }} className="text-left rounded-xl border p-3 transition" style={on ? { borderColor: primary, background: `${primary}0d` } : { borderColor: "#e7e5e4" }}>
                 <div className="font-medium text-stone-900 text-sm flex items-center justify-between gap-2">{s.name}{on ? <Check size={15} style={{ color: primary }} /> : null}</div>
                 <div className="text-xs text-stone-400 mt-0.5 flex items-center gap-2"><span className="inline-flex items-center gap-1"><Clock size={11} /> {s.durationMin} min</span>{s.price != null ? <span>· {eur(s.price)}</span> : null}</div>
               </button>
@@ -128,10 +135,29 @@ export default function BookingPage({ aid }) {
           )}
         </section>
 
-        {/* 2. Data + orario */}
+        {/* 2. Operatore (se più di uno può fare il servizio) */}
+        {service && showOps ? (
+          <section className="lc-card p-4 lc-fade-up">
+            <div className="flex items-center gap-2 mb-3"><span className="w-6 h-6 rounded-full text-xs font-semibold flex items-center justify-center" style={accent}>2</span><h2 className="font-semibold text-stone-900 tracking-tight">Scegli l'operatore</h2></div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <button onClick={() => setStaffSel("")} className="rounded-xl border p-3 flex flex-col items-center gap-2 text-center transition" style={staffSel === "" ? { borderColor: primary, background: `${primary}0d` } : { borderColor: "#e7e5e4" }}>
+                <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: `${primary}1a`, color: primary }}><Users size={22} /></div>
+                <div className="text-sm font-medium text-stone-800 leading-tight">Qualsiasi</div>
+              </button>
+              {operators.map((st) => { const on = staffSel === st.id; return (
+                <button key={st.id} onClick={() => setStaffSel(st.id)} className="rounded-xl border p-3 flex flex-col items-center gap-2 text-center transition" style={on ? { borderColor: primary, background: `${primary}0d` } : { borderColor: "#e7e5e4" }}>
+                  <AvatarSvg id={avatarIdFor(st)} photo={st.photo} size={48} ring={on} />
+                  <div className="min-w-0"><div className="text-sm font-medium text-stone-800 leading-tight truncate">{st.name}</div>{st.role ? <div className="text-[11px] text-stone-400 truncate">{st.role}</div> : null}</div>
+                </button>
+              ); })}
+            </div>
+          </section>
+        ) : null}
+
+        {/* Data + orario */}
         {service ? (
           <section className="lc-card p-4 lc-fade-up">
-            <div className="flex items-center gap-2 mb-3"><span className="w-6 h-6 rounded-full text-xs font-semibold flex items-center justify-center" style={accent}>2</span><h2 className="font-semibold text-stone-900 tracking-tight">Scegli data e orario</h2></div>
+            <div className="flex items-center gap-2 mb-3"><span className="w-6 h-6 rounded-full text-xs font-semibold flex items-center justify-center" style={accent}>{stepDate}</span><h2 className="font-semibold text-stone-900 tracking-tight">Scegli data e orario</h2></div>
             <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1 -mx-1 px-1">
               {days.map((ds) => { const d = parseDate(ds); const on = ds === date; return (
                 <button key={ds} onClick={() => setDate(ds)} className="shrink-0 w-14 py-2 rounded-xl border text-center transition" style={on ? { borderColor: "transparent", background: primary, color: "#fff" } : { borderColor: "#e7e5e4", background: "#fff" }}>
@@ -156,10 +182,10 @@ export default function BookingPage({ aid }) {
           </section>
         ) : null}
 
-        {/* 3. Dati cliente */}
+        {/* Dati cliente */}
         {service && slot ? (
           <section className="lc-card p-4 lc-fade-up">
-            <div className="flex items-center gap-2 mb-3"><span className="w-6 h-6 rounded-full text-xs font-semibold flex items-center justify-center" style={accent}>3</span><h2 className="font-semibold text-stone-900 tracking-tight">I tuoi dati</h2></div>
+            <div className="flex items-center gap-2 mb-3"><span className="w-6 h-6 rounded-full text-xs font-semibold flex items-center justify-center" style={accent}>{stepData}</span><h2 className="font-semibold text-stone-900 tracking-tight">I tuoi dati</h2></div>
             <div className="space-y-2.5">
               <Field icon={User}><input value={f.name} onChange={(e) => { setF({ ...f, name: e.target.value }); setErr(""); }} placeholder="Nome e cognome *" className="flex-1 text-sm focus:outline-none bg-transparent" /></Field>
               <Field icon={Phone}><input value={f.phone} onChange={(e) => { setF({ ...f, phone: e.target.value }); setErr(""); }} type="tel" placeholder="Telefono *" className="flex-1 text-sm focus:outline-none bg-transparent" /></Field>
@@ -169,7 +195,7 @@ export default function BookingPage({ aid }) {
 
             <div className="mt-4 rounded-xl bg-stone-50 border border-stone-100 p-3 text-sm flex items-center justify-between gap-2">
               <span className="text-stone-500">Riepilogo</span>
-              <span className="text-stone-800 font-medium text-right">{service.name} · <span className="capitalize">{fmtLong(date)}</span> · <span className="tabular-nums">{slot.label}</span></span>
+              <span className="text-stone-800 font-medium text-right">{service.name}{staffSel ? ` · ${(operators.find((o) => o.id === staffSel) || {}).name}` : ""} · <span className="capitalize">{fmtLong(date)}</span> · <span className="tabular-nums">{slot.label}</span></span>
             </div>
             {err ? <p className="text-xs text-red-500 mt-3 flex items-center gap-1.5"><AlertCircle size={13} /> {err}</p> : null}
             <button onClick={submit} disabled={busy} className="mt-4 w-full text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 lc-shine hover:brightness-105 transition" style={{ background: primary }}>
