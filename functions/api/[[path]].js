@@ -142,8 +142,8 @@ async function getCollezione(env, aziendaId, coll) {
   try { return row ? JSON.parse(row.dati) : null; } catch (e) { return null; }
 }
 async function onlineBookingsOf(env, aziendaId, dateStr) {
-  const res = await env.DB.prepare("SELECT staff_id, start_min, end_min FROM prenotazioni_online WHERE azienda_id = ? AND data = ? AND stato = 'attiva'").bind(aziendaId, dateStr).all();
-  return (res.results || []).map((r) => ({ staffId: r.staff_id, date: dateStr, startMin: r.start_min, endMin: r.end_min, status: undefined }));
+  const res = await env.DB.prepare("SELECT id, staff_id, start_min, end_min FROM prenotazioni_online WHERE azienda_id = ? AND data = ? AND stato = 'attiva'").bind(aziendaId, dateStr).all();
+  return (res.results || []).map((r) => ({ id: r.id, staffId: r.staff_id, date: dateStr, startMin: r.start_min, endMin: r.end_min, status: undefined }));
 }
 // Slot "anti-vuoto": per ogni segmento libero offre SOLO il bordo sinistro
 // (orario di apertura, oppure subito dopo un appuntamento esistente). Così le
@@ -352,9 +352,10 @@ export async function onRequest(context) {
       const date = url.searchParams.get("date") || "";
       const serviceId = url.searchParams.get("service") || "";
       const staffSel = url.searchParams.get("staff") || "";
+      const exclude = url.searchParams.get("exclude") || "";
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !serviceId) return json({ slots: [] });
       const bookings = (await getCollezione(env, aid, "bookings")) || [];
-      const online = await onlineBookingsOf(env, aid, date);
+      const online = (await onlineBookingsOf(env, aid, date)).filter((b) => b.id !== exclude);
       const slots = computeStarts(config, [...(Array.isArray(bookings) ? bookings : []), ...online], date, serviceId, leadMin, mode, staffSel || undefined);
       return json({ slots: slots.map((s) => ({ start: s.start, label: `${pad2(Math.floor(s.start / 60))}:${pad2(s.start % 60)}` })) });
     }
@@ -400,6 +401,44 @@ export async function onRequest(context) {
       await env.DB.prepare("INSERT INTO prenotazioni_online (id, azienda_id, data, start_min, end_min, service_id, staff_id, client_code, client_name, client_phone, client_email, note, stato) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'attiva')")
         .bind(id, aid, date, start, end, serviceId, slot.staffId, clientCode, name, phone, email, note).run();
       return json({ ok: true, conferma: { date, start, end, label: `${pad2(Math.floor(start / 60))}:${pad2(start % 60)}`, service: svc.name, salone: az.denominazione } });
+    }
+
+    // "Le mie prenotazioni": ricerca per numero di telefono (gestione self-service)
+    const lbl = (m) => `${pad2(Math.floor(m / 60))}:${pad2(m % 60)}`;
+    const svcName = (sid) => { const s = (config.services || []).find((x) => x.id === sid); return s ? s.name : "Servizio"; };
+    const stName = (sid) => { const s = (config.staff || []).find((x) => x.id === sid); return s ? s.name : ""; };
+    const normP = (p) => String(p || "").replace(/\D/g, "");
+    if (segs[2] === "mie" && method === "GET") {
+      const phone = normP(url.searchParams.get("phone"));
+      if (phone.length < 6) return json({ items: [] });
+      const res = await env.DB.prepare("SELECT * FROM prenotazioni_online WHERE azienda_id = ? AND stato = 'attiva' AND data >= ? ORDER BY data, start_min").bind(aid, todayISO()).all();
+      const items = (res.results || []).filter((r) => normP(r.client_phone) === phone).map((r) => ({ id: r.id, date: r.data, startMin: r.start_min, endMin: r.end_min, label: lbl(r.start_min), serviceId: r.service_id, serviceName: svcName(r.service_id), staffId: r.staff_id, staffName: stName(r.staff_id) }));
+      return json({ items });
+    }
+    if (segs[2] === "annulla" && method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      const phone = normP(body.phone);
+      const row = await env.DB.prepare("SELECT * FROM prenotazioni_online WHERE id = ? AND azienda_id = ?").bind(String(body.id || ""), aid).first();
+      if (!row || row.stato !== "attiva" || normP(row.client_phone) !== phone) return json({ error: "Prenotazione non trovata." }, 404);
+      await env.DB.prepare("UPDATE prenotazioni_online SET stato = 'annullata' WHERE id = ?").bind(row.id).run();
+      return json({ ok: true });
+    }
+    if (segs[2] === "sposta" && method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      const phone = normP(body.phone);
+      const ndate = String(body.date || "");
+      const nstart = Number(body.start);
+      const row = await env.DB.prepare("SELECT * FROM prenotazioni_online WHERE id = ? AND azienda_id = ?").bind(String(body.id || ""), aid).first();
+      if (!row || row.stato !== "attiva" || normP(row.client_phone) !== phone) return json({ error: "Prenotazione non trovata." }, 404);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(ndate) || !Number.isFinite(nstart)) return json({ error: "Orario non valido." }, 400);
+      const svc = (config.services || []).find((s) => s.id === row.service_id);
+      const dur = svc ? (Number(svc.durationMin) || (row.end_min - row.start_min)) : (row.end_min - row.start_min);
+      const bookings = (await getCollezione(env, aid, "bookings")) || [];
+      const online = (await onlineBookingsOf(env, aid, ndate)).filter((b) => b.id !== row.id);
+      const slots = computeStarts(config, [...(Array.isArray(bookings) ? bookings : []), ...online], ndate, row.service_id, leadMin, mode, row.staff_id || undefined);
+      if (!slots.find((s) => s.start === nstart)) return json({ error: "Questo orario non è più disponibile. Scegline un altro." }, 409);
+      await env.DB.prepare("UPDATE prenotazioni_online SET data = ?, start_min = ?, end_min = ? WHERE id = ?").bind(ndate, nstart, nstart + dur, row.id).run();
+      return json({ ok: true, conferma: { date: ndate, start: nstart, label: lbl(nstart), service: svcName(row.service_id), salone: az.denominazione } });
     }
 
     return json({ error: "metodo non consentito" }, 405);
