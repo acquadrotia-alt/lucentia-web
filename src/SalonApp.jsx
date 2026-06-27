@@ -909,7 +909,7 @@ function Field({ label, children }) { return <div><div className="text-xs font-m
 function LoyaltyCard({ stats }) {
   const filled = stats.progress;
   return (
-    <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+    <div className="lc-card p-5">
       <div className="flex items-center gap-2 mb-3"><Star size={16} className="brand-accent" /><h3 className="font-semibold">Programma fedeltà</h3></div>
       {stats.rewards > 0 ? <div className="flex items-center gap-2 bg-green-50 text-green-700 rounded-lg px-3 py-2 text-sm mb-3"><Gift size={16} /> <span>Ha <span className="font-semibold">{stats.rewards} sconto{stats.rewards > 1 ? "i" : ""} del 10%</span> disponibile.</span></div> : null}
       <div className="flex items-center gap-1.5 mb-2">{Array.from({ length: LOYALTY_GOAL }).map((_, i) => <div key={i} className={`h-2.5 flex-1 rounded-full ${i < filled ? "brand-bg" : "bg-stone-200"}`} />)}</div>
@@ -924,7 +924,7 @@ function ApptItem({ b, staff, services, onCal, onCancel, onEdit, canCancel, canc
   const meta = b.status ? STATUS[b.status] : null;
   const showActions = onCancel || onEdit;
   return (
-    <div className={`bg-white rounded-xl border border-stone-200 p-4 shadow-sm ${b.status && b.status !== "done" ? "opacity-70" : ""}`}>
+    <div className={`lc-card p-4 ${b.status && b.status !== "done" ? "opacity-70" : ""}`}>
       <div className="flex gap-4 items-start">
         <div className="text-center shrink-0 w-16"><div className="text-xs text-stone-400 capitalize">{WDAY_SHORT[parseDate(b.date).getDay()]} {parseDate(b.date).getDate()}/{parseDate(b.date).getMonth() + 1}</div><div className="font-semibold brand-accent">{minToStr(b.startMin)}</div></div>
         <div className="w-px self-stretch bg-stone-100" />
@@ -1265,7 +1265,7 @@ function ClientsView({ config, bookings, clients, setClients, sales, catalog, vo
         <button onClick={() => setSel(null)} className="flex items-center gap-1 text-sm text-stone-500 hover:text-stone-700"><ChevronLeft size={16} /> Tutti i clienti</button>
         {F.fidelity && <FidelityCard branding={config.branding} name={c.name} code={c.code} />}
         {F.fidelity && <CardActions branding={config.branding} name={c.name} code={c.code} />}
-        <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm">
+        <div className="lc-card p-4">
           <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-3 flex items-center gap-1.5"><User size={13} /> Anagrafica cliente</div>
           <div className="grid sm:grid-cols-2 gap-3">
             <Field label="Nome"><input value={nm.fn} onChange={(e) => setName(c.code, e.target.value, nm.ln)} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
@@ -1277,7 +1277,7 @@ function ClientsView({ config, bookings, clients, setClients, sales, catalog, vo
         </div>
 
         {F.allergeni && (
-        <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm">
+        <div className="lc-card p-4">
           <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-3 flex items-center gap-1.5"><AlertTriangle size={13} /> Allergie, patologie e note</div>
           <div className="space-y-3">
             <div><div className="text-[11px] text-stone-400 mb-1">Allergie</div><textarea value={c.allergies || ""} onChange={(e) => patchClient(c.code, { allergies: e.target.value })} rows={2} placeholder="Es. allergia a tinture, lattice…" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></div>
@@ -1288,7 +1288,7 @@ function ClientsView({ config, bookings, clients, setClients, sales, catalog, vo
         )}
 
         {F.fidelity && (
-        <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+        <div className="lc-card p-5">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold flex items-center gap-2"><Star size={16} className="brand-accent" /> Programma fedeltà</h3>
             <div className="text-right"><div className="text-2xl font-bold brand-accent leading-none">{balance}</div><div className="text-[11px] text-stone-400 uppercase tracking-wide">punti disponibili</div></div>
@@ -1312,7 +1312,7 @@ function ClientsView({ config, bookings, clients, setClients, sales, catalog, vo
         )}
 
         {F.pacchetti && (
-        <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+        <div className="lc-card p-5">
           <h3 className="font-semibold flex items-center gap-2 mb-3"><Layers size={16} className="brand-accent" /> Pacchetti sedute</h3>
           {(c.packages && c.packages.length) ? (
             <div className="space-y-2 mb-4">{c.packages.map((p) => { const svc = services.find((x) => x.id === p.serviceId); const used = Number(p.used) || 0; const rem = p.total - used; return (
@@ -1342,7 +1342,7 @@ function ClientsView({ config, bookings, clients, setClients, sales, catalog, vo
         )}
 
         {(() => { const myV = (vouchers || []).filter((v) => v.clienteCode === c.code); const val = myV.filter((v) => v.tipo === "valore"); const pkgV = myV.filter((v) => v.tipo === "pacchetto"); return (
-        <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+        <div className="lc-card p-5">
           <h3 className="font-semibold flex items-center gap-2 mb-3"><Gift size={16} className="brand-accent" /> Buoni regalo</h3>
           <div className="flex flex-wrap items-end gap-2 mb-4">
             <div className="flex-1 min-w-[160px]"><div className="text-[11px] text-stone-400 mb-1">Registra un buono ricevuto</div>
@@ -1455,13 +1455,13 @@ function GiftCardsView({ config, vouchers, setVouchers, clients, canAddVoucher }
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h2 className="text-lg font-semibold flex items-center gap-2"><Gift size={18} className="brand-accent" /> Buoni regalo</h2>
+        <h2 className="text-xl font-semibold tracking-tight text-stone-900 flex items-center gap-2"><Gift size={18} className="brand-accent" /> Buoni regalo</h2>
         <div className="text-sm text-stone-500">{(vouchers || []).length} buoni · {attivi} da consegnare · incasso {eur(totIncasso)}</div>
       </div>
 
       {limite ? <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2"><AlertCircle size={16} className="shrink-0 mt-0.5" /> Hai raggiunto il numero massimo di buoni della versione demo.</p> : null}
 
-      <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+      <div className="lc-card p-5">
         <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-3">Genera un nuovo buono</div>
         <div className="flex gap-2 mb-4">
           <button onClick={() => setTipo("valore")} className={`flex-1 text-sm border rounded-lg px-3 py-2 transition ${tipo === "valore" ? "brand-soft brand-border" : "bg-white border-stone-200"}`}><div className="font-medium">Buono valore</div><div className="text-xs text-stone-400">Un importo in euro</div></button>
@@ -1483,7 +1483,7 @@ function GiftCardsView({ config, vouchers, setVouchers, clients, canAddVoucher }
       </div>
 
       {created ? (
-        <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+        <div className="lc-card p-5">
           <div className="flex items-center justify-between mb-3"><h3 className="font-semibold flex items-center gap-2"><Check size={16} className="text-green-600" /> Buono creato</h3><button onClick={() => setCreated(null)} className="text-stone-400 hover:text-stone-600"><X size={18} /></button></div>
           <VoucherCard branding={b} v={created} services={services} />
           <div className="mt-3 flex flex-col items-center gap-1">
@@ -1495,7 +1495,7 @@ function GiftCardsView({ config, vouchers, setVouchers, clients, canAddVoucher }
 
       <div className="space-y-2">
         <div className="text-xs font-medium text-stone-400 uppercase tracking-wide">Buoni emessi</div>
-        {(vouchers || []).length === 0 ? <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center text-stone-400">Ancora nessun buono.</div> : (vouchers || []).map((v) => { const lab = voucherStatusLabel(v); return (
+        {(vouchers || []).length === 0 ? <div className="lc-card p-10 text-center text-stone-400">Ancora nessun buono.</div> : (vouchers || []).map((v) => { const lab = voucherStatusLabel(v); return (
           <div key={v.id} className="bg-white rounded-xl border border-stone-200 p-4 flex items-center gap-3 shadow-sm">
             <div className="w-10 h-10 rounded-xl brand-soft brand-accent flex items-center justify-center shrink-0"><Gift size={18} /></div>
             <div className="flex-1 min-w-0">
@@ -1815,11 +1815,11 @@ function MarketingView({ config, saveConfig, bookings, clients, sales, catalog }
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h2 className="text-lg font-semibold">Marketing</h2>
+        <h2 className="text-xl font-semibold tracking-tight text-stone-900">Marketing</h2>
         <button onClick={openCfg} className="flex items-center gap-1.5 text-sm border border-stone-300 text-stone-700 px-3 py-1.5 rounded-lg hover:bg-stone-50"><Settings size={15} /> Messaggi</button>
       </div>
 
-      <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm grid sm:grid-cols-3 gap-3">
+      <div className="lc-card p-4 grid sm:grid-cols-3 gap-3">
         <div><div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Servizio usato</div><select value={svc} onChange={(e) => setSvc(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm bg-white brand-ring"><option value="">Tutti</option>{services.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
         <div><div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Prodotto acquistato</div><select value={prod} onChange={(e) => setProd(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm bg-white brand-ring"><option value="">Tutti</option>{products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
         <div><div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Cliente inattivo</div><select value={inact} onChange={(e) => setInact(Number(e.target.value))} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm bg-white brand-ring">{inactOpts.map((o) => <option key={o[0]} value={o[0]}>{o[1]}</option>)}</select></div>
@@ -1827,7 +1827,7 @@ function MarketingView({ config, saveConfig, bookings, clients, sales, catalog }
 
       {activeMsg ? <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5 flex items-start gap-2"><MessageCircle size={14} className="shrink-0 mt-0.5" /><span>Con il filtro attivo, WhatsApp si aprirà con un messaggio già pronto: potrai completarlo o modificarlo prima di inviarlo.</span></p> : null}
 
-      {filtered.length === 0 ? <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center text-stone-400">{withPhone.length === 0 ? "Nessun cliente con numero di telefono." : "Nessun cliente corrisponde ai filtri."}</div> : (
+      {filtered.length === 0 ? <div className="lc-card p-10 text-center text-stone-400">{withPhone.length === 0 ? "Nessun cliente con numero di telefono." : "Nessun cliente corrisponde ai filtri."}</div> : (
         <div className="space-y-2">{filtered.map((c) => { const lv = lastVisit(c.code); return (
           <div key={c.code} className="bg-white rounded-xl border border-stone-200 p-3 flex items-center gap-3 shadow-sm">
             <div className="w-10 h-10 rounded-full brand-soft brand-accent flex items-center justify-center font-semibold shrink-0">{(c.name || "?").slice(0, 1).toUpperCase()}</div>
@@ -1893,11 +1893,11 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3 flex-wrap"><h2 className="text-lg font-semibold">Impostazioni</h2>{isReseller ? <div className="flex items-center gap-2"><button onClick={reset} className="flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-700"><RefreshCw size={14} /> Ripristina demo</button><button onClick={azzeraTutto} className="flex items-center gap-1.5 text-sm text-red-600 border border-red-300 px-2.5 py-1.5 rounded-lg hover:bg-red-50"><AlertTriangle size={14} /> Azzera tutto</button></div> : null}</div>
+      <div className="flex items-center justify-between gap-3 flex-wrap"><h2 className="text-xl font-semibold tracking-tight text-stone-900">Impostazioni</h2>{isReseller ? <div className="flex items-center gap-2"><button onClick={reset} className="flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-700"><RefreshCw size={14} /> Ripristina demo</button><button onClick={azzeraTutto} className="flex items-center gap-1.5 text-sm text-red-600 border border-red-300 px-2.5 py-1.5 rounded-lg hover:bg-red-50"><AlertTriangle size={14} /> Azzera tutto</button></div> : null}</div>
 
       {isReseller ? <LicensePanel license={license} onSave={onSaveLicense} /> : null}
 
-      <section className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+      <section className="lc-card p-5">
         <h3 className="font-semibold flex items-center gap-2 mb-3"><BadgeCheck size={16} className="brand-accent" /> La tua licenza</h3>
         <div className="grid grid-cols-3 gap-3 text-center">
           <div className="bg-stone-50 rounded-xl p-3"><div className="text-[11px] text-stone-400 uppercase tracking-wide">Piano</div><div className="font-semibold mt-0.5">{(licenza && licenza.plan) || "—"}</div></div>
@@ -1908,14 +1908,14 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
       </section>
 
 {F.vendite && (
-      <section className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+      <section className="lc-card p-5">
         <h3 className="font-semibold flex items-center gap-2 mb-3"><Boxes size={16} className="brand-accent" /> Magazzino</h3>
         <p className="text-sm text-stone-500 mb-3">Azzera la giacenza di tutti i prodotti (prodotti, formati e prezzi restano invariati). Utile prima di un nuovo inventario da ricaricare con la scheda Carico.</p>
         <button onClick={azzeraGiacenze} className="text-sm border border-red-300 text-red-600 px-3 py-2 rounded-lg inline-flex items-center gap-2 hover:bg-red-50"><AlertCircle size={15} /> Azzera giacenze</button>
       </section>
       )}
 
-      <section className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+      <section className="lc-card p-5">
         <h3 className="font-semibold flex items-center gap-2 mb-3"><Download size={16} className="brand-accent" /> Backup dei dati</h3>
         <p className="text-sm text-stone-500 mb-3">I dati sono salvati su questo PC. Esporta regolarmente un backup per sicurezza. (La licenza non è inclusa nel backup.)</p>
         <div className="flex flex-wrap gap-2">
@@ -1924,7 +1924,7 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
         </div>
       </section>
 
-      <section className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+      <section className="lc-card p-5">
         <h3 className="font-semibold flex items-center gap-2 mb-3"><RefreshCw size={16} className="brand-accent" /> Backup automatico</h3>
         <label className="flex items-center gap-2 text-sm cursor-pointer mb-3"><input type="checkbox" checked={!!(config.backup && config.backup.enabled)} onChange={(e) => saveConfig({ ...config, backup: { time: (config.backup && config.backup.time) || "20:00", enabled: e.target.checked } })} className="w-4 h-4" /> Salva automaticamente un backup ogni giorno</label>
         <div className="flex flex-wrap items-end gap-3 mb-3">
@@ -1938,7 +1938,7 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
         <p className="text-xs text-stone-400 mt-3">Scegli una volta la cartella sul PC: l'app vi salverà il file <code className="bg-stone-100 px-1 rounded">lucentia-backup-AAAA-MM-GG.json</code> all'orario impostato (occorre che l'app sia aperta a quell'ora). Funziona su Windows; su Android usa "Esporta backup".</p>
       </section>
 
-      <section className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+      <section className="lc-card p-5">
         <div className="flex items-center justify-between mb-4"><h3 className="font-semibold flex items-center gap-2"><Store size={16} className="brand-accent" /> Attività e aspetto</h3><button onClick={() => setEditAspect((e) => !e)} className="text-sm brand-accent border border-stone-200 px-3 py-1.5 rounded-lg hover:bg-stone-50">{editAspect ? "Chiudi" : "Modifica"}</button></div>
         {!editAspect ? (
           <div className="flex items-center gap-3 text-sm text-stone-500">{branding.logo ? <img src={branding.logo} alt="logo" className="w-10 h-10 rounded-xl object-cover border border-stone-200" /> : <div className="w-10 h-10 rounded-xl bg-stone-100 flex items-center justify-center text-stone-300"><ImageIcon size={18} /></div>}<span className="font-medium text-stone-700">{branding.name || "—"}</span>{branding.tagline ? <span className="text-stone-400">· {branding.tagline}</span> : null}</div>
@@ -1969,7 +1969,7 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
         )}
       </section>
 
-      <section className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+      <section className="lc-card p-5">
         <h3 className="font-semibold flex items-center gap-2 mb-3"><CalendarRange size={16} className="brand-accent" /> Chiusure salone (ferie / festività)</h3>
         {closures.length > 0 ? (
           <div className="space-y-2 mb-4">{closures.slice().sort((a, b) => (a.from > b.from ? 1 : -1)).map((c) => (
@@ -1992,7 +1992,7 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
       </section>
 
 {F.fidelity && (
-      <section className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+      <section className="lc-card p-5">
         <h3 className="font-semibold flex items-center gap-2 mb-4"><Star size={16} className="brand-accent" /> Programma fedeltà</h3>
         <div className="space-y-4">
           <div>
@@ -2018,7 +2018,7 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
       </section>
       )}
 
-      <section className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+      <section className="lc-card p-5">
         <div className="flex items-center justify-between mb-4 gap-2 flex-wrap"><h3 className="font-semibold flex items-center gap-2"><Sparkles size={16} className="brand-accent" /> Servizi, durate e prezzi</h3><div className="flex items-center gap-2"><button onClick={() => printPriceList(config)} className="flex items-center gap-1 text-sm border border-stone-300 text-stone-700 px-3 py-1.5 rounded-lg hover:bg-stone-50"><Printer size={15} /> Listino PDF</button><button onClick={addService} className="flex items-center gap-1 text-sm brand-bg px-3 py-1.5 rounded-lg"><Plus size={15} /> Aggiungi</button></div></div>
         <div className="space-y-2">{services.map((s) => (
           <div key={s.id} className="flex flex-wrap items-center gap-2">
@@ -2031,7 +2031,7 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
         ))}</div>
       </section>
 
-      <section className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+      <section className="lc-card p-5">
         <div className="flex items-center justify-between mb-4"><h3 className="font-semibold flex items-center gap-2"><Users size={16} className="brand-accent" /> Operatori {F.maxOperatori !== Infinity ? <span className="text-xs font-normal text-stone-400">· max {F.maxOperatori}</span> : null}</h3><button onClick={addStaff} disabled={staff.length >= F.maxOperatori} title={staff.length >= F.maxOperatori ? "Limite operatori raggiunto per questo piano" : ""} className="flex items-center gap-1 text-sm brand-bg px-3 py-1.5 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"><Plus size={15} /> Aggiungi</button></div>
         <div className="space-y-4">{staff.map((st) => <StaffEditor key={st.id} st={st} services={services} onEdit={(patch) => editStaff(st.id, patch)} onDelete={() => delStaff(st.id)} />)}</div>
       </section>
@@ -2141,7 +2141,7 @@ function OperatorAccounts({ staff }) {
   const nameOf = (sid) => { const s = staff.find((x) => x.id === sid); return s ? s.name : "— (operatore rimosso)"; };
 
   return (
-    <section className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+    <section className="lc-card p-5">
       <h3 className="font-semibold flex items-center gap-2 mb-1"><KeyRound size={16} className="brand-accent" /> Accessi operatori</h3>
       <p className="text-sm text-stone-500 mb-3">Crea un accesso per ogni operatore: entrerà con le proprie credenziali e vedrà soltanto la propria agenda, in sola lettura.</p>
       {msg ? <div className="text-sm bg-stone-800 text-white rounded-lg px-3 py-2 inline-flex items-center gap-2 mb-3"><Check size={14} /> {msg}</div> : null}
@@ -2431,7 +2431,7 @@ function CatalogTab({ catalog, setCatalog, loyalty }) {
 
   return (
     <div className="space-y-6">
-      <section className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+      <section className="lc-card p-5">
         <h3 className="font-semibold flex items-center gap-2 mb-3"><Layers size={16} className="brand-accent" /> Categorie</h3>
         <div className="space-y-2">{cats.map((c) => (
           <div key={c.id} className="flex items-center gap-2">
@@ -2445,7 +2445,7 @@ function CatalogTab({ catalog, setCatalog, loyalty }) {
 
       <section>
         <div className="flex items-center justify-between mb-3"><h3 className="font-semibold flex items-center gap-2"><Package size={16} className="brand-accent" /> Prodotti e giacenze</h3><button onClick={addProduct} className="flex items-center gap-1 text-sm brand-bg px-3 py-1.5 rounded-lg"><Plus size={15} /> Aggiungi prodotto</button></div>
-        {catalog.products.length === 0 ? <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center text-stone-400">Nessun prodotto. Aggiungine uno.</div> : groups.map((g) => (
+        {catalog.products.length === 0 ? <div className="lc-card p-10 text-center text-stone-400">Nessun prodotto. Aggiungine uno.</div> : groups.map((g) => (
           <div key={g.cat.id || "none"} className="mb-4">
             <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-2">{g.cat.name}</div>
             <div className="space-y-2">{g.items.map((p) => <ProductEditor key={p.id} product={p} categories={cats} loyalty={loyalty} onChange={(patch) => editProduct(p.id, patch)} onDelete={() => delProduct(p.id)} />)}</div>
@@ -2517,15 +2517,15 @@ function SalesHistoryTab({ sales, branding, hidePartial }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm"><div className="text-xs text-stone-400 uppercase tracking-wide">Incasso oggi</div><div className="text-xl font-semibold">{eur(todayTot)}</div><div className="text-xs text-stone-400">{todaySales.length} vendite</div></div>
-        <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm"><div className="text-xs text-stone-400 uppercase tracking-wide">Incasso totale</div><div className="text-xl font-semibold">{eur(allTot)}</div><div className="text-xs text-stone-400">{onlySales.length} vendite · {loadCount} carichi</div></div>
+        <div className="lc-card p-4"><div className="text-xs text-stone-400 uppercase tracking-wide">Incasso oggi</div><div className="text-xl font-semibold">{eur(todayTot)}</div><div className="text-xs text-stone-400">{todaySales.length} vendite</div></div>
+        <div className="lc-card p-4"><div className="text-xs text-stone-400 uppercase tracking-wide">Incasso totale</div><div className="text-xl font-semibold">{eur(allTot)}</div><div className="text-xs text-stone-400">{onlySales.length} vendite · {loadCount} carichi</div></div>
       </div>
       <div className="flex flex-wrap gap-1.5">
         <button onClick={() => setFlt("all")} className={chip(flt === "all")}>Tutti</button>
         <button onClick={() => setFlt("sales")} className={chip(flt === "sales")}>Vendite</button>
         <button onClick={() => setFlt("loads")} className={chip(flt === "loads")}>Carichi</button>
       </div>
-      {records.length === 0 ? <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center text-stone-400">Nessun movimento.</div> : (
+      {records.length === 0 ? <div className="lc-card p-10 text-center text-stone-400">Nessun movimento.</div> : (
         <div className="space-y-2">{records.map((s) => { const open = openId === s.id; const load = isLoad(s); const pieces = s.items.reduce((a, it) => a + it.qty, 0); return (
           <div key={s.id} className="bg-white rounded-xl border border-stone-200 shadow-sm">
             <button onClick={() => setOpenId(open ? null : s.id)} className="w-full flex items-center gap-3 p-3 text-left">
@@ -2585,9 +2585,9 @@ function LoadTab({ catalog, setCatalog, sales, setSales }) {
           {cats.map((c) => <button key={c.id} onClick={() => setCat(c.id)} className={chip(cat === c.id)}>{c.name}</button>)}
         </div>
         <div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2 bg-white brand-ring"><Search size={16} className="text-stone-400" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cerca prodotto da rifornire" className="flex-1 text-sm focus:outline-none" /></div>
-        {products.length === 0 ? <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center text-stone-400">Nessun prodotto. Aggiungilo dalla scheda Catalogo.</div> : (
+        {products.length === 0 ? <div className="lc-card p-10 text-center text-stone-400">Nessun prodotto. Aggiungilo dalla scheda Catalogo.</div> : (
           <div className="grid sm:grid-cols-2 gap-3">{products.map((p) => (
-            <div key={p.id} className="bg-white rounded-xl border border-stone-200 p-3 shadow-sm">
+            <div key={p.id} className="lc-card p-3">
               <div className="font-medium leading-tight">{p.name}</div>
               {p.description ? <div className="text-xs text-stone-400 mb-2 mt-0.5">{p.description}</div> : <div className="mb-2" />}
               <div className="space-y-1.5">{p.formats.map((f) => { const added = inList(p.id, f.id); return (

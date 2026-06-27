@@ -46,10 +46,10 @@ export default function OperatorApp({ user, azienda, onLogout }) {
 
   return (
     <div className="min-h-screen bg-stone-50 text-stone-800 flex flex-col">
-      <header className="bg-white border-b border-stone-200 sticky top-0 z-10">
+      <header className="bg-white/80 backdrop-blur-xl border-b border-stone-200/70 sticky top-0 z-10" style={{ boxShadow: "var(--lc-shadow-xs)" }}>
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="min-w-0">
-            <div className="text-lg font-bold leading-tight truncate" style={{ color: "var(--lc-accent)" }}>{brandName}</div>
+            <div className="text-lg font-bold leading-tight truncate tracking-tight" style={{ color: "var(--lc-accent)" }}>{brandName}</div>
             <div className="text-xs text-stone-400 truncate flex items-center gap-1"><User size={12} /> {opName} · la tua agenda</div>
           </div>
           <button onClick={onLogout} className="flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-700 shrink-0"><LogOut size={16} /> Esci</button>
@@ -58,33 +58,37 @@ export default function OperatorApp({ user, azienda, onLogout }) {
 
       <main className="max-w-2xl mx-auto w-full px-4 py-5 flex-1">
         <div className="flex items-center justify-between gap-2 mb-4">
-          <button onClick={() => setDate(addDays(date, -1))} className="w-10 h-10 rounded-lg border border-stone-300 bg-white flex items-center justify-center text-stone-500 hover:bg-stone-50"><ChevronLeft size={18} /></button>
-          <div className="text-center">
-            <div className="font-semibold capitalize flex items-center justify-center gap-1.5"><Calendar size={15} style={{ color: "var(--lc-accent)" }} /> {fmtLong(date)}</div>
-            {date !== todayStr() ? <button onClick={() => setDate(todayStr())} className="text-xs text-stone-400 hover:text-stone-600 underline">Torna a oggi</button> : <div className="text-xs text-stone-400">oggi</div>}
+          <button onClick={() => setDate(addDays(date, -1))} aria-label="Giorno precedente" className="w-9 h-9 flex items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-500 hover:text-stone-900 hover:border-stone-300 hover:shadow-[var(--lc-shadow-xs)] transition"><ChevronLeft size={18} /></button>
+          <div className="text-center min-w-0 px-2">
+            <div className="font-semibold capitalize truncate tracking-tight text-stone-900 flex items-center justify-center gap-1.5"><Calendar size={15} style={{ color: "var(--lc-accent)" }} /> {fmtLong(date)}</div>
+            {date !== todayStr() ? <button onClick={() => setDate(todayStr())} className="text-xs hover:underline" style={{ color: "var(--lc-accent)" }}>Torna a oggi</button> : <div className="text-xs text-stone-400">oggi</div>}
           </div>
-          <button onClick={() => setDate(addDays(date, 1))} className="w-10 h-10 rounded-lg border border-stone-300 bg-white flex items-center justify-center text-stone-500 hover:bg-stone-50"><ChevronRight size={18} /></button>
+          <button onClick={() => setDate(addDays(date, 1))} aria-label="Giorno successivo" className="w-9 h-9 flex items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-500 hover:text-stone-900 hover:border-stone-300 hover:shadow-[var(--lc-shadow-xs)] transition"><ChevronRight size={18} /></button>
         </div>
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-12 lc-fade-in"><div className="lc-spinner" style={{ borderTopColor: "var(--lc-accent)", borderColor: "rgba(225,29,72,0.2)" }} /><p className="text-sm text-stone-400">Caricamento…</p></div>
+          <div className="flex flex-col items-center justify-center gap-3 py-12 lc-fade-in"><div className="lc-spinner" /><p className="text-sm text-stone-400">Caricamento…</p></div>
         ) : ofDay.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center text-stone-400 lc-fade-up">Nessun appuntamento in questa giornata.</div>
+          <div className="lc-card p-10 text-center lc-fade-up">
+            <div className="w-12 h-12 rounded-full bg-stone-100 flex items-center justify-center mx-auto mb-3"><Calendar size={22} className="text-stone-400" /></div>
+            <p className="text-sm font-medium text-stone-600">Nessun appuntamento</p>
+            <p className="text-xs text-stone-400 mt-1">Non hai impegni in questa giornata.</p>
+          </div>
         ) : (
           <div key={date} className="space-y-2">
             {ofDay.map((b, bi) => {
               const done = b.status === "done";
               return (
-                <div key={b.id} className="bg-white rounded-xl border border-stone-200 p-4 shadow-sm flex items-start gap-3 lc-fade-up" style={{ animationDelay: `${Math.min(bi * 50, 400)}ms` }}>
-                  <div className="flex flex-col items-center shrink-0 w-16">
-                    <div className="font-semibold text-sm">{hhmm(b.startMin)}</div>
-                    <div className="text-xs text-stone-400">{hhmm(b.endMin)}</div>
+                <div key={b.id} className="lc-card p-3 flex items-stretch gap-3 lc-fade-up" style={{ animationDelay: `${Math.min(bi * 50, 400)}ms` }}>
+                  <div className="flex flex-col items-center justify-center w-14 shrink-0 border-r border-stone-100 pr-3">
+                    <span className="text-sm font-semibold tabular-nums leading-tight" style={{ color: "var(--lc-accent)" }}>{hhmm(b.startMin)}</span>
+                    <span className="text-[11px] text-stone-400 tabular-nums">{hhmm(b.endMin)}</span>
                   </div>
-                  <div className="flex-1 min-w-0 border-l border-stone-100 pl-3">
-                    <div className="font-medium truncate">{b.clientName || "Cliente"}</div>
-                    <div className="text-sm text-stone-500 truncate">{svcNames(b.serviceIds)}</div>
+                  <div className="flex-1 min-w-0 self-center">
+                    <div className="text-[15px] font-semibold truncate leading-tight text-stone-900">{b.clientName || "Cliente"}</div>
+                    <div className="text-[13px] text-stone-500 truncate mt-0.5">{svcNames(b.serviceIds)}</div>
                   </div>
-                  <span className={`text-xs px-2 py-1 rounded-full shrink-0 inline-flex items-center gap-1 ${done ? "bg-green-100 text-green-700" : "bg-sky-100 text-sky-700"}`}>
+                  <span className={`self-center text-xs px-2 py-1 rounded-full shrink-0 inline-flex items-center gap-1 font-medium ${done ? "bg-green-100 text-green-700" : "bg-sky-100 text-sky-700"}`}>
                     {done ? <><CheckCircle2 size={12} /> Completato</> : <><Clock size={12} /> In programma</>}
                   </span>
                 </div>
