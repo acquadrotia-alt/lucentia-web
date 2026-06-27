@@ -73,7 +73,6 @@
       @keyframes lc-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
       @keyframes lc-spin { to { transform: rotate(360deg); } }
       @keyframes lc-shimmer { 100% { transform: translateX(100%); } }
-      @keyframes lc-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(184,137,59,0.0); } 50% { box-shadow: 0 0 24px 2px rgba(184,137,59,0.35); } }
       @keyframes lc-ring { 0% { opacity: .5; transform: scale(0.6); } 100% { opacity: 0; transform: scale(1.6); } }
       @keyframes lc-grow-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
       @keyframes lc-grow-y { from { transform: scaleY(0); } to { transform: scaleY(1); } }
@@ -84,7 +83,7 @@
       .lc-scale-in { animation: lc-scale-in .35s var(--lc-ease) both; }
       .lc-pop-in { animation: lc-pop-in .5s var(--lc-ease) both; }
       .lc-float { animation: lc-float 5s ease-in-out infinite; }
-      .lc-glow-card { animation: lc-glow 4s ease-in-out infinite; }
+      .lc-glow-card { box-shadow: inset 0 0 0 1px rgba(184,137,59,0.40); }
 
       /* Entrata a comparsa allo scroll (attivata via IntersectionObserver) */
       .lc-reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s var(--lc-ease), transform .7s var(--lc-ease); will-change: opacity, transform; }

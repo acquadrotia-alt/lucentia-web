@@ -793,12 +793,12 @@ export default function SalonApp({ onLogout, moduli, azienda, demo }) {
           <nav className="flex items-center gap-0.5 shrink-0">
             {NAV.map((item) => { const k = item[0], label = item[1], Icon = item[2]; return (
               <button key={k} onClick={() => setView(k)} aria-current={view === k ? "page" : undefined} className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-medium transition ${view === k ? "brand-soft brand-text" : "text-stone-500 hover:bg-stone-100 hover:text-stone-800"}`}>
-                <Icon size={16} /><span className="hidden md:inline">{label}</span>
+                <Icon size={16} /><span className="hidden lg:inline">{label}</span>
               </button>
             ); })}
             {session.role === "reseller" ? <span className="hidden sm:inline-flex items-center gap-1 text-xs font-medium bg-stone-800 text-white px-2 py-1 rounded-lg ml-1"><ShieldCheck size={13} /> Rivenditore</span> : null}
             {isDemo ? <span className="inline-flex items-center gap-1 text-xs font-medium bg-amber-500 text-white px-2 py-1 rounded-lg ml-1"><Sparkles size={13} /> Demo</span> : null}
-            <button onClick={onLogout} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-medium text-stone-500 hover:bg-stone-100 ml-1" title="Esci"><LogOut size={16} /><span className="hidden md:inline">Esci</span></button>
+            <button onClick={onLogout} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-medium text-stone-500 hover:bg-stone-100 ml-1" title="Esci"><LogOut size={16} /><span className="hidden lg:inline">Esci</span></button>
           </nav>
         </div>
         {operatorWarn ? <div className="bg-amber-50 border-t border-amber-200 text-amber-700 text-xs text-center py-1.5 flex items-center justify-center gap-1.5"><AlertTriangle size={13} /> Licenza in scadenza tra {ls.days} giorn{ls.days === 1 ? "o" : "i"}. Contatta il rivenditore per il rinnovo.</div> : null}
