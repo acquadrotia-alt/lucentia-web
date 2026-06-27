@@ -15,7 +15,9 @@ const sameSet = (a, b) => a.length === b.length && a.slice().sort().join(",") ==
 const presetName = (opt, tier) => { const p = PRESETS.find((x) => x[2] === tier && sameSet(x[1], opt)); return p ? p[0] : "Personalizzato"; };
 const planPrice = (opt, tier) => { const p = PRESETS.find((x) => x[2] === tier && sameSet(x[1], opt)); return p ? p[3] : null; };
 const tierFrom = (m) => { const a = Array.isArray(m) ? m : []; return a.includes("opinf") ? "inf" : (a.includes("op3") ? "3" : "1"); };
-const optFrom = (m) => (Array.isArray(m) ? m.filter((k) => OPT_KEYS.includes(k)) : []);
+// "online" (prenotazioni online) è un add-on a parte: non rientra in nessun
+// preset, ma deve comunque essere conservato tra i moduli del salone.
+const optFrom = (m) => (Array.isArray(m) ? m.filter((k) => OPT_KEYS.includes(k) || k === "online") : []);
 const buildModuli = (opt, tier) => [...opt, ...(tier === "inf" ? ["opinf"] : tier === "3" ? ["op3"] : [])];
 
 function fmt(d) { if (!d) return "—"; const p = String(d).split("-"); return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : d; }
@@ -58,8 +60,20 @@ function ModuleEditor({ opt, setOpt, tier, setTier, onPrezzo, planOnly }) {
           </div>
           <div className="flex items-center gap-2 mt-3">
             <Users size={15} className="text-stone-400" />
-            <select value={tier} onChange={(e) => setTier(e.target.value)} className="px-3 py-2 rounded-lg border border-stone-300 text-sm bg-white">{OPER.map((o) => <option key={o[0]} value={o[0]}>{o[1]}</option>)}</select>
+            <select value={tier} onChange={(e) => { const t = e.target.value; setTier(t); if (t === "1") setOpt((p) => p.filter((x) => x !== "online")); }} className="px-3 py-2 rounded-lg border border-stone-300 text-sm bg-white">{OPER.map((o) => <option key={o[0]} value={o[0]}>{o[1]}</option>)}</select>
           </div>
+
+          <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5 mt-4">Add-on</div>
+          {(() => { const on = opt.includes("online"); const locked = tier === "1"; return (
+            <button type="button" disabled={locked} onClick={() => toggle("online")} className={`w-full text-left rounded-xl border p-3 inline-flex items-center gap-3 transition ${locked ? "border-stone-200 bg-stone-50 opacity-60 cursor-not-allowed" : on ? "border-transparent text-white" : "bg-white border-stone-300 hover:border-stone-400"}`} style={on && !locked ? { background: "var(--lc-accent)" } : {}}>
+              <Clock size={18} className="shrink-0" />
+              <span className="flex-1 min-w-0">
+                <span className="font-medium text-sm flex items-center gap-1.5">Prenotazioni online {on && !locked ? <Check size={14} /> : null}</span>
+                <span className={`text-xs ${on && !locked ? "text-white/80" : "text-stone-400"}`}>I clienti prenotano da soli tramite un link · + € 4/mese</span>
+              </span>
+            </button>
+          ); })()}
+          {tier === "1" ? <p className="text-[11px] text-amber-700 mt-1.5 flex items-center gap-1"><Ban size={12} /> Non disponibile con il piano Basic: richiede un piano con più operatori.</p> : null}
         </>
       ) : null}
       <p className="text-[11px] text-stone-400 mt-2">Sempre incluso (base): Agenda e Clienti (anagrafica + storico appuntamenti).</p>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, createContext, useContext } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, createContext, useContext } from "react";
 import { Sparkles, Calendar, Clock, User, Mail, Lock, Settings, LayoutDashboard, Plus, Trash2, Check, ChevronLeft, ChevronRight, X, Users, CalendarPlus, Phone, MapPin, Image as ImageIcon, Palette, Store, Sunrise, Sun, Moon, History, Search, Gift, Star, Hash, LogOut, Ban, UserX, Undo2, Timer, CalendarClock, Wallet, RefreshCw, Printer, Download, Upload, KeyRound, ShieldCheck, CalendarX2, AlertTriangle, BadgeCheck, ShoppingCart, ShoppingBag, Package, Tag, Minus, Boxes, Receipt, Layers, AlertCircle, CalendarRange, CalendarDays, PackagePlus, BarChart3, TrendingUp, MessageCircle, FolderOpen } from "lucide-react";
 
 // Versione dell'app (da package.json, iniettata da Vite) mostrata nel login.
@@ -631,13 +631,13 @@ function RescheduleModal({ booking, config, bookings, onClose, onSave }) {
   );
 }
 
-const ALL_FLAGS = { fidelity: true, vendite: true, statistiche: true, marketing: true, allergeni: true, pacchetti: true, maxOperatori: Infinity };
+const ALL_FLAGS = { fidelity: true, vendite: true, statistiche: true, marketing: true, allergeni: true, pacchetti: true, online: true, maxOperatori: Infinity };
 function flagsFromModuli(moduli) {
   if (!Array.isArray(moduli)) return ALL_FLAGS;
   const has = (k) => moduli.includes(k);
   return {
     fidelity: has("fidelity"), vendite: has("vendite"), statistiche: has("statistiche"),
-    marketing: has("marketing"), allergeni: has("allergeni"), pacchetti: has("pacchetti"),
+    marketing: has("marketing"), allergeni: has("allergeni"), pacchetti: has("pacchetti"), online: has("online"),
     maxOperatori: has("opinf") ? Infinity : (has("op3") ? 3 : 1),
   };
 }
@@ -662,6 +662,7 @@ export default function SalonApp({ onLogout, moduli, azienda, demo }) {
   const [catalog, setCatalog] = useState(DEFAULT_CATALOG);
   const [sales, setSales] = useState([]);
   const [vouchers, setVouchers] = useState([]);
+  const [onlineBk, setOnlineBk] = useState([]); // prenotazioni online ricevute (overlay, sola lettura)
   const [loading, setLoading] = useState(true);
   const loadedRef = useRef(false);
   const [license, setLicense] = useState(() => loadLicense()); // licenza: resta in locale, invariata
@@ -703,6 +704,25 @@ export default function SalonApp({ onLogout, moduli, azienda, demo }) {
     })();
     return () => { alive = false; };
   }, []);
+
+  // Prenotazioni online ricevute dai clienti (overlay sull'agenda).
+  const refreshOnline = useCallback(async () => {
+    if (!flags.online || isDemo) { setOnlineBk([]); return; }
+    try {
+      const r = await fetch("/api/online-bookings", { credentials: "include" });
+      const j = await r.json().catch(() => ({}));
+      setOnlineBk(Array.isArray(j.items) ? j.items.map((b) => ({ ...b, serviceIds: b.serviceId ? [b.serviceId] : [], online: true })) : []);
+    } catch (e) {}
+  }, [flags.online, isDemo]);
+  useEffect(() => { refreshOnline(); }, [refreshOnline]);
+  const importOnline = async (b) => {
+    const nb = { id: uid(), date: b.date, startMin: b.startMin, endMin: b.endMin, serviceIds: b.serviceIds || [], staffId: b.staffId, clientCode: b.clientCode || null, clientName: b.clientName || "", createdAt: Date.now(), fromOnline: true };
+    setBookings((cur) => [...cur, nb]);
+    await fetch("/api/online-bookings/" + b.id, { method: "DELETE", credentials: "include" }).catch(() => {});
+    refreshOnline();
+  };
+  const cancelOnline = async (b) => { await fetch("/api/online-bookings/" + b.id, { method: "DELETE", credentials: "include" }).catch(() => {}); refreshOnline(); };
+
   useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("bookings", bookings); }, [bookings]);
   useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("clients", clients); }, [clients]);
   useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("catalog", catalog); }, [catalog]);
@@ -805,7 +825,7 @@ export default function SalonApp({ onLogout, moduli, azienda, demo }) {
       </header>
 
       <main key={view} className="max-w-5xl w-full mx-auto px-4 py-6 flex-1 lc-fade-up">
-        {view === "agenda" && <AgendaPage config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={session.hidePartial} canAddBooking={canAddBooking} canAddClient={canAddClient} />}
+        {view === "agenda" && <AgendaPage config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={session.hidePartial} canAddBooking={canAddBooking} canAddClient={canAddClient} onlineBk={flags.online ? onlineBk : []} onImportOnline={importOnline} onCancelOnline={cancelOnline} canManageOnline={session.role !== "operator"} />}
         {view === "clienti" && <ClientsView config={config} bookings={bookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} vouchers={vouchers} setVouchers={setVouchers} />}
         {view === "buoni" && <GiftCardsView config={config} vouchers={vouchers} setVouchers={setVouchers} clients={clients} canAddVoucher={canAddVoucher} />}
         {view === "shop" && <ShopView catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} clients={clients} setClients={setClients} branding={b} loyalty={config.loyalty} hidePartial={session.hidePartial} canAddClient={canAddClient} demo={isDemo} />}
@@ -815,11 +835,11 @@ export default function SalonApp({ onLogout, moduli, azienda, demo }) {
           <div>
             <div className="mb-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2"><AlertCircle size={16} className="shrink-0 mt-0.5" /> In versione demo le impostazioni sono <b>visibili ma non modificabili</b>.</div>
             <fieldset disabled style={{ border: 0, margin: 0, padding: 0, minInlineSize: "auto" }}>
-              <SettingsView config={config} saveConfig={saveConfig} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} session={session} license={license} onSaveLicense={updateLicense} backupDirName={backupDirName} onPickBackupDir={pickBackupDir} onClearBackupDir={clearBackupDir} onBackupNow={backupNow} lastBackup={lastBackup} licenza={{ plan: planName(moduli), prezzo_finale: azienda && azienda.prezzo_finale, scadenza: azienda && azienda.licenza_scadenza }} />
+              <SettingsView config={config} saveConfig={saveConfig} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} session={session} online={flags.online} aziendaId={azienda && azienda.id} license={license} onSaveLicense={updateLicense} backupDirName={backupDirName} onPickBackupDir={pickBackupDir} onClearBackupDir={clearBackupDir} onBackupNow={backupNow} lastBackup={lastBackup} licenza={{ plan: planName(moduli), prezzo_finale: azienda && azienda.prezzo_finale, scadenza: azienda && azienda.licenza_scadenza }} />
             </fieldset>
           </div>
         ) : (
-          <SettingsView config={config} saveConfig={saveConfig} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} session={session} license={license} onSaveLicense={updateLicense} backupDirName={backupDirName} onPickBackupDir={pickBackupDir} onClearBackupDir={clearBackupDir} onBackupNow={backupNow} lastBackup={lastBackup} licenza={{ plan: planName(moduli), prezzo_finale: azienda && azienda.prezzo_finale, scadenza: azienda && azienda.licenza_scadenza }} />
+          <SettingsView config={config} saveConfig={saveConfig} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} session={session} online={flags.online} aziendaId={azienda && azienda.id} license={license} onSaveLicense={updateLicense} backupDirName={backupDirName} onPickBackupDir={pickBackupDir} onClearBackupDir={clearBackupDir} onBackupNow={backupNow} lastBackup={lastBackup} licenza={{ plan: planName(moduli), prezzo_finale: azienda && azienda.prezzo_finale, scadenza: azienda && azienda.licenza_scadenza }} />
         ))}
       </main>
 
@@ -944,19 +964,20 @@ function ApptItem({ b, staff, services, onCal, onCancel, onEdit, canCancel, canc
   );
 }
 
-function AgendaPage({ config, bookings, setBookings, clients, setClients, sales, catalog, hidePartial, canAddBooking, canAddClient }) {
+function AgendaPage({ config, bookings, setBookings, clients, setClients, sales, catalog, hidePartial, canAddBooking, canAddClient, onlineBk, onImportOnline, onCancelOnline, canManageOnline }) {
   const [adding, setAdding] = useState(false);
+  const onlineCount = (onlineBk || []).length;
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold tracking-tight text-stone-900 leading-none">Agenda</h2>
-          <p className="text-[13px] text-stone-400 mt-1">Appuntamenti e disponibilità</p>
+          <p className="text-[13px] text-stone-400 mt-1">Appuntamenti e disponibilità{onlineCount ? <span className="brand-accent font-medium"> · {onlineCount} online</span> : null}</p>
         </div>
         <button onClick={() => setAdding((a) => !a)} className="flex items-center gap-1.5 text-sm font-medium brand-bg px-3.5 py-2 rounded-lg shadow-[var(--lc-shadow-xs)] hover:shadow-[var(--lc-shadow-sm)]">{adding ? <X size={15} /> : <Plus size={15} />} {adding ? "Chiudi" : "Appuntamento"}</button>
       </div>
       {adding ? <ManualBooking config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} canAddBooking={canAddBooking} canAddClient={canAddClient} onDone={() => setAdding(false)} /> : null}
-      <AgendaView config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={hidePartial} />
+      <AgendaView config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={hidePartial} onlineBk={onlineBk || []} onImportOnline={onImportOnline} onCancelOnline={onCancelOnline} canManageOnline={canManageOnline} />
     </div>
   );
 }
@@ -964,17 +985,18 @@ function AgendaPage({ config, bookings, setBookings, clients, setClients, sales,
 const VIEW_MODES = [["day", "Giorno", CalendarDays], ["3day", "3 giorni", CalendarRange], ["week", "Settimana", Calendar]];
 function mondayOf(dateStr) { const d = parseDate(dateStr); const wd = (d.getDay() + 6) % 7; return addDays(dateStr, -wd); }
 
-function AgendaView({ config, bookings, setBookings, clients, setClients, sales, catalog, hidePartial }) {
+function AgendaView({ config, bookings, setBookings, clients, setClients, sales, catalog, hidePartial, onlineBk, onImportOnline, onCancelOnline, canManageOnline }) {
   const staff = config.staff, services = config.services;
   const [anchor, setAnchor] = useState(todayStr());
   const [mode, setMode] = useState("day");
   const [filter, setFilter] = useState("all");
   const [sel, setSel] = useState(null);
+  const [selOnline, setSelOnline] = useState(null);
   const [resch, setResch] = useState(null);
 
   const span = mode === "week" ? 7 : mode === "3day" ? 3 : 1;
   const days = useMemo(() => { const start = mode === "week" ? mondayOf(anchor) : anchor; return Array.from({ length: span }, (_, i) => addDays(start, i)); }, [anchor, mode, span]);
-  const byDay = useMemo(() => { const m = {}; days.forEach((ds) => { m[ds] = bookings.filter((b) => b.date === ds && (filter === "all" || b.staffId === filter) && !(hidePartial && b.status === "partial")).sort((a, b) => a.startMin - b.startMin); }); return m; }, [bookings, days, filter, hidePartial]);
+  const byDay = useMemo(() => { const m = {}; days.forEach((ds) => { const reg = bookings.filter((b) => b.date === ds && (filter === "all" || b.staffId === filter) && !(hidePartial && b.status === "partial")); const onl = (onlineBk || []).filter((b) => b.date === ds && (filter === "all" || b.staffId === filter)); m[ds] = [...reg, ...onl].sort((a, b) => a.startMin - b.startMin); }); return m; }, [bookings, onlineBk, days, filter, hidePartial]);
   const totalCount = days.reduce((a, ds) => a + byDay[ds].length, 0);
 
   const shift = (dir) => setAnchor((a) => addDays(mode === "week" ? mondayOf(a) : a, dir * span));
@@ -1034,7 +1056,7 @@ function AgendaView({ config, bookings, setBookings, clients, setClients, sales,
               <p className="text-sm font-medium text-stone-600">Nessun appuntamento</p>
               <p className="text-xs text-stone-400 mt-1">Tocca «Appuntamento» in alto per aggiungerne uno.</p>
             </div>
-          ) : byDay[days[0]].map((b, i) => <ApptCard key={b.id} b={b} staff={staff} services={services} big index={i} onClick={() => setSel(b)} />)}
+          ) : byDay[days[0]].map((b, i) => <ApptCard key={b.id} b={b} staff={staff} services={services} big index={i} onClick={() => (b.online ? setSelOnline(b) : setSel(b))} />)}
         </div>
       ) : (
         <div className="overflow-x-auto -mx-1 px-1 pb-1">
@@ -1046,7 +1068,7 @@ function AgendaView({ config, bookings, setBookings, clients, setClients, sales,
                   <div className={`text-sm font-semibold leading-none mt-0.5 ${isToday ? "" : "text-stone-700"}`}>{d.getDate()}<span className="text-stone-400 font-normal">/{d.getMonth() + 1}</span></div>
                 </div>
                 <div className="space-y-1.5">
-                  {list.length === 0 ? <div className="text-center text-xs text-stone-300 py-4 rounded-lg border border-dashed border-stone-200/70">—</div> : list.map((b, i) => <ApptCard key={b.id} b={b} staff={staff} services={services} index={i} onClick={() => setSel(b)} />)}
+                  {list.length === 0 ? <div className="text-center text-xs text-stone-300 py-4 rounded-lg border border-dashed border-stone-200/70">—</div> : list.map((b, i) => <ApptCard key={b.id} b={b} staff={staff} services={services} index={i} onClick={() => (b.online ? setSelOnline(b) : setSel(b))} />)}
                 </div>
               </div>
             ); })}
@@ -1057,7 +1079,42 @@ function AgendaView({ config, bookings, setBookings, clients, setClients, sales,
       {totalCount > 0 ? <p className="text-xs text-stone-400 text-center pt-1">{totalCount} appuntament{totalCount === 1 ? "o" : "i"} nel periodo · tocca una card per gestirla</p> : null}
 
       {sel ? <ApptActions booking={sel} config={config} clients={clients} setClients={setClients} bookings={bookings} sales={sales} catalog={catalog} hidePartial={hidePartial} onStatus={setStatus} onResch={(bk) => { setResch(bk); setSel(null); }} onClose={() => setSel(null)} /> : null}
+      {selOnline ? <OnlineApptModal booking={selOnline} config={config} canManage={canManageOnline} onImport={(bk) => { onImportOnline && onImportOnline(bk); setSelOnline(null); }} onCancel={(bk) => { onCancelOnline && onCancelOnline(bk); setSelOnline(null); }} onClose={() => setSelOnline(null)} /> : null}
       {resch ? <RescheduleModal booking={resch} config={config} bookings={bookings} onClose={() => setResch(null)} onSave={(d2, startMin) => applyResch(resch, d2, startMin)} /> : null}
+    </div>
+  );
+}
+
+function OnlineApptModal({ booking, config, canManage, onImport, onCancel, onClose }) {
+  const b = booking;
+  const st = config.staff.find((s) => s.id === b.staffId);
+  const names = (b.serviceIds || []).map((id) => { const s = config.services.find((x) => x.id === id); return s ? s.name : null; }).filter(Boolean).join(", ");
+  const wa = b.clientPhone ? ("39" + String(b.clientPhone).replace(/\D/g, "")) : "";
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 lc-fade-in" onClick={onClose}>
+      <div className="lc-card lc-scale-in w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <div>
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full brand-soft brand-text inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--brand)" }} /> Prenotazione online</span>
+            <h3 className="font-semibold text-lg text-stone-900 mt-2 tracking-tight">{b.clientName || "Cliente"}</h3>
+          </div>
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-600"><X size={20} /></button>
+        </div>
+        <div className="space-y-2 text-sm">
+          <Row icon={Tag} label={names || "—"} />
+          <Row icon={Calendar} label={`${fmtDate(b.date)} · ${minToStr(b.startMin)}–${minToStr(b.endMin)}`} />
+          <Row icon={User} label={st ? st.name : "Operatore da assegnare"} />
+          {b.clientPhone ? <div className="flex items-center gap-2"><Phone size={15} className="text-stone-400 shrink-0" /><a href={`tel:${b.clientPhone}`} className="brand-accent font-medium">{b.clientPhone}</a>{wa ? <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="text-xs text-green-600 ml-1">WhatsApp</a> : null}</div> : null}
+          {b.note ? <div className="flex items-start gap-2 text-stone-600"><AlertCircle size={15} className="text-stone-400 shrink-0 mt-0.5" /><span>{b.note}</span></div> : null}
+        </div>
+        {canManage ? (
+          <div className="mt-5 space-y-2">
+            <button onClick={() => onImport(b)} className="w-full brand-bg font-medium py-2.5 rounded-xl flex items-center justify-center gap-1.5"><Check size={16} /> Aggiungi all'agenda</button>
+            <button onClick={() => { if (confirm("Annullare questa prenotazione online?")) onCancel(b); }} className="w-full font-medium py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 transition">Annulla prenotazione</button>
+            <p className="text-[11px] text-stone-400 text-center leading-relaxed">«Aggiungi all'agenda» la sposta tra i tuoi appuntamenti e potrai gestirla normalmente.</p>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -1087,7 +1144,9 @@ function ApptCard({ b, staff, services, onClick, big, index = 0 }) {
           </div>
         </div>
         <div className="flex flex-col items-end justify-between shrink-0">
-          {meta ? <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full inline-flex items-center gap-0.5 ${meta.cls}`}><meta.Icon size={10} /> {meta.label}</span> : <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full brand-soft brand-text">Da svolgere</span>}
+          {b.online ? <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full brand-soft brand-text inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--brand)" }} /> Online</span>
+            : meta ? <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full inline-flex items-center gap-0.5 ${meta.cls}`}><meta.Icon size={10} /> {meta.label}</span>
+            : <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full brand-soft brand-text">Da svolgere</span>}
           <ChevronRight size={16} className="text-stone-300 group-hover:text-stone-500 group-hover:translate-x-0.5 transition" />
         </div>
       </button>
@@ -1097,7 +1156,7 @@ function ApptCard({ b, staff, services, onClick, big, index = 0 }) {
     <button onClick={onClick} style={{ animationDelay: delay }} className={`lc-fade-up w-full text-left rounded-lg border p-2 transition-[box-shadow,border-color] duration-200 ${muted ? "bg-stone-50/70 border-stone-200/70" : "bg-white border-stone-200/80 hover:border-stone-300 hover:shadow-sm"}`}>
       <div className="flex items-center justify-between gap-1">
         <span className={`text-xs font-semibold tabular-nums ${muted ? "text-stone-400" : "brand-accent"}`}>{minToStr(b.startMin)}</span>
-        {meta ? <meta.Icon size={11} className="text-stone-400 shrink-0" /> : null}
+        {b.online ? <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "var(--brand)" }} /> : meta ? <meta.Icon size={11} className="text-stone-400 shrink-0" /> : null}
       </div>
       <div className={`text-[13px] font-medium truncate mt-0.5 ${muted ? "text-stone-500" : "text-stone-800"}`}>{b.clientName}</div>
       <div className="text-[11px] text-stone-500 truncate">{names}</div>
@@ -1856,7 +1915,39 @@ function MarketingView({ config, saveConfig, bookings, clients, sales, catalog }
   );
 }
 
-function SettingsView({ config, saveConfig, bookings, setBookings, clients, setClients, catalog, setCatalog, sales, setSales, session, license, onSaveLicense, backupDirName, onPickBackupDir, onClearBackupDir, onBackupNow, lastBackup, licenza }) {
+function BookingLinkCard({ aziendaId, config, saveConfig }) {
+  const ob = config.onlineBooking || {};
+  const url = `${typeof window !== "undefined" ? window.location.origin : ""}/?prenota=${aziendaId}`;
+  const [copied, setCopied] = useState(false);
+  const save = (patch) => saveConfig({ ...config, onlineBooking: { ...ob, ...patch } });
+  const copy = async () => { try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch (e) {} };
+  return (
+    <section className="lc-card p-5">
+      <h3 className="font-semibold flex items-center gap-2 mb-1 text-stone-900 tracking-tight"><CalendarPlus size={16} className="brand-accent" /> Prenotazioni online</h3>
+      <p className="text-sm text-stone-500 mb-3">Condividi questo link con i clienti (sito, Google, Instagram, WhatsApp): potranno prenotare da soli.</p>
+      <div className="flex items-center gap-2 border border-stone-200 rounded-lg px-3 py-2 bg-stone-50">
+        <input readOnly value={url} onFocus={(e) => e.target.select()} className="flex-1 text-sm bg-transparent focus:outline-none text-stone-600 truncate" />
+        <button onClick={copy} className="text-xs font-medium brand-bg px-2.5 py-1.5 rounded-lg inline-flex items-center gap-1 shrink-0">{copied ? <><Check size={13} /> Copiato</> : "Copia"}</button>
+        <a href={url} target="_blank" rel="noreferrer" className="text-xs font-medium border border-stone-300 text-stone-600 px-2.5 py-1.5 rounded-lg hover:bg-white shrink-0">Apri</a>
+      </div>
+      <div className="grid sm:grid-cols-2 gap-3 mt-4">
+        <label className="text-sm block"><span className="text-xs font-medium text-stone-400 uppercase tracking-wide block mb-1">Preavviso minimo</span>
+          <select value={ob.leadHours != null ? ob.leadHours : 2} onChange={(e) => save({ leadHours: Number(e.target.value) })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm bg-white brand-ring">{[0, 1, 2, 4, 12, 24, 48].map((h) => <option key={h} value={h}>{h === 0 ? "Nessuno" : `${h} or${h === 1 ? "a" : "e"}`}</option>)}</select>
+        </label>
+        <label className="text-sm block"><span className="text-xs font-medium text-stone-400 uppercase tracking-wide block mb-1">Giorni prenotabili in avanti</span>
+          <select value={ob.horizonDays || 30} onChange={(e) => save({ horizonDays: Number(e.target.value) })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm bg-white brand-ring">{[7, 14, 30, 60, 90].map((d) => <option key={d} value={d}>{d} giorni</option>)}</select>
+        </label>
+      </div>
+      <label className="flex items-center gap-2.5 mt-4 cursor-pointer">
+        <input type="checkbox" checked={!ob.paused} onChange={(e) => save({ paused: !e.target.checked })} style={{ accentColor: "var(--brand)" }} className="w-4 h-4" />
+        <span className="text-sm text-stone-700">Prenotazioni online attive {ob.paused ? <span className="text-amber-600 text-xs font-medium">· attualmente sospese</span> : null}</span>
+      </label>
+      <div className="mt-3 text-xs text-stone-400 leading-relaxed flex items-start gap-1.5"><AlertCircle size={13} className="shrink-0 mt-0.5" /> Gli orari proposti partono dall'apertura e si incastrano subito dopo gli appuntamenti già presenti, così non restano vuoti in agenda.</div>
+    </section>
+  );
+}
+
+function SettingsView({ config, saveConfig, bookings, setBookings, clients, setClients, catalog, setCatalog, sales, setSales, session, online, aziendaId, license, onSaveLicense, backupDirName, onPickBackupDir, onClearBackupDir, onBackupNow, lastBackup, licenza }) {
   const F = useMods();
   const services = config.services, staff = config.staff, branding = config.branding;
   const isReseller = session && session.role === "reseller";
@@ -1894,6 +1985,8 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap"><h2 className="text-xl font-semibold tracking-tight text-stone-900">Impostazioni</h2>{isReseller ? <div className="flex items-center gap-2"><button onClick={reset} className="flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-700"><RefreshCw size={14} /> Ripristina demo</button><button onClick={azzeraTutto} className="flex items-center gap-1.5 text-sm text-red-600 border border-red-300 px-2.5 py-1.5 rounded-lg hover:bg-red-50"><AlertTriangle size={14} /> Azzera tutto</button></div> : null}</div>
+
+      {online && aziendaId ? <BookingLinkCard aziendaId={aziendaId} config={config} saveConfig={saveConfig} /> : null}
 
       {isReseller ? <LicensePanel license={license} onSave={onSaveLicense} /> : null}
 

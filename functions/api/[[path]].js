@@ -11,15 +11,19 @@
 // ============================================================================
 
 const COLLEZIONI = ["config", "bookings", "clients", "catalog", "sales", "vouchers"];
-const MODULI = ["fidelity", "vendite", "statistiche", "marketing", "allergeni", "pacchetti", "op3", "opinf"];
+const MODULI = ["fidelity", "vendite", "statistiche", "marketing", "allergeni", "pacchetti", "online", "op3", "opinf"];
 const OLD_MAP = { shop: "vendite", stats: "statistiche" };
+// "online" (prenotazioni online) è un add-on non disponibile col piano Basic:
+// richiede un piano con più operatori (op3 o opinf).
+function multiOp(a) { return a.includes("op3") || a.includes("opinf"); }
 function parseModuli(raw) {
   if (raw == null) return MODULI.slice(); // clienti creati prima dei moduli: tutto attivo
   try { const a = JSON.parse(raw); if (Array.isArray(a)) return a.map((k) => OLD_MAP[k] || k).filter((k) => MODULI.includes(k)); } catch (e) {}
   return [];
 }
 function cleanModuli(arr) {
-  const a = Array.isArray(arr) ? arr.map((k) => OLD_MAP[k] || k).filter((k) => MODULI.includes(k)) : [];
+  let a = Array.isArray(arr) ? arr.map((k) => OLD_MAP[k] || k).filter((k) => MODULI.includes(k)) : [];
+  if (a.includes("online") && !multiOp(a)) a = a.filter((k) => k !== "online"); // non con Basic
   return JSON.stringify(a);
 }
 function cleanPrezzo(v) { if (v == null) return null; const s = String(v).trim(); return s === "" ? null : s; }
@@ -129,6 +133,55 @@ function licStatus(az) {
   return Date.now() > exp ? "expired" : "active";
 }
 
+// ---- Prenotazioni online: utilità (slot anti-vuoto) ----
+const STEP_MIN = 15;
+function inRange(date, from, to) { const lo = from || to, hi = to || from; if (!lo) return false; return date >= lo && date <= hi; }
+function weekdayOf(dateStr) { const p = String(dateStr).split("-").map(Number); return new Date(p[0], (p[1] || 1) - 1, p[2] || 1).getDay(); }
+async function getCollezione(env, aziendaId, coll) {
+  const row = await env.DB.prepare("SELECT dati FROM dati_app WHERE azienda_id = ? AND collezione = ?").bind(aziendaId, coll).first();
+  try { return row ? JSON.parse(row.dati) : null; } catch (e) { return null; }
+}
+async function onlineBookingsOf(env, aziendaId, dateStr) {
+  const res = await env.DB.prepare("SELECT staff_id, start_min, end_min FROM prenotazioni_online WHERE azienda_id = ? AND data = ? AND stato = 'attiva'").bind(aziendaId, dateStr).all();
+  return (res.results || []).map((r) => ({ staffId: r.staff_id, date: dateStr, startMin: r.start_min, endMin: r.end_min, status: undefined }));
+}
+// Slot "anti-vuoto": per ogni segmento libero offre SOLO il bordo sinistro
+// (orario di apertura, oppure subito dopo un appuntamento esistente). Così le
+// prenotazioni si impacchettano una dopo l'altra senza lasciare buchi: se apri
+// alle 10:00 viene offerto 10:00, mai 10:15.
+function gapFreeStarts(config, bookingsAll, dateStr, serviceId, leadMin) {
+  const closures = (config && config.closures) || [];
+  if (closures.some((r) => inRange(dateStr, r.from, r.to))) return [];
+  const svc = (config.services || []).find((s) => s.id === serviceId);
+  if (!svc) return [];
+  const D = Number(svc.durationMin) || 0; if (D <= 0) return [];
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+  if (dateStr < todayStr) return [];
+  let earliest = 0;
+  if (dateStr === todayStr) { const nowMin = now.getHours() * 60 + now.getMinutes(); earliest = Math.ceil((nowMin + (leadMin || 0)) / STEP_MIN) * STEP_MIN; }
+  const wd = weekdayOf(dateStr);
+  const byStart = {};
+  (config.staff || []).forEach((st) => {
+    if (!(st.serviceIds || []).includes(serviceId)) return;
+    if (staffOff(st, dateStr)) return;
+    const windows = (st.availability && st.availability[wd]) || [];
+    const stBk = bookingsAll.filter((b) => b && b.staffId === st.id && b.date === dateStr && b.status !== "cancelled" && b.status !== "noshow").slice().sort((a, b) => a.startMin - b.startMin);
+    windows.forEach((win) => {
+      const ws = win[0], we = win[1];
+      let cursor = Math.max(ws, earliest);
+      const inWin = stBk.filter((b) => b.endMin > ws && b.startMin < we);
+      for (const b of inWin) {
+        if (b.startMin > cursor && cursor + D <= b.startMin && byStart[cursor] == null) byStart[cursor] = st.id;
+        cursor = Math.max(cursor, b.endMin);
+      }
+      if (cursor + D <= we && byStart[cursor] == null) byStart[cursor] = st.id;
+    });
+  });
+  return Object.keys(byStart).map(Number).sort((a, b) => a - b).map((start) => ({ start, staffId: byStart[start] }));
+}
+function staffOff(st, date) { return Array.isArray(st && st.off) && st.off.some((r) => inRange(date, r.from, r.to)); }
+
 async function getSession(env, request) {
   const sid = getCookie(request, "sid");
   if (!sid) return null;
@@ -232,9 +285,112 @@ export async function onRequest(context) {
     return json({ ok: true, email });
   }
 
+  // ---- /api/prenota/:aid  (PUBBLICA: prenotazioni online dei clienti) ----
+  if (segs[0] === "prenota" && segs[1]) {
+    const aid = segs[1];
+    const az = await getAzienda(env, aid);
+    if (!az || licStatus(az) !== "active" || !parseModuli(az.moduli).includes("online")) return json({ error: "Prenotazioni online non disponibili." }, 404);
+    const config = (await getCollezione(env, aid, "config")) || {};
+    const booking = config.onlineBooking || {};
+    if (booking.paused) return json({ error: "Le prenotazioni online sono momentaneamente sospese." }, 403);
+    const leadMin = Math.max(0, Number(booking.leadHours != null ? booking.leadHours * 60 : 120));
+    const horizonDays = Math.max(1, Number(booking.horizonDays || 30));
+    const services = (config.services || []).filter((s) => Number(s.durationMin) > 0 && (config.staff || []).some((st) => (st.serviceIds || []).includes(s.id) && (st.availability && Object.keys(st.availability).length)));
+
+    // info attività + servizi prenotabili
+    if (segs[2] == null && method === "GET") {
+      const b = config.branding || {};
+      return json({
+        ok: true,
+        salone: { nome: az.denominazione, brandName: b.name || az.denominazione, tagline: b.tagline || "", logo: b.logo || null, primary: b.primary || "#b8893b", phone: b.phone || "", email: b.email || "", address: b.address || "" },
+        services: services.map((s) => ({ id: s.id, name: s.name, durationMin: s.durationMin, price: s.price != null ? s.price : null })),
+        horizonDays,
+      });
+    }
+
+    // slot disponibili per data + servizio (anti-vuoto)
+    if (segs[2] === "slots" && method === "GET") {
+      const date = url.searchParams.get("date") || "";
+      const serviceId = url.searchParams.get("service") || "";
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !serviceId) return json({ slots: [] });
+      const bookings = (await getCollezione(env, aid, "bookings")) || [];
+      const online = await onlineBookingsOf(env, aid, date);
+      const slots = gapFreeStarts(config, [...(Array.isArray(bookings) ? bookings : []), ...online], date, serviceId, leadMin);
+      return json({ slots: slots.map((s) => ({ start: s.start, label: `${pad2(Math.floor(s.start / 60))}:${pad2(s.start % 60)}` })) });
+    }
+
+    // crea prenotazione
+    if (segs[2] == null && method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      const date = String(body.date || "");
+      const serviceId = String(body.service || "");
+      const start = Number(body.start);
+      const name = String(body.name || "").trim();
+      const phone = String(body.phone || "").trim();
+      const email = String(body.email || "").trim().toLowerCase();
+      const note = String(body.note || "").trim().slice(0, 500);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !serviceId || !Number.isFinite(start) || !name || phone.replace(/\D/g, "").length < 6) {
+        return json({ error: "Compila nome, telefono e scegli un orario valido." }, 400);
+      }
+      const svc = services.find((s) => s.id === serviceId);
+      if (!svc) return json({ error: "Servizio non valido." }, 400);
+      const bookings = (await getCollezione(env, aid, "bookings")) || [];
+      const online = await onlineBookingsOf(env, aid, date);
+      const slots = gapFreeStarts(config, [...(Array.isArray(bookings) ? bookings : []), ...online], date, serviceId, leadMin);
+      const slot = slots.find((s) => s.start === start);
+      if (!slot) return json({ error: "Questo orario non è più disponibile. Scegline un altro." }, 409);
+      const end = start + (Number(svc.durationMin) || 0);
+
+      // associazione cliente: per telefono (normalizzato) sui clienti del salone
+      const clients = (await getCollezione(env, aid, "clients")) || [];
+      const norm = (p) => String(p || "").replace(/\D/g, "");
+      const existing = (Array.isArray(clients) ? clients : []).find((c) => norm(c.phone) && norm(c.phone) === norm(phone));
+      let clientCode = existing ? existing.code : null;
+      if (!existing) {
+        const codes = (Array.isArray(clients) ? clients : []).map((c) => parseInt(c.code, 10)).filter((n) => !isNaN(n));
+        clientCode = String((codes.length ? Math.max(...codes) : 10000) + 1);
+        const parts = name.split(/\s+/);
+        const newClient = { code: clientCode, name, firstName: parts[0] || "", lastName: parts.slice(1).join(" "), phone, email, fromOnline: true, createdAt: Date.now() };
+        const updated = [...(Array.isArray(clients) ? clients : []), newClient];
+        await env.DB.prepare("INSERT INTO dati_app (id, azienda_id, collezione, dati, aggiornato_il) VALUES (?, ?, 'clients', ?, datetime('now')) ON CONFLICT(id) DO UPDATE SET dati = excluded.dati, aggiornato_il = datetime('now')").bind(aid + ":clients", aid, JSON.stringify(updated)).run();
+      }
+
+      const id = crypto.randomUUID();
+      await env.DB.prepare("INSERT INTO prenotazioni_online (id, azienda_id, data, start_min, end_min, service_id, staff_id, client_code, client_name, client_phone, client_email, note, stato) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'attiva')")
+        .bind(id, aid, date, start, end, serviceId, slot.staffId, clientCode, name, phone, email, note).run();
+      return json({ ok: true, conferma: { date, start, end, label: `${pad2(Math.floor(start / 60))}:${pad2(start % 60)}`, service: svc.name, salone: az.denominazione } });
+    }
+
+    return json({ error: "metodo non consentito" }, 405);
+  }
+
   // ---- da qui in poi serve la sessione ----
   const sess = await getSession(env, request);
   if (!sess) return json({ error: "non autenticato" }, 401);
+
+  // ---- /api/online-bookings  (il salone vede le prenotazioni online ricevute) ----
+  if (segs[0] === "online-bookings") {
+    if ((sess.ruolo !== "azienda" && sess.ruolo !== "operatore") || !sess.azienda_id) return json({ error: "riservato al salone" }, 403);
+    const azid = sess.azienda_id;
+    if (!segs[1]) {
+      if (method === "GET") {
+        const from = todayISO();
+        const res = await env.DB.prepare("SELECT * FROM prenotazioni_online WHERE azienda_id = ? AND data >= ? AND stato = 'attiva' ORDER BY data, start_min").bind(azid, from).all();
+        let items = (res.results || []).map((r) => ({ id: r.id, date: r.data, startMin: r.start_min, endMin: r.end_min, serviceId: r.service_id, staffId: r.staff_id, clientCode: r.client_code, clientName: r.client_name, clientPhone: r.client_phone, clientEmail: r.client_email, note: r.note, online: true, createdAt: r.creato_il }));
+        if (sess.ruolo === "operatore") items = items.filter((b) => b.staffId === sess.staff_id);
+        return json({ items });
+      }
+      return json({ error: "metodo non consentito" }, 405);
+    }
+    // /api/online-bookings/:id  (annulla)
+    const id = segs[1];
+    if (method === "DELETE") {
+      if (sess.ruolo !== "azienda") return json({ error: "sola lettura" }, 403);
+      await env.DB.prepare("UPDATE prenotazioni_online SET stato = 'annullata' WHERE id = ? AND azienda_id = ?").bind(id, azid).run();
+      return json({ ok: true });
+    }
+    return json({ error: "metodo non consentito" }, 405);
+  }
 
   // ---- /api/me ----
   if (segs[0] === "me") {

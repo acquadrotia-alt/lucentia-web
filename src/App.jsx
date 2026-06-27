@@ -4,6 +4,7 @@ import SalonApp from "./SalonApp.jsx";
 import ResellerPanel from "./ResellerPanel.jsx";
 import OperatorApp from "./OperatorApp.jsx";
 import Landing from "./Landing.jsx";
+import BookingPage from "./BookingPage.jsx";
 
 // Versione dell'app (da package.json, iniettata da Vite). Serve per verificare
 // che il deploy si sia aggiornato: per cambiarla basta aggiornare "version" in package.json.
@@ -104,6 +105,10 @@ function DemoExpired({ denominazione, onLogout }) {
 }
 
 export default function App() {
+  // Link pubblico di prenotazione online: ?prenota=<aziendaId> (nessun login).
+  const prenotaId = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("prenota") : null;
+  if (prenotaId) return <BookingPage aid={prenotaId} />;
+
   const [stato, setStato] = useState("loading"); // loading | login | ready
   const [me, setMe] = useState(null);
   const [showLogin, setShowLogin] = useState(() => {
