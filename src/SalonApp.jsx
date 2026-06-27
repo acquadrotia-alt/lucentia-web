@@ -1930,6 +1930,17 @@ function BookingLinkCard({ aziendaId, config, saveConfig }) {
         <button onClick={copy} className="text-xs font-medium brand-bg px-2.5 py-1.5 rounded-lg inline-flex items-center gap-1 shrink-0">{copied ? <><Check size={13} /> Copiato</> : "Copia"}</button>
         <a href={url} target="_blank" rel="noreferrer" className="text-xs font-medium border border-stone-300 text-stone-600 px-2.5 py-1.5 rounded-lg hover:bg-white shrink-0">Apri</a>
       </div>
+      <div className="mt-4">
+        <span className="text-xs font-medium text-stone-400 uppercase tracking-wide block mb-1.5">Come proporre gli orari</span>
+        <div className="grid sm:grid-cols-2 gap-2">
+          {[["antivuoto", "Anti-vuoto", "Orari consecutivi: partono dall'apertura e si incastrano dopo gli appuntamenti. Niente buchi in agenda."], ["griglia", "A griglia", "Orari liberi a intervalli fissi: il cliente sceglie l'ora che preferisce. Più libertà, può lasciare qualche buco."]].map(([val, title, desc]) => { const on = (ob.mode || "antivuoto") === val; return (
+            <button key={val} type="button" onClick={() => save({ mode: val })} className="text-left rounded-xl border p-3 transition" style={on ? { borderColor: "var(--brand)", background: "var(--brand-soft)" } : { borderColor: "#e7e5e4" }}>
+              <div className="text-sm font-medium text-stone-900 flex items-center gap-1.5">{on ? <Check size={14} className="brand-accent" /> : null} {title}</div>
+              <div className="text-[11px] text-stone-500 mt-1 leading-relaxed">{desc}</div>
+            </button>
+          ); })}
+        </div>
+      </div>
       <div className="grid sm:grid-cols-2 gap-3 mt-4">
         <label className="text-sm block"><span className="text-xs font-medium text-stone-400 uppercase tracking-wide block mb-1">Preavviso minimo</span>
           <select value={ob.leadHours != null ? ob.leadHours : 2} onChange={(e) => save({ leadHours: Number(e.target.value) })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm bg-white brand-ring">{[0, 1, 2, 4, 12, 24, 48].map((h) => <option key={h} value={h}>{h === 0 ? "Nessuno" : `${h} or${h === 1 ? "a" : "e"}`}</option>)}</select>
@@ -1942,7 +1953,6 @@ function BookingLinkCard({ aziendaId, config, saveConfig }) {
         <input type="checkbox" checked={!ob.paused} onChange={(e) => save({ paused: !e.target.checked })} style={{ accentColor: "var(--brand)" }} className="w-4 h-4" />
         <span className="text-sm text-stone-700">Prenotazioni online attive {ob.paused ? <span className="text-amber-600 text-xs font-medium">· attualmente sospese</span> : null}</span>
       </label>
-      <div className="mt-3 text-xs text-stone-400 leading-relaxed flex items-start gap-1.5"><AlertCircle size={13} className="shrink-0 mt-0.5" /> Gli orari proposti partono dall'apertura e si incastrano subito dopo gli appuntamenti già presenti, così non restano vuoti in agenda.</div>
     </section>
   );
 }

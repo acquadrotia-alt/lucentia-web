@@ -181,6 +181,40 @@ function gapFreeStarts(config, bookingsAll, dateStr, serviceId, leadMin) {
   return Object.keys(byStart).map(Number).sort((a, b) => a - b).map((start) => ({ start, staffId: byStart[start] }));
 }
 function staffOff(st, date) { return Array.isArray(st && st.off) && st.off.some((r) => inRange(date, r.from, r.to)); }
+// Modalità "a griglia": orari liberi a passo fisso (il cliente sceglie l'ora);
+// può lasciare buchi tra le prenotazioni, ma dà più libertà di scelta.
+function gridStarts(config, bookingsAll, dateStr, serviceId, leadMin) {
+  const closures = (config && config.closures) || [];
+  if (closures.some((r) => inRange(dateStr, r.from, r.to))) return [];
+  const svc = (config.services || []).find((s) => s.id === serviceId);
+  if (!svc) return [];
+  const D = Number(svc.durationMin) || 0; if (D <= 0) return [];
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+  if (dateStr < todayStr) return [];
+  const isToday = dateStr === todayStr;
+  const earliest = isToday ? now.getHours() * 60 + now.getMinutes() + (leadMin || 0) : -1;
+  const wd = weekdayOf(dateStr);
+  const byStart = {};
+  (config.staff || []).forEach((st) => {
+    if (!(st.serviceIds || []).includes(serviceId)) return;
+    if (staffOff(st, dateStr)) return;
+    const windows = (st.availability && st.availability[wd]) || [];
+    const stBk = bookingsAll.filter((b) => b && b.staffId === st.id && b.date === dateStr && b.status !== "cancelled" && b.status !== "noshow");
+    windows.forEach((win) => {
+      const ws = win[0], we = win[1];
+      for (let t = ws; t + D <= we; t += STEP_MIN) {
+        if (isToday && t < earliest) continue;
+        if (!stBk.some((b) => t < b.endMin && t + D > b.startMin) && byStart[t] == null) byStart[t] = st.id;
+      }
+    });
+  });
+  return Object.keys(byStart).map(Number).sort((a, b) => a - b).map((start) => ({ start, staffId: byStart[start] }));
+}
+// Sceglie l'algoritmo in base alla modalità configurata dal salone.
+function computeStarts(config, bookingsAll, dateStr, serviceId, leadMin, mode) {
+  return (mode === "griglia" ? gridStarts : gapFreeStarts)(config, bookingsAll, dateStr, serviceId, leadMin);
+}
 
 async function getSession(env, request) {
   const sid = getCookie(request, "sid");
@@ -295,6 +329,7 @@ export async function onRequest(context) {
     if (booking.paused) return json({ error: "Le prenotazioni online sono momentaneamente sospese." }, 403);
     const leadMin = Math.max(0, Number(booking.leadHours != null ? booking.leadHours * 60 : 120));
     const horizonDays = Math.max(1, Number(booking.horizonDays || 30));
+    const mode = booking.mode === "griglia" ? "griglia" : "antivuoto";
     const services = (config.services || []).filter((s) => Number(s.durationMin) > 0 && (config.staff || []).some((st) => (st.serviceIds || []).includes(s.id) && (st.availability && Object.keys(st.availability).length)));
 
     // info attività + servizi prenotabili
@@ -315,7 +350,7 @@ export async function onRequest(context) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !serviceId) return json({ slots: [] });
       const bookings = (await getCollezione(env, aid, "bookings")) || [];
       const online = await onlineBookingsOf(env, aid, date);
-      const slots = gapFreeStarts(config, [...(Array.isArray(bookings) ? bookings : []), ...online], date, serviceId, leadMin);
+      const slots = computeStarts(config, [...(Array.isArray(bookings) ? bookings : []), ...online], date, serviceId, leadMin, mode);
       return json({ slots: slots.map((s) => ({ start: s.start, label: `${pad2(Math.floor(s.start / 60))}:${pad2(s.start % 60)}` })) });
     }
 
@@ -336,7 +371,7 @@ export async function onRequest(context) {
       if (!svc) return json({ error: "Servizio non valido." }, 400);
       const bookings = (await getCollezione(env, aid, "bookings")) || [];
       const online = await onlineBookingsOf(env, aid, date);
-      const slots = gapFreeStarts(config, [...(Array.isArray(bookings) ? bookings : []), ...online], date, serviceId, leadMin);
+      const slots = computeStarts(config, [...(Array.isArray(bookings) ? bookings : []), ...online], date, serviceId, leadMin, mode);
       const slot = slots.find((s) => s.start === start);
       if (!slot) return json({ error: "Questo orario non è più disponibile. Scegline un altro." }, 409);
       const end = start + (Number(svc.durationMin) || 0);
