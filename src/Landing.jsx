@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Calendar, Users, Star, Layers, ShoppingBag, BarChart3, MessageCircle, HeartPulse, KeyRound, Cloud, FileText, Check, ArrowRight, Sparkles, ShieldCheck, Smartphone, X, Gift } from "lucide-react";
+import { Calendar, Users, Star, Layers, ShoppingBag, BarChart3, MessageCircle, HeartPulse, KeyRound, Cloud, FileText, Check, ArrowRight, Sparkles, ShieldCheck, Smartphone, X, Gift, CalendarClock, Globe } from "lucide-react";
 
 // Rivela il contenuto con un'animazione quando entra nello schermo (scroll reveal).
 function Reveal({ children, delay = 0, className = "", as: Tag = "div", ...rest }) {
@@ -38,6 +38,7 @@ const FEATURES = [
   [Cloud, "Cloud & multi-dispositivo", "Dati sincronizzati e al sicuro: lavori da computer, tablet e telefono, ovunque ti trovi."],
   [FileText, "Listino PDF", "Genera un listino servizi elegante e personalizzato col tuo logo e i tuoi colori."],
   [ShieldCheck, "Backup e sicurezza", "Accesso protetto, dati isolati per ogni salone e backup dei tuoi dati."],
+  [CalendarClock, "Prenotazioni online", "I clienti prenotano da soli con un link dedicato. Add-on opzionale, +€4/mese."],
 ];
 
 const PLANS = [
@@ -175,6 +176,44 @@ export default function Landing({ onLogin }) {
         </div>
       </section>
 
+      {/* ADD-ON · PRENOTAZIONI ONLINE */}
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-0" style={{ background: `radial-gradient(70% 70% at 50% 0%, ${GOLD_SOFT} 0%, #ffffff 65%)` }} />
+        <div className="relative max-w-5xl mx-auto px-5 py-16">
+          <div className="rounded-3xl border border-stone-200 bg-white/80 backdrop-blur shadow-sm overflow-hidden">
+            <div className="grid lg:grid-cols-2">
+              <div className="p-8 sm:p-10">
+                <Reveal className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full mb-4" style={{ background: GOLD_SOFT, color: GOLD }}><Sparkles size={13} /> Add-on · Novità</Reveal>
+                <Reveal as="h2" delay={60} className="font-display text-3xl sm:text-4xl font-bold text-stone-900 leading-tight">I tuoi clienti prenotano <span className="font-display-i" style={{ color: GOLD }}>da soli</span>, online.</Reveal>
+                <Reveal as="p" delay={120} className="mt-3 text-stone-500 leading-relaxed">Condividi un link dedicato — su WhatsApp, Instagram, Google o un QR in negozio — e ricevi prenotazioni 24 ore su 24, senza telefonate.</Reveal>
+                <div className="mt-6 space-y-3">
+                  {[
+                    [Globe, "Pagina col tuo brand", "Logo, colori e contatti del tuo salone, senza login per il cliente."],
+                    [CalendarClock, "Niente vuoti in agenda", "Gli orari si incastrano in automatico dopo gli appuntamenti — oppure a griglia, come preferisci."],
+                    [Users, "Scelta dell'operatore", "Il cliente sceglie chi preferisce, con foto o avatar personalizzati."],
+                    [Check, "Gestione autonoma", "Sposta o annulla la prenotazione e la aggiunge al proprio calendario."],
+                  ].map(([Icon, t, d], i) => (
+                    <Reveal key={i} delay={160 + i * 70} className="flex items-start gap-3">
+                      <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: GOLD_SOFT, color: GOLD }}><Icon size={17} /></div>
+                      <div><div className="font-semibold text-stone-900 text-sm">{t}</div><div className="text-sm text-stone-500 leading-relaxed">{d}</div></div>
+                    </Reveal>
+                  ))}
+                </div>
+              </div>
+              <div className="relative p-8 sm:p-10 flex flex-col justify-center items-center text-center border-t lg:border-t-0 lg:border-l border-stone-100" style={{ background: "#1c1917" }}>
+                <Reveal className="lc-float">
+                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto" style={{ background: GOLD, color: "#1c1917" }}><CalendarClock size={30} /></div>
+                </Reveal>
+                <Reveal as="div" delay={80} className="mt-5 text-white/60 text-sm">Add-on opzionale</Reveal>
+                <Reveal as="div" delay={120} className="mt-1 flex items-baseline justify-center gap-1.5"><span className="text-5xl font-bold text-white">€4</span><span className="text-white/50">/mese</span></Reveal>
+                <Reveal as="p" delay={180} className="mt-3 text-white/50 text-xs leading-relaxed max-w-[16rem]">Attivabile dai piani Smart e Pro (non disponibile con Basic). IVA esclusa.</Reveal>
+                <Reveal delay={240}><button onClick={() => setLead({ kind: "licenza", piano: "Pro" })} className="mt-6 font-semibold px-6 py-3 rounded-xl inline-flex items-center gap-2 lc-shine hover:-translate-y-0.5 transition" style={{ background: GOLD, color: "#1c1917" }}>Lo voglio nel mio salone <ArrowRight size={17} /></button></Reveal>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* PIANI */}
       <section id="piani" style={{ background: "#1c1917" }} className="text-white">
         <div className="max-w-6xl mx-auto px-5 py-16">
@@ -205,6 +244,7 @@ export default function Landing({ onLogin }) {
             ))}
           </div>
           <p className="text-center text-xs text-stone-500 mt-8">Tutti i piani includono Agenda e Scheda cliente. Gli operatori e i moduli si attivano in base al piano scelto.</p>
+          <p className="text-center text-xs mt-2" style={{ color: GOLD }}>+ Add-on Prenotazioni online: € 4/mese, attivabile dai piani Smart e Pro.</p>
         </div>
       </section>
 
