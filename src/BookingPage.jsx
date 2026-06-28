@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { Calendar, Clock, Check, ChevronRight, ChevronLeft, User, Users, Phone, Mail, Sparkles, MapPin, ArrowRight, Scissors, AlertCircle, Download, Search, CalendarClock, Trash2, X } from "lucide-react";
+import { Calendar, Clock, Check, ChevronRight, ChevronLeft, User, Users, Phone, Mail, Sparkles, MapPin, ArrowRight, Scissors, AlertCircle, CalendarClock, Trash2, X } from "lucide-react";
 import { AvatarSvg, avatarIdFor } from "./avatars.jsx";
+import { setBrandTab } from "./favicon.js";
 
 // --- Aggiungi al calendario ---
 function calStamps(date, start, end) {
@@ -12,19 +13,6 @@ function googleCalUrl(done, salone) {
   const { s, e } = calStamps(done.date, done.start, done.end);
   const p = new URLSearchParams({ action: "TEMPLATE", text: `${done.service} · ${salone.brandName}`, dates: `${s}/${e}`, location: salone.address || "", details: `Appuntamento da ${salone.brandName}${salone.phone ? ` (${salone.phone})` : ""}` });
   return `https://calendar.google.com/calendar/render?${p.toString()}`;
-}
-function downloadIcs(done, salone) {
-  const { s, e } = calStamps(done.date, done.start, done.end);
-  const esc = (x) => String(x || "").replace(/([,;\\])/g, "\\$1");
-  const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Lucentia//Prenotazioni//IT", "BEGIN:VEVENT",
-    `UID:${done.date}-${done.start}-lucentia`, `DTSTART:${s}`, `DTEND:${e}`,
-    `SUMMARY:${esc(done.service + " · " + salone.brandName)}`,
-    salone.address ? `LOCATION:${esc(salone.address)}` : "",
-    `DESCRIPTION:${esc("Appuntamento da " + salone.brandName + (salone.phone ? " (" + salone.phone + ")" : ""))}`,
-    "END:VEVENT", "END:VCALENDAR"].filter(Boolean).join("\r\n");
-  const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
-  const a = document.createElement("a"); a.href = url; a.download = `prenotazione-${done.date}.ics`; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 const pad2 = (n) => String(n).padStart(2, "0");
@@ -59,7 +47,7 @@ export default function BookingPage({ aid }) {
   useEffect(() => {
     (async () => {
       const r = await api(aid);
-      if (r.ok && r.data && r.data.ok) { setInfo(r.data); setState("ready"); }
+      if (r.ok && r.data && r.data.ok) { setInfo(r.data); setState("ready"); setBrandTab(r.data.salone.logo, `${r.data.salone.brandName} · Prenota online`); }
       else setState("error");
     })();
   }, [aid]);
@@ -123,11 +111,7 @@ export default function BookingPage({ aid }) {
               <div className="flex items-center gap-2.5 text-sm"><Clock size={16} className="text-stone-400" /><span className="text-stone-700 tabular-nums">{done.label}</span></div>
             </div>
             <div className="mt-5">
-              <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-2">Aggiungi al calendario</div>
-              <div className="grid grid-cols-2 gap-2">
-                <a href={googleCalUrl(done, b)} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-1.5 text-sm font-medium border border-stone-200 rounded-xl py-2.5 hover:bg-stone-50 transition"><Calendar size={15} className="text-stone-500" /> Google</a>
-                <button onClick={() => downloadIcs(done, b)} className="flex items-center justify-center gap-1.5 text-sm font-medium border border-stone-200 rounded-xl py-2.5 hover:bg-stone-50 transition"><Download size={15} className="text-stone-500" /> Apple / .ics</button>
-              </div>
+              <a href={googleCalUrl(done, b)} target="_blank" rel="noreferrer" className="w-full flex items-center justify-center gap-1.5 text-sm font-medium border border-stone-200 rounded-xl py-2.5 hover:bg-stone-50 transition"><Calendar size={15} className="text-stone-500" /> Aggiungi a Google Calendar</a>
             </div>
             <p className="text-xs text-stone-400 mt-4">Puoi consultare o spostare la prenotazione da «Le mie prenotazioni».</p>
             <button onClick={() => { setDone(null); setView("manage"); }} className="mt-1 text-sm font-medium" style={{ color: primary }}>Le mie prenotazioni →</button>

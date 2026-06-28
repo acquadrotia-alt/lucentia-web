@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback, createContext, useContext } from "react";
 import { Sparkles, Calendar, Clock, User, Mail, Lock, Settings, LayoutDashboard, Plus, Trash2, Check, ChevronLeft, ChevronRight, X, Users, CalendarPlus, Phone, MapPin, Image as ImageIcon, Palette, Store, Sunrise, Sun, Moon, History, Search, Gift, Star, Hash, LogOut, Ban, UserX, Undo2, Timer, CalendarClock, Wallet, RefreshCw, Printer, Download, Upload, KeyRound, ShieldCheck, CalendarX2, AlertTriangle, BadgeCheck, ShoppingCart, ShoppingBag, Package, Tag, Minus, Boxes, Receipt, Layers, AlertCircle, CalendarRange, CalendarDays, PackagePlus, BarChart3, TrendingUp, MessageCircle, FolderOpen } from "lucide-react";
 import { AvatarSvg, AVATAR_IDS, avatarIdFor } from "./avatars.jsx";
+import { setBrandTab } from "./favicon.js";
 
 // Versione dell'app (da package.json, iniettata da Vite) mostrata nel login.
 const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
@@ -771,6 +772,8 @@ export default function SalonApp({ onLogout, moduli, azienda, demo }) {
     })();
   };
   const b = config.branding;
+  // Favicon + titolo scheda = brand del cliente (salone) quando si è dentro la sua pagina.
+  useEffect(() => { setBrandTab(b.logo, b.name ? `${b.name} · Lucentia` : undefined); }, [b.logo, b.name]);
   const pickBackupDir = async () => {
     if (!window.showDirectoryPicker) { alert("La scelta della cartella non è supportata in questo ambiente. Su Windows funziona; altrimenti usa \"Esporta backup\"."); return; }
     try { const h = await window.showDirectoryPicker({ mode: "readwrite", id: "lucentia-backup" }); await saveDirHandle(h); setBackupDir(h); setBackupDirName(h.name || "cartella"); } catch (e) {}
