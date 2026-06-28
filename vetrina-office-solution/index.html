@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0f4a5a" />
+<title>Office Solution — I gestionali su misura per la tua attività</title>
+<meta name="description" content="Office Solution: software gestionali semplici e su misura per artigiani, saloni e ristoranti. Scopri interventia, Lucentia e Menù Digitale." />
+<meta property="og:title" content="Office Solution — Soluzioni gestionali per la tua attività" />
+<meta property="og:description" content="Tre gestionali pensati per il lavoro di tutti i giorni: rapportini d'intervento, gestione del salone e menù digitale." />
+<meta property="og:type" content="website" />
+<meta property="og:image" content="./assets/logo-stacked.png" />
+<link rel="icon" type="image/png" href="./assets/logo-mark.png" />
+<link rel="apple-touch-icon" href="./assets/logo-mark.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+
+<!--
+  ============================================================================
+  VETRINA OFFICE SOLUTION — pagina unica, statica, senza build.
+  Per pubblicarla: carica questa cartella (index.html + assets/) su qualsiasi
+  hosting statico (Cloudflare Pages, Netlify, ecc.).
+
+  >>> LINK AI PRODOTTI: aggiorna gli href qui sotto con gli URL definitivi.
+      Cerca "data-prodotto" nel codice. Valori attuali = provvisori.
+  ============================================================================
+-->
+
+<style>
+  :root{
+    /* Palette estratta dal logo Office Solution */
+    --ink:#0f4250;          /* teal profondo */
+    --ink-2:#0b3641;
+    --teal:#1796b2;         /* teal acceso */
+    --teal-600:#127d96;
+    --teal-100:#e3f2f5;
+    --grey:#5b6e73;         /* grigio "SOLUTION" */
+    --bg:#ffffff;
+    --bg-soft:#f5f9fa;
+    --line:#e4ecee;
+    --text:#1b2a2e;
+    --muted:#5d6f74;
+    --radius:20px;
+    --shadow:0 18px 50px -22px rgba(15,66,80,.45);
+    --shadow-sm:0 8px 24px -16px rgba(15,66,80,.4);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:"Inter",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    color:var(--text);background:var(--bg);line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  .display{font-family:"Sora","Inter",sans-serif;letter-spacing:-.02em}
+  a{color:inherit;text-decoration:none}
+  .wrap{width:min(1140px,92vw);margin-inline:auto}
+  section{padding:clamp(56px,9vw,110px) 0}
+
+  /* ---------- buttons ---------- */
+  .btn{display:inline-flex;align-items:center;gap:.5rem;font-weight:600;font-size:.95rem;
+    padding:.8rem 1.4rem;border-radius:999px;transition:.25s ease;border:1px solid transparent;cursor:pointer}
+  .btn svg{width:18px;height:18px}
+  .btn-dark{background:var(--ink);color:#fff}
+  .btn-dark:hover{background:var(--ink-2);transform:translateY(-2px)}
+  .btn-teal{background:var(--teal);color:#fff}
+  .btn-teal:hover{background:var(--teal-600);transform:translateY(-2px)}
+  .btn-outline{border-color:var(--line);background:#fff;color:var(--ink)}
+  .btn-outline:hover{border-color:var(--teal);color:var(--teal);transform:translateY(-2px)}
+  .btn-ghost{color:var(--ink)}
+  .btn-ghost:hover{color:var(--teal)}
+
+  /* ---------- nav ---------- */
+  header.nav{position:sticky;top:0;z-index:40;background:rgba(255,255,255,.82);
+    backdrop-filter:saturate(160%) blur(12px);border-bottom:1px solid var(--line)}
+  .nav-in{display:flex;align-items:center;justify-content:space-between;height:70px}
+  .brand{display:flex;align-items:center;gap:.65rem;font-weight:700}
+  .brand img{height:38px;width:auto}
+  .brand b{font-family:"Sora",sans-serif;font-size:1.12rem;color:var(--ink);letter-spacing:-.01em}
+  .brand b span{color:var(--teal)}
+  .nav-links{display:flex;align-items:center;gap:1.6rem}
+  .nav-links a.lnk{font-size:.94rem;color:var(--muted);font-weight:500}
+  .nav-links a.lnk:hover{color:var(--ink)}
+  .burger{display:none;background:none;border:0;color:var(--ink)}
+  @media(max-width:820px){
+    .nav-links .lnk{display:none}
+  }
+
+  /* ---------- hero ---------- */
+  .hero{position:relative;overflow:hidden;
+    background:
+      radial-gradient(1100px 480px at 78% -8%, rgba(23,150,178,.16), transparent 60%),
+      linear-gradient(180deg,#fbfdfe 0%,#fff 60%)}
+  .hero-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:3rem;align-items:center}
+  .eyebrow{display:inline-flex;align-items:center;gap:.5rem;font-size:.8rem;font-weight:600;
+    letter-spacing:.04em;text-transform:uppercase;color:var(--teal-600);
+    background:var(--teal-100);padding:.4rem .8rem;border-radius:999px}
+  .hero h1{font-size:clamp(2.1rem,5vw,3.5rem);line-height:1.05;color:var(--ink);margin:1.1rem 0 1.1rem}
+  .hero h1 em{font-style:normal;color:var(--teal)}
+  .hero p.lead{font-size:1.12rem;color:var(--muted);max-width:48ch}
+  .hero-cta{display:flex;flex-wrap:wrap;gap:.8rem;margin-top:1.8rem}
+  .hero-trust{display:flex;flex-wrap:wrap;gap:1.2rem;margin-top:1.7rem;color:var(--muted);font-size:.9rem}
+  .hero-trust span{display:inline-flex;align-items:center;gap:.4rem}
+  .hero-trust svg{width:16px;height:16px;color:var(--teal)}
+  .hero-visual{display:flex;justify-content:center}
+  .hero-visual .card{background:#fff;border:1px solid var(--line);border-radius:28px;
+    padding:2.4rem;box-shadow:var(--shadow);text-align:center;width:100%;max-width:380px}
+  .hero-visual img{width:78%;max-width:240px;height:auto;margin-inline:auto}
+  @media(max-width:880px){
+    .hero-grid{grid-template-columns:1fr;gap:2.2rem}
+    .hero-visual{order:-1}
+    .hero-visual .card{max-width:300px;padding:1.8rem}
+  }
+
+  /* ---------- strip ---------- */
+  .strip{background:var(--ink);color:#fff}
+  .strip-in{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem;text-align:center}
+  .strip .v{font-family:"Sora",sans-serif;font-size:clamp(1.8rem,4vw,2.6rem);font-weight:700;color:#fff}
+  .strip .l{color:#bfe0e8;font-size:.92rem;margin-top:.2rem}
+  @media(max-width:680px){.strip-in{grid-template-columns:1fr;gap:1.6rem}}
+
+  /* ---------- section heads ---------- */
+  .head{text-align:center;max-width:720px;margin:0 auto clamp(2.4rem,5vw,3.6rem)}
+  .head .eyebrow{margin-bottom:1rem}
+  .head h2{font-size:clamp(1.7rem,3.6vw,2.5rem);color:var(--ink);line-height:1.1}
+  .head p{color:var(--muted);margin-top:.9rem;font-size:1.06rem}
+
+  /* ---------- product cards ---------- */
+  .products{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem}
+  @media(max-width:980px){.products{grid-template-columns:1fr;max-width:520px;margin-inline:auto}}
+  .pcard{position:relative;display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);
+    border-radius:var(--radius);padding:2rem 1.9rem;box-shadow:var(--shadow-sm);
+    transition:transform .3s ease,box-shadow .3s ease,border-color .3s ease;overflow:hidden}
+  .pcard::before{content:"";position:absolute;inset:0 0 auto 0;height:5px;background:var(--accent,var(--teal))}
+  .pcard:hover{transform:translateY(-6px);box-shadow:var(--shadow);border-color:transparent}
+  .pcard .ic{width:54px;height:54px;border-radius:14px;display:grid;place-items:center;
+    background:color-mix(in srgb,var(--accent,var(--teal)) 14%,#fff);color:var(--accent,var(--teal));margin-top:.6rem}
+  .pcard .ic svg{width:26px;height:26px}
+  .pcard .chip{margin-top:1.1rem;font-size:.76rem;font-weight:600;letter-spacing:.03em;text-transform:uppercase;
+    color:var(--accent,var(--teal))}
+  .pcard h3{font-family:"Sora",sans-serif;font-size:1.45rem;color:var(--ink);margin:.3rem 0 .2rem}
+  .pcard .tag{color:var(--muted);font-size:.98rem;min-height:2.8em}
+  .pcard ul{list-style:none;margin:1.2rem 0 1.6rem;display:flex;flex-direction:column;gap:.6rem}
+  .pcard li{display:flex;align-items:flex-start;gap:.55rem;font-size:.94rem;color:var(--text)}
+  .pcard li svg{width:17px;height:17px;color:var(--accent,var(--teal));flex:none;margin-top:.18rem}
+  .pcard .go{margin-top:auto;display:inline-flex;align-items:center;gap:.45rem;font-weight:600;
+    color:#fff;background:var(--accent,var(--teal));padding:.75rem 1.2rem;border-radius:999px;
+    align-self:flex-start;transition:.25s ease}
+  .pcard .go:hover{filter:brightness(.93);gap:.7rem}
+  .pcard .go svg{width:17px;height:17px;transition:transform .25s ease}
+
+  /* ---------- why ---------- */
+  .why{background:var(--bg-soft)}
+  .why-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.4rem}
+  @media(max-width:880px){.why-grid{grid-template-columns:1fr;max-width:480px;margin-inline:auto}}
+  .why-card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:1.8rem}
+  .why-card .ic{width:46px;height:46px;border-radius:12px;background:var(--teal-100);color:var(--teal-600);
+    display:grid;place-items:center;margin-bottom:1rem}
+  .why-card .ic svg{width:23px;height:23px}
+  .why-card h3{font-family:"Sora",sans-serif;font-size:1.16rem;color:var(--ink);margin-bottom:.35rem}
+  .why-card p{color:var(--muted);font-size:.96rem}
+
+  /* ---------- contact ---------- */
+  .contact .panel{background:var(--ink);color:#fff;border-radius:28px;padding:clamp(2rem,5vw,3.4rem);
+    display:grid;grid-template-columns:1.1fr .9fr;gap:2.4rem;align-items:center;
+    background-image:radial-gradient(700px 320px at 90% 0%, rgba(23,150,178,.35), transparent 60%)}
+  @media(max-width:820px){.contact .panel{grid-template-columns:1fr;gap:1.8rem}}
+  .contact h2{font-family:"Sora",sans-serif;font-size:clamp(1.6rem,3.4vw,2.3rem);line-height:1.12}
+  .contact p.sub{color:#cfe6eb;margin-top:.8rem;max-width:40ch}
+  .contact .clist{display:flex;flex-direction:column;gap:.9rem}
+  .contact .crow{display:flex;align-items:center;gap:.85rem;background:rgba(255,255,255,.07);
+    border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:.85rem 1rem;transition:.2s ease}
+  .contact .crow:hover{background:rgba(255,255,255,.13)}
+  .contact .crow .ic{width:40px;height:40px;border-radius:11px;background:var(--teal);display:grid;place-items:center;flex:none}
+  .contact .crow .ic svg{width:20px;height:20px;color:#fff}
+  .contact .crow b{display:block;font-size:.97rem}
+  .contact .crow span{display:block;color:#b9d9e0;font-size:.84rem}
+
+  /* ---------- footer ---------- */
+  footer.ft{border-top:1px solid var(--line);padding:2.4rem 0}
+  .ft-in{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:1.2rem}
+  .ft-in img{height:34px}
+  .ft-links{display:flex;gap:1.4rem;flex-wrap:wrap}
+  .ft-links a{color:var(--muted);font-size:.92rem}
+  .ft-links a:hover{color:var(--teal)}
+  .ft-copy{color:var(--muted);font-size:.86rem;width:100%}
+
+  /* ---------- reveal ---------- */
+  .rv{opacity:0;transform:translateY(22px);transition:opacity .7s ease,transform .7s ease}
+  .rv.in{opacity:1;transform:none}
+  @media(prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}}
+</style>
+</head>
+<body>
+
+<!-- ===== NAV ===== -->
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="#top">
+      <img src="./assets/logo-mark.png" alt="Office Solution" />
+      <b>Office<span> Solution</span></b>
+    </a>
+    <nav class="nav-links">
+      <a class="lnk" href="#soluzioni">Soluzioni</a>
+      <a class="lnk" href="#perche">Perché noi</a>
+      <a class="lnk" href="#contatti">Contatti</a>
+      <a class="btn btn-dark" href="https://wa.me/393920241955" target="_blank" rel="noreferrer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        Scrivici
+      </a>
+    </nav>
+  </div>
+</header>
+
+<!-- ===== HERO ===== -->
+<section class="hero" id="top">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow rv">Software gestionali su misura</span>
+      <h1 class="display rv">Un software <em>su misura</em> per ogni mestiere.</h1>
+      <p class="lead rv">Office Solution sviluppa gestionali semplici e concreti, pensati per il lavoro di tutti i giorni. Scegli la soluzione adatta alla tua attività e provala subito.</p>
+      <div class="hero-cta rv">
+        <a class="btn btn-teal" href="#soluzioni">Scopri le soluzioni
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+        <a class="btn btn-outline" href="#contatti">Parla con noi</a>
+      </div>
+      <div class="hero-trust rv">
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Assistenza in italiano</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Tutto online, da telefono e PC</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Provale gratis</span>
+      </div>
+    </div>
+    <div class="hero-visual rv">
+      <div class="card">
+        <img src="./assets/logo-stacked.png" alt="Office Solution" />
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== STRIP ===== -->
+<section class="strip" style="padding-block:clamp(34px,5vw,52px)">
+  <div class="wrap strip-in">
+    <div class="rv"><div class="v">3</div><div class="l">gestionali pronti all'uso</div></div>
+    <div class="rv"><div class="v">100%</div><div class="l">online, nessuna installazione</div></div>
+    <div class="rv"><div class="v">0€</div><div class="l">per provarli</div></div>
+  </div>
+</section>
+
+<!-- ===== SOLUZIONI ===== -->
+<section id="soluzioni">
+  <div class="wrap">
+    <div class="head">
+      <span class="eyebrow rv">Le nostre soluzioni</span>
+      <h2 class="display rv">Un gestionale per ogni attività</h2>
+      <p class="rv">Tre prodotti distinti, ognuno con la sua pagina dedicata dove vederlo nel dettaglio e provarlo.</p>
+    </div>
+
+    <div class="products">
+
+      <!-- INTERVENTIA -->
+      <article class="pcard rv" style="--accent:#1f2937">
+        <div class="ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.8 2.8-2.1-2.1 2.8-2.8z"/></svg>
+        </div>
+        <div class="chip">Idraulici · artigiani · tecnici</div>
+        <h3>interventia</h3>
+        <p class="tag">Rapportini d'intervento, clienti, assistenza e fatturazione per chi lavora sul campo.</p>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Rapportini digitali con ore e materiali</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Anagrafica clienti e storico interventi</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Preventivi e fatture pronti da inviare</li>
+        </ul>
+        <!-- data-prodotto: aggiorna l'URL con quello definitivo -->
+        <a class="go" data-prodotto="interventia" href="https://interventia.pages.dev" target="_blank" rel="noreferrer">
+          Scopri interventia
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8"/></svg>
+        </a>
+      </article>
+
+      <!-- LUCENTIA -->
+      <article class="pcard rv" style="--accent:#b8893b">
+        <div class="ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.1 4.9 5.4.5-4 3.6 1.2 5.3L12 15l-4.7 2.8 1.2-5.3-4-3.6 5.4-.5L12 3z"/></svg>
+        </div>
+        <div class="chip">Parrucchieri · centri estetici</div>
+        <h3>Lucentia</h3>
+        <p class="tag">Il gestionale completo per saloni e studi di bellezza: agenda, clienti, cassa e fidelity.</p>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Agenda per operatore e prenotazioni online</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Schede clienti, fidelity e pacchetti</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Cassa, magazzino e statistiche</li>
+        </ul>
+        <a class="go" data-prodotto="lucentia" href="https://lucentia.pages.dev" target="_blank" rel="noreferrer">
+          Scopri Lucentia
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8"/></svg>
+        </a>
+      </article>
+
+      <!-- MENU DIGITALE -->
+      <article class="pcard rv" style="--accent:#1796b2">
+        <div class="ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM21 14v7M18 21h3M18 18v3"/></svg>
+        </div>
+        <div class="chip">Ristoranti · bar · locali</div>
+        <h3>Menù Digitale</h3>
+        <p class="tag">Il menù del locale via QR: multilingua, con allergeni a norma, foto e statistiche.</p>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Consultazione via QR, senza app</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Traduzioni automatiche in 5 lingue</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Allergeni UE, foto piatti e statistiche</li>
+        </ul>
+        <a class="go" data-prodotto="menu-digitale" href="https://menudigitale.it" target="_blank" rel="noreferrer">
+          Scopri Menù Digitale
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8"/></svg>
+        </a>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<!-- ===== PERCHE ===== -->
+<section class="why" id="perche">
+  <div class="wrap">
+    <div class="head">
+      <span class="eyebrow rv">Perché Office Solution</span>
+      <h2 class="display rv">Strumenti concreti, senza complicazioni</h2>
+    </div>
+    <div class="why-grid">
+      <div class="why-card rv">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6l-8-4z"/><path d="m9 12 2 2 4-4"/></svg></div>
+        <h3>Pensati per chi lavora</h3>
+        <p>Niente menù infiniti: solo le funzioni che servono davvero, facili da usare anche dal telefono mentre sei al lavoro.</p>
+      </div>
+      <div class="why-card rv">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></div>
+        <h3>Assistenza diretta</h3>
+        <p>Parli con noi in italiano, anche su WhatsApp. Ti seguiamo nell'avvio e quando ti serve una mano.</p>
+      </div>
+      <div class="why-card rv">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 0 0 .5-9 6 6 0 0 0-11.6-1.5A4 4 0 0 0 6 19z"/></svg></div>
+        <h3>Tutto in cloud</h3>
+        <p>I dati sono al sicuro e sincronizzati: lavori da computer, tablet e telefono senza installare nulla.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== CONTATTI ===== -->
+<section class="contact" id="contatti">
+  <div class="wrap">
+    <div class="panel rv">
+      <div>
+        <h2>Parliamone insieme</h2>
+        <p class="sub">Raccontaci della tua attività: ti aiutiamo a scegliere la soluzione giusta e ad attivare una prova.</p>
+      </div>
+      <div class="clist">
+        <a class="crow" href="https://wa.me/393920241955" target="_blank" rel="noreferrer">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div>
+          <div><b>392 0241955</b><span>WhatsApp — risposta rapida</span></div>
+        </a>
+        <a class="crow" href="mailto:amministrazione@cmav.it">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></div>
+          <div><b>amministrazione@cmav.it</b><span>Scrivici una email</span></div>
+        </a>
+        <a class="crow" href="https://officesolutionoleggio.com" target="_blank" rel="noreferrer">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg></div>
+          <div><b>officesolutionoleggio.com</b><span>Vai al sito</span></div>
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== FOOTER ===== -->
+<footer class="ft">
+  <div class="wrap ft-in">
+    <img src="./assets/logo-horizontal.png" alt="Office Solution" />
+    <nav class="ft-links">
+      <a href="#soluzioni">Soluzioni</a>
+      <a href="#perche">Perché noi</a>
+      <a href="#contatti">Contatti</a>
+      <a href="https://officesolutionoleggio.com" target="_blank" rel="noreferrer">Sito</a>
+    </nav>
+    <div class="ft-copy">© <span id="yy"></span> Office Solution · officesolutionoleggio.com · amministrazione@cmav.it</div>
+  </div>
+</footer>
+
+<script>
+  // anno corrente
+  document.getElementById("yy").textContent = new Date().getFullYear();
+  // reveal on scroll
+  (function(){
+    var els = document.querySelectorAll(".rv");
+    if(!("IntersectionObserver" in window)){els.forEach(function(e){e.classList.add("in")});return;}
+    var io = new IntersectionObserver(function(en){
+      en.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target);} });
+    },{threshold:.14,rootMargin:"0px 0px -8% 0px"});
+    els.forEach(function(e){io.observe(e)});
+  })();
+</script>
+</body>
+</html>
