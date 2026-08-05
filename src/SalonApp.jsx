@@ -3,24 +3,14 @@ import { Sparkles, Calendar, Clock, User, Mail, Lock, Settings, LayoutDashboard,
 import { AvatarSvg, AVATAR_IDS, avatarIdFor } from "./avatars.jsx";
 import { setBrandTab } from "./favicon.js";
 
-// Versione dell'app (da package.json, iniettata da Vite) mostrata nel login.
-const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
-
 const CFG_KEY = "salon-config-v3";
 const BK_KEY = "salon-bookings-v2";
 const CLIENTS_KEY = "salon-clients-v1";
 const PROD_KEY = "salon-catalog-v1"; // catalogo prodotti + giacenze
 const SALES_KEY = "salon-sales-v1"; // storico vendite
-const LIC_KEY = "salon-license-v1"; // licenza salvata a parte: NON inclusa nei backup
 const STEP = 15;
 const ADVANCE_DAYS = 30;
 const LOYALTY_GOAL = 10;
-
-// Codice master del RIVENDITORE: vale sempre, non scade mai, sblocca il pannello Licenza.
-// Cambialo qui (e ricompila) se vuoi un master diverso da 0724 per le tue build.
-const RESELLER_CODE = "0724";
-// Firma anti-manomissione della licenza (vedi nota sicurezza nel messaggio di consegna).
-const LIC_SECRET = "bs-lic-39f1c7";
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 const pad = (n) => String(n).padStart(2, "0");
@@ -109,41 +99,37 @@ const loadKey = (key, fallback) => { try { const v = localStorage.getItem(key); 
 const saveKey = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {} };
 
 // --- Strato dati: legge/salva sul server (database D1) invece che nel localStorage ---
-// Login e licenze restano in locale e invariati; qui passano solo i 5 contenitori dati.
 async function apiLoad(coll, fallback) {
   try { const r = await fetch(`/api/data/${coll}`); if (!r.ok) return fallback; const j = await r.json(); return (j && j.value != null) ? j.value : fallback; }
   catch (e) { return fallback; }
 }
-async function apiSave(coll, value) {
-  try { await fetch(`/api/data/${coll}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ value }) }); } catch (e) {}
-}
+// Salvataggio con esito visibile: gli errori vengono segnalati alla UI (via _onSaveError)
+// e i salvataggi in attesa vengono inviati subito alla chiusura della pagina (pagehide).
+let _onSaveError = null; // impostato dal componente SalonApp
+const _pending = {}; // collezione -> valore non ancora confermato dal server
 const _saveTimers = {};
+async function apiSave(coll, value) {
+  const r = await fetch(`/api/data/${coll}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ value }) }).catch(() => null);
+  if (r && r.ok) { delete _pending[coll]; if (_onSaveError) _onSaveError(null); return; }
+  _pending[coll] = value;
+  if (_onSaveError) _onSaveError(coll);
+  // Errore di rete o del server: riprova tra 5 secondi. Un rifiuto (es. licenza scaduta) non viene ritentato.
+  if (!r || r.status >= 500) { clearTimeout(_saveTimers[coll]); _saveTimers[coll] = setTimeout(() => apiSave(coll, value), 5000); }
+}
 function apiSaveDebounced(coll, value, delay = 800) {
+  _pending[coll] = value;
   clearTimeout(_saveTimers[coll]);
   _saveTimers[coll] = setTimeout(() => apiSave(coll, value), delay);
 }
-
-// --- Sistema licenza cliente (a tempo) ---
-function hashStr(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h.toString(36); }
-const licSig = (code, expiry) => hashStr(`${code}|${expiry}|${LIC_SECRET}`);
-const loadLicense = () => loadKey(LIC_KEY, null);
-const saveLicense = (lic) => saveKey(LIC_KEY, lic);
-function makeLicense(code, months) {
-  const m = Number(months) || 0;
-  let expiry = null;
-  if (m > 0) { const d = new Date(); d.setMonth(d.getMonth() + m); expiry = d.getTime(); }
-  const base = { code: String(code).trim(), expiry, months: m, issuedAt: Date.now() };
-  return { ...base, sig: licSig(base.code, base.expiry) };
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", () => {
+    for (const coll of Object.keys(_pending)) {
+      clearTimeout(_saveTimers[coll]);
+      try { fetch(`/api/data/${coll}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ value: _pending[coll] }), keepalive: true }); } catch (e) {}
+      delete _pending[coll];
+    }
+  });
 }
-function licenseState(lic) {
-  if (!lic || !lic.code) return { state: "none" };
-  if (lic.sig !== licSig(lic.code, lic.expiry)) return { state: "tampered" };
-  if (lic.expiry == null) return { state: "active", unlimited: true };
-  const ms = lic.expiry - Date.now();
-  if (ms <= 0) return { state: "expired", expiry: lic.expiry };
-  return { state: "active", expiry: lic.expiry, days: Math.ceil(ms / 86400000) };
-}
-const licenseOk = (lic) => licenseState(lic).state === "active";
 
 const hexToRgb = (h) => { h = String(h).replace("#", ""); if (h.length === 3) h = h.split("").map((c) => c + c).join(""); const n = parseInt(h, 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 const mix = (rgb, t, a) => rgb.map((c, i) => Math.round(c + (t[i] - c) * a));
@@ -667,8 +653,7 @@ export default function SalonApp({ onLogout, moduli, azienda, demo }) {
   const [onlineBk, setOnlineBk] = useState([]); // prenotazioni online ricevute (overlay, sola lettura)
   const [loading, setLoading] = useState(true);
   const loadedRef = useRef(false);
-  const [license, setLicense] = useState(() => loadLicense()); // licenza: resta in locale, invariata
-  const [session, setSession] = useState({ role: "operator", hidePartial: false }); // login gestito dal contenitore (server)
+  const [saveError, setSaveError] = useState(false); // salvataggio non riuscito: mostrato in un avviso
   const [view, setView] = useState("agenda");
   const enabledSections = ["agenda", "clienti", "buoni", ...(flags.vendite ? ["shop"] : []), ...(flags.statistiche ? ["stats"] : []), ...(flags.marketing ? ["marketing"] : []), "settings"];
   useEffect(() => { if (!enabledSections.includes(view)) setView("agenda"); }, [moduli, view]);
@@ -746,31 +731,10 @@ export default function SalonApp({ onLogout, moduli, azienda, demo }) {
     const id = setInterval(tick, 60000); const t0 = setTimeout(tick, 5000);
     return () => { clearInterval(id); clearTimeout(t0); };
   }, []);
-  // La licenza è ora verificata dal server: nessun controllo locale qui.
-  useEffect(() => {}, [session]);
+  // Avvisi di salvataggio: il layer apiSave segnala qui gli errori (e il rientro alla normalità).
+  useEffect(() => { _onSaveError = (coll) => setSaveError(!!coll); return () => { _onSaveError = null; }; }, []);
 
   const saveConfig = (next) => { setConfig(next); if (!demoRef.current && loadedRef.current) apiSaveDebounced("config", next); };
-  const updateLicense = (lic) => { setLicense(lic); saveLicense(lic); };
-  const enterSession = (role, hidePartial) => {
-    if (role === "demo") {
-      const d = buildDemoData();
-      setConfig(d.config); setBookings(d.bookings); setClients(d.clients); setCatalog(d.catalog); setSales(d.sales);
-      setView("agenda"); setDemoBanner(true); setSession({ role: "demo", hidePartial: false }); return;
-    }
-    setSession({ role, hidePartial: !!hidePartial });
-  };
-  const logout = () => {
-    const wasDemo = demoRef.current;
-    setDemoBanner(false); setSession(null);
-    if (wasDemo) (async () => {
-      const [cfg, bk, cl, cat, sl] = await Promise.all([
-        apiLoad("config", null), apiLoad("bookings", null), apiLoad("clients", null), apiLoad("catalog", null), apiLoad("sales", null),
-      ]);
-      setConfig(cfg ? { ...DEFAULT_CONFIG, ...cfg, branding: { ...BRANDING, ...(cfg.branding || {}) } } : DEFAULT_CONFIG);
-      setBookings(Array.isArray(bk) ? bk : []); setClients(Array.isArray(cl) ? cl : []);
-      setCatalog(cat && Array.isArray(cat.products) ? cat : DEFAULT_CATALOG); setSales(Array.isArray(sl) ? sl : []);
-    })();
-  };
   const b = config.branding;
   // Favicon + titolo scheda = brand del cliente (salone) quando si è dentro la sua pagina.
   useEffect(() => { setBrandTab(b.logo, b.name ? `${b.name} · Lucentia` : undefined); }, [b.logo, b.name]);
@@ -784,17 +748,6 @@ export default function SalonApp({ onLogout, moduli, azienda, demo }) {
   };
   const clearBackupDir = async () => { await clearDirHandle(); setBackupDir(null); setBackupDirName(""); };
 
-  if (!session) {
-    return (
-      <div className="min-h-screen bg-stone-50 text-stone-800" style={themeVars(b.primary)}>
-        <style>{BRAND_CSS}</style>
-        <LoginGate branding={b} license={license} onUnlock={(role, hidePartial) => enterSession(role, hidePartial)} />
-      </div>
-    );
-  }
-
-  const ls = licenseState(license);
-  const operatorWarn = session.role === "operator" && ls.state === "active" && !ls.unlimited && ls.days <= 30;
   const ALL_NAV = [["agenda", "Agenda", Calendar], ["clienti", "Clienti", Users], ["buoni", "Buoni", Gift], ["shop", "Vendite", ShoppingBag], ["stats", "Statistiche", BarChart3], ["marketing", "Marketing", MessageCircle], ["settings", "Impostazioni", Settings]];
   const canAddVoucher = !isDemo || vouchers.filter((v) => !v.seed).length < 5;
   const NAV = ALL_NAV.filter((x) => enabledSections.includes(x[0]));
@@ -820,32 +773,36 @@ export default function SalonApp({ onLogout, moduli, azienda, demo }) {
                 <Icon size={16} /><span className="hidden lg:inline">{label}</span>
               </button>
             ); })}
-            {session.role === "reseller" ? <span className="hidden sm:inline-flex items-center gap-1 text-xs font-medium bg-stone-800 text-white px-2 py-1 rounded-lg ml-1"><ShieldCheck size={13} /> Rivenditore</span> : null}
             {isDemo ? <span className="inline-flex items-center gap-1 text-xs font-medium bg-amber-500 text-white px-2 py-1 rounded-lg ml-1"><Sparkles size={13} /> Demo</span> : null}
             <button onClick={onLogout} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-medium text-stone-500 hover:bg-stone-100 ml-1" title="Esci"><LogOut size={16} /><span className="hidden lg:inline">Esci</span></button>
           </nav>
         </div>
-        {operatorWarn ? <div className="bg-amber-50 border-t border-amber-200 text-amber-700 text-xs text-center py-1.5 flex items-center justify-center gap-1.5"><AlertTriangle size={13} /> Licenza in scadenza tra {ls.days} giorn{ls.days === 1 ? "o" : "i"}. Contatta il rivenditore per il rinnovo.</div> : null}
       </header>
 
       <main key={view} className="max-w-5xl w-full mx-auto px-4 py-6 flex-1 lc-fade-up">
-        {view === "agenda" && <AgendaPage config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={session.hidePartial} canAddBooking={canAddBooking} canAddClient={canAddClient} onlineBk={flags.online ? onlineBk : []} onImportOnline={importOnline} onCancelOnline={cancelOnline} canManageOnline={session.role !== "operator"} />}
+        {view === "agenda" && <AgendaPage config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={false} canAddBooking={canAddBooking} canAddClient={canAddClient} onlineBk={flags.online ? onlineBk : []} onImportOnline={importOnline} onCancelOnline={cancelOnline} canManageOnline={true} />}
         {view === "clienti" && <ClientsView config={config} bookings={bookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} vouchers={vouchers} setVouchers={setVouchers} />}
         {view === "buoni" && <GiftCardsView config={config} vouchers={vouchers} setVouchers={setVouchers} clients={clients} canAddVoucher={canAddVoucher} />}
-        {view === "shop" && <ShopView catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} clients={clients} setClients={setClients} branding={b} loyalty={config.loyalty} hidePartial={session.hidePartial} canAddClient={canAddClient} demo={isDemo} />}
+        {view === "shop" && <ShopView catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} clients={clients} setClients={setClients} branding={b} loyalty={config.loyalty} hidePartial={false} canAddClient={canAddClient} demo={isDemo} />}
         {view === "stats" && <StatsView config={config} bookings={bookings} clients={clients} sales={sales} catalog={catalog} vouchers={vouchers} />}
         {view === "marketing" && <MarketingView config={config} saveConfig={saveConfig} bookings={bookings} clients={clients} sales={sales} catalog={catalog} />}
         {view === "settings" && (isDemo ? (
           <div>
             <div className="mb-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2"><AlertCircle size={16} className="shrink-0 mt-0.5" /> In versione demo le impostazioni sono <b>visibili ma non modificabili</b>.</div>
             <fieldset disabled style={{ border: 0, margin: 0, padding: 0, minInlineSize: "auto" }}>
-              <SettingsView config={config} saveConfig={saveConfig} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} session={session} online={flags.online} aziendaId={azienda && azienda.id} license={license} onSaveLicense={updateLicense} backupDirName={backupDirName} onPickBackupDir={pickBackupDir} onClearBackupDir={clearBackupDir} onBackupNow={backupNow} lastBackup={lastBackup} licenza={{ plan: planName(moduli), prezzo_finale: azienda && azienda.prezzo_finale, scadenza: azienda && azienda.licenza_scadenza }} />
+              <SettingsView config={config} saveConfig={saveConfig} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} online={flags.online} aziendaId={azienda && azienda.id} backupDirName={backupDirName} onPickBackupDir={pickBackupDir} onClearBackupDir={clearBackupDir} onBackupNow={backupNow} lastBackup={lastBackup} licenza={{ plan: planName(moduli), scadenza: azienda && azienda.licenza_scadenza }} />
             </fieldset>
           </div>
         ) : (
-          <SettingsView config={config} saveConfig={saveConfig} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} session={session} online={flags.online} aziendaId={azienda && azienda.id} license={license} onSaveLicense={updateLicense} backupDirName={backupDirName} onPickBackupDir={pickBackupDir} onClearBackupDir={clearBackupDir} onBackupNow={backupNow} lastBackup={lastBackup} licenza={{ plan: planName(moduli), prezzo_finale: azienda && azienda.prezzo_finale, scadenza: azienda && azienda.licenza_scadenza }} />
+          <SettingsView config={config} saveConfig={saveConfig} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} online={flags.online} aziendaId={azienda && azienda.id} backupDirName={backupDirName} onPickBackupDir={pickBackupDir} onClearBackupDir={clearBackupDir} onBackupNow={backupNow} lastBackup={lastBackup} licenza={{ plan: planName(moduli), scadenza: azienda && azienda.licenza_scadenza }} />
         ))}
       </main>
+
+      {saveError ? (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white text-sm px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 lc-fade-up">
+          <AlertTriangle size={15} className="shrink-0" /> Salvataggio non riuscito: controlla la connessione. Riproveremo automaticamente.
+        </div>
+      ) : null}
 
       {isDemo && demoBanner ? (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 lc-fade-in">
@@ -875,55 +832,8 @@ export default function SalonApp({ onLogout, moduli, azienda, demo }) {
   );
 }
 
-// Logo dell'app Lucentia (marchio + nome) per la schermata di accesso.
+// Logo dell'app Lucentia (marchio + nome), usato nel piè di pagina delle Impostazioni.
 const LUCENTIA_LOGO = "/lucentia-logo.png";
-
-// Logo del produttore (Office Solution) usato come firma nella schermata di accesso.
-const MAKER_LOGO = "data:image/png;base64,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";
-
-function LoginGate({ branding, license, onUnlock }) {
-  const [v, setV] = useState("");
-  const [err, setErr] = useState("");
-  const submit = () => {
-    const code = v.trim();
-    if (!code) return;
-    if (code === RESELLER_CODE) { onUnlock("reseller", false); return; }
-    if (code === "1234") { onUnlock("demo", false); return; }
-    if (license && license.code) {
-      const isFull = code === license.code;
-      const isReduced = code === license.code + "01"; // accesso ridotto: nasconde vendite e appuntamenti parziali
-      if (isFull || isReduced) {
-        if (licenseOk(license)) { onUnlock("operator", isReduced); return; }
-        setErr("expired"); setV(""); return;
-      }
-    }
-    setErr("wrong"); setV("");
-  };
-  return (
-    <div className="min-h-screen flex items-center justify-center p-4 lc-fade-in">
-      <div className="w-full max-w-sm bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden lc-scale-in">
-        <div className="px-6 pt-8 pb-5 text-center border-b border-stone-100">
-          <img src={LUCENTIA_LOGO} alt="Lucentia" className="h-11 w-auto mx-auto lc-pop-in" />
-          <div className="text-xs text-stone-400 mt-2">Gestionale per centri estetici e parrucchieri</div>
-          {branding.name ? <div className="text-xs text-stone-300 mt-0.5">per {branding.name}</div> : null}
-        </div>
-        <div className="p-6">
-          <div className="flex items-center gap-2 text-sm font-medium text-stone-600 mb-1"><Lock size={15} className="brand-accent" /> Accesso operatori</div>
-          <p className="text-xs text-stone-400 mb-4">Inserisci il codice di accesso per usare il gestionale.</p>
-          <input type="password" value={v} autoFocus onChange={(e) => { setV(e.target.value); setErr(""); }} onKeyDown={(e) => e.key === "Enter" && submit()} placeholder="Codice di accesso" className={`w-full text-center tracking-widest text-lg px-3 py-2.5 rounded-lg border brand-ring ${err ? "border-red-400 bg-red-50" : "border-stone-300"}`} />
-          {err === "wrong" ? <p className="text-xs text-red-500 mt-2 text-center">Codice non valido.</p> : null}
-          {err === "expired" ? <p className="text-xs text-red-500 mt-2 text-center flex items-center justify-center gap-1"><AlertTriangle size={13} /> Licenza scaduta. Contatta il rivenditore per il rinnovo.</p> : null}
-          <button onClick={submit} className="mt-4 w-full brand-bg font-medium py-2.5 rounded-lg transition">Entra</button>
-        </div>
-        <div className="px-6 pb-5 pt-1 text-center border-t border-stone-100">
-          <div className="text-[10px] uppercase tracking-widest text-stone-300 mb-1.5 mt-3">Realizzato da</div>
-          <img src={MAKER_LOGO} alt="Office Solution" className="h-7 w-auto mx-auto opacity-80" />
-          <p className="text-[11px] text-stone-300 mt-3 select-none tracking-wide">V {APP_VERSION}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function FieldIcon({ icon: Icon, children }) { return <div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2 brand-ring"><Icon size={16} className="text-stone-400" />{children}</div>; }
 function Row({ icon: Icon, label }) { return <div className="flex items-center gap-2"><Icon size={15} className="text-stone-400 shrink-0" /><span>{label}</span></div>; }
@@ -1660,44 +1570,6 @@ function ManualBooking({ config, bookings, setBookings, clients, setClients, can
   );
 }
 
-function LicensePanel({ license, onSave }) {
-  const st = licenseState(license);
-  const [code, setCode] = useState(license && license.code ? license.code : "");
-  const [unlimited, setUnlimited] = useState(license ? !!license.code && license.expiry == null : false);
-  const [months, setMonths] = useState(license && license.months ? license.months : 12);
-  const [saved, setSaved] = useState(false);
-  const gen = () => {
-    const c = code.trim(); if (!c) return;
-    onSave(makeLicense(c, unlimited ? 0 : months));
-    setSaved(true); setTimeout(() => setSaved(false), 2500);
-  };
-
-  let banner = null;
-  if (st.state === "none") banner = <div className="bg-stone-50 text-stone-500 rounded-lg px-3 py-2 text-sm">Nessuna licenza cliente configurata. Imposta un codice e una durata, poi consegna il codice al cliente.</div>;
-  else if (st.state === "tampered") banner = <div className="bg-red-50 text-red-600 rounded-lg px-3 py-2 text-sm flex items-center gap-1.5"><AlertTriangle size={15} /> Licenza non valida o manomessa. Rigenerala.</div>;
-  else if (st.state === "expired") banner = <div className="bg-red-50 text-red-600 rounded-lg px-3 py-2 text-sm flex items-center gap-1.5"><CalendarX2 size={15} /> Scaduta il {fmtFullDate(st.expiry)}. Genera una nuova licenza per riattivare l'accesso.</div>;
-  else if (st.unlimited) banner = <div className="bg-green-50 text-green-700 rounded-lg px-3 py-2 text-sm flex items-center gap-1.5"><BadgeCheck size={15} /> Licenza attiva — senza scadenza.</div>;
-  else banner = <div className={`rounded-lg px-3 py-2 text-sm flex items-center gap-1.5 ${st.days <= 30 ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"}`}><BadgeCheck size={15} /> Attiva fino al {fmtFullDate(st.expiry)} · {st.days} giorni rimanenti.</div>;
-
-  return (
-    <section className="bg-white rounded-2xl border-2 brand-border p-5 shadow-sm">
-      <h3 className="font-semibold flex items-center gap-2 mb-1"><KeyRound size={16} className="brand-accent" /> Licenza cliente <span className="text-xs font-normal text-stone-400">(solo rivenditore)</span></h3>
-      <p className="text-xs text-stone-400 mb-3">Sezione visibile solo con il codice rivenditore <span className="font-semibold">{RESELLER_CODE}</span>. Il cliente non la vede e non può rinnovarsi da solo.</p>
-      <div className="mb-4">{banner}</div>
-      <div className="grid sm:grid-cols-2 gap-3 mb-3">
-        <Field label="Codice cliente"><input value={code} onChange={(e) => setCode(e.target.value)} placeholder="es. 1234" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm tracking-widest brand-ring" /></Field>
-        <Field label="Durata (mesi)"><input type="number" min={1} step={1} value={months} disabled={unlimited} onChange={(e) => setMonths(Math.max(1, Number(e.target.value) || 1))} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring disabled:opacity-50 disabled:cursor-not-allowed" /></Field>
-      </div>
-      <label className="flex items-center gap-2 text-sm text-stone-600 mb-4 cursor-pointer"><input type="checkbox" checked={unlimited} onChange={(e) => setUnlimited(e.target.checked)} /> Senza scadenza (licenza illimitata)</label>
-      <div className="flex items-center gap-3 flex-wrap">
-        <button disabled={!code.trim()} onClick={gen} className="brand-bg disabled:opacity-40 disabled:cursor-not-allowed font-medium px-4 py-2.5 rounded-lg transition inline-flex items-center gap-2"><KeyRound size={16} /> {st.state === "none" ? "Genera licenza" : "Rigenera / rinnova"}</button>
-        {saved ? <span className="text-sm text-green-600 inline-flex items-center gap-1"><Check size={15} /> Salvata.</span> : null}
-      </div>
-      <p className="text-xs text-stone-400 mt-4 leading-relaxed">Alla scadenza il cliente non potrà più accedere finché non generi una nuova licenza da qui. Il rinnovo riparte da oggi.<br />Accesso ridotto: il cliente può entrare col proprio codice seguito da <span className="font-medium text-stone-500">01</span> (es. codice 1234 → 123401) per usare il gestionale senza vedere le vendite e gli appuntamenti segnati come "parziale".</p>
-    </section>
-  );
-}
-
 function StatBar({ rows, fmt }) {
   const max = rows.reduce((m, r) => Math.max(m, r.value), 0) || 1;
   if (rows.length === 0) return <p className="text-sm text-stone-400">Nessun dato nel periodo selezionato.</p>;
@@ -1961,10 +1833,9 @@ function BookingLinkCard({ aziendaId, config, saveConfig }) {
   );
 }
 
-function SettingsView({ config, saveConfig, bookings, setBookings, clients, setClients, catalog, setCatalog, sales, setSales, session, online, aziendaId, license, onSaveLicense, backupDirName, onPickBackupDir, onClearBackupDir, onBackupNow, lastBackup, licenza }) {
+function SettingsView({ config, saveConfig, bookings, setBookings, clients, setClients, catalog, setCatalog, sales, setSales, online, aziendaId, backupDirName, onPickBackupDir, onClearBackupDir, onBackupNow, lastBackup, licenza }) {
   const F = useMods();
   const services = config.services, staff = config.staff, branding = config.branding;
-  const isReseller = session && session.role === "reseller";
   const updServices = (next) => saveConfig({ ...config, services: next });
   const updStaff = (next) => saveConfig({ ...config, staff: next });
   const updBranding = (patch) => saveConfig({ ...config, branding: { ...branding, ...patch } });
@@ -1975,14 +1846,12 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
   const editStaff = (id, patch) => updStaff(staff.map((st) => (st.id === id ? { ...st, ...patch } : st)));
   const delStaff = (id) => updStaff(staff.filter((st) => st.id !== id));
   const onLogo = async (e) => { const file = e.target.files && e.target.files[0]; if (!file) return; try { const url = await fileToResizedDataURL(file, 256); updBranding({ logo: url }); } catch (err) { alert("Impossibile caricare l'immagine."); } e.target.value = ""; };
-  const reset = () => { if (confirm("Caricare i dati di esempio (clienti, appuntamenti e vendite di prova)? I dati attuali verranno sostituiti. La licenza non viene toccata.")) { const s = buildSampleData(); saveConfig(DEFAULT_CONFIG); setClients(s.clients); setBookings(s.bookings); setSales(s.sales); setCatalog(DEFAULT_CATALOG); alert("Dati di esempio caricati."); } };
   const azzeraGiacenze = () => { if (confirm("Azzerare TUTTE le giacenze a 0? Prodotti, formati e prezzi restano invariati: solo le quantità in magazzino verranno messe a zero. L'operazione non è reversibile.")) { setCatalog({ ...catalog, products: catalog.products.map((p) => ({ ...p, formats: p.formats.map((f) => ({ ...f, stock: 0 })) })) }); alert("Giacenze azzerate."); } };
   const importBackup = async (e) => {
     const file = e.target.files && e.target.files[0]; if (!file) return;
     try { const text = await file.text(); const d = JSON.parse(text); if (d.config) saveConfig({ ...DEFAULT_CONFIG, ...d.config }); if (Array.isArray(d.bookings)) setBookings(d.bookings); if (Array.isArray(d.clients)) setClients(d.clients); if (d.catalog && Array.isArray(d.catalog.products)) setCatalog(d.catalog); if (Array.isArray(d.sales)) setSales(d.sales); alert("Backup importato."); } catch (err) { alert("File di backup non valido."); }
     e.target.value = "";
   };
-  const azzeraTutto = () => { if (confirm("Azzerare COMPLETAMENTE la configurazione (servizi, operatori, clienti, appuntamenti, catalogo, vendite e dati dell'attività)? Da usare per preparare una nuova installazione cliente. Operazione non reversibile.")) { saveConfig({ ...DEFAULT_CONFIG, services: [], staff: [], branding: BLANK_BRANDING, loyalty: DEFAULT_LOYALTY }); setBookings([]); setClients([]); setCatalog({ categories: [], products: [] }); setSales([]); alert("Configurazione azzerata. Puoi impostare il salone da zero."); } };
   const loyalty = loyaltyConfig(config);
   const updLoyalty = (patch) => saveConfig({ ...config, loyalty: { ...loyalty, ...patch } });
   const addReward = () => updLoyalty({ rewards: [...loyalty.rewards, { id: uid(), points: 5, label: "Nuovo premio" }] });
@@ -1998,17 +1867,15 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3 flex-wrap"><h2 className="text-xl font-semibold tracking-tight text-stone-900">Impostazioni</h2>{isReseller ? <div className="flex items-center gap-2"><button onClick={reset} className="flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-700"><RefreshCw size={14} /> Ripristina demo</button><button onClick={azzeraTutto} className="flex items-center gap-1.5 text-sm text-red-600 border border-red-300 px-2.5 py-1.5 rounded-lg hover:bg-red-50"><AlertTriangle size={14} /> Azzera tutto</button></div> : null}</div>
+      <h2 className="text-xl font-semibold tracking-tight text-stone-900">Impostazioni</h2>
 
       {online && aziendaId ? <BookingLinkCard aziendaId={aziendaId} config={config} saveConfig={saveConfig} /> : null}
 
-      {isReseller ? <LicensePanel license={license} onSave={onSaveLicense} /> : null}
 
       <section className="lc-card p-5">
         <h3 className="font-semibold flex items-center gap-2 mb-3"><BadgeCheck size={16} className="brand-accent" /> La tua licenza</h3>
-        <div className="grid grid-cols-3 gap-3 text-center">
+        <div className="grid grid-cols-2 gap-3 text-center">
           <div className="bg-stone-50 rounded-xl p-3"><div className="text-[11px] text-stone-400 uppercase tracking-wide">Piano</div><div className="font-semibold mt-0.5">{(licenza && licenza.plan) || "—"}</div></div>
-          <div className="bg-stone-50 rounded-xl p-3"><div className="text-[11px] text-stone-400 uppercase tracking-wide">Canone</div><div className="font-semibold mt-0.5">{licenza && licenza.prezzo_finale ? `€ ${licenza.prezzo_finale}/mese` : "—"}</div></div>
           <div className="bg-stone-50 rounded-xl p-3"><div className="text-[11px] text-stone-400 uppercase tracking-wide">Scadenza</div><div className="font-semibold mt-0.5">{licenza && licenza.scadenza ? String(licenza.scadenza).split("-").reverse().join("/") : "Illimitata"}</div></div>
         </div>
         <p className="text-[11px] text-stone-400 mt-3">Per cambiare piano o rinnovare la licenza contatta il tuo fornitore.</p>
@@ -2149,7 +2016,7 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
 
       <div className="text-center py-4 space-y-2">
         <img src={LUCENTIA_LOGO} alt="Lucentia" className="h-6 w-auto mx-auto opacity-70" />
-        <div className="text-[11px] text-stone-300 flex items-center justify-center gap-1.5">Realizzato da <img src={MAKER_LOGO} alt="Office Solution" className="h-3.5 w-auto inline-block opacity-70" /></div>
+        <div className="text-[11px] text-stone-300">Realizzato da <span className="font-medium text-stone-400">Office Solution</span></div>
       </div>
     </div>
   );

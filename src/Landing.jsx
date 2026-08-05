@@ -63,7 +63,7 @@ function LeadModal({ kind, piano, onClose, onLogin }) {
       const j = await r.json().catch(() => ({}));
       setBusy(false);
       if (!r.ok) { setErr(j.error || "Si è verificato un errore. Riprova."); return; }
-      if (demo) setOkDemo(j.email || f.email.trim().toLowerCase()); else setOkLead(true);
+      if (demo) setOkDemo({ email: j.email || f.email.trim().toLowerCase(), password: j.password || "" }); else setOkLead(true);
     } catch (e) { setBusy(false); setErr("Errore di rete. Riprova."); }
   };
   const GOLD = "#b8893b";
@@ -78,10 +78,10 @@ function LeadModal({ kind, piano, onClose, onLogin }) {
           <div className="text-sm text-stone-600 space-y-3">
             <p>La tua prova è pronta. Accedi con queste credenziali:</p>
             <div className="bg-stone-50 border border-stone-200 rounded-xl p-3">
-              <div>Email: <b>{okDemo}</b></div>
-              <div>Password: <b>demo</b></div>
+              <div>Email: <b>{okDemo.email}</b></div>
+              <div>Password: <b>{okDemo.password}</b></div>
             </div>
-            <p className="text-xs text-stone-400">La demo resta attiva per 10 giorni. Tutti i moduli sono disponibili, con alcuni limiti.</p>
+            <p className="text-xs text-stone-400">Conserva la password: è personale e non viene mostrata di nuovo. La demo resta attiva per 10 giorni, con tutti i moduli e alcuni limiti.</p>
             <button onClick={onLogin} className="w-full text-white font-semibold py-2.5 rounded-xl inline-flex items-center justify-center gap-2" style={{ background: "#1c1917" }}>Vai al login <ArrowRight size={16} /></button>
           </div>
         ) : okLead ? (
@@ -134,7 +134,7 @@ export default function Landing({ onLogin }) {
         <div className="pointer-events-none absolute -top-24 -left-24 w-72 h-72 rounded-full opacity-50 lc-float" style={{ background: `radial-gradient(circle, ${GOLD_SOFT} 0%, transparent 70%)` }} />
         <div className="pointer-events-none absolute top-10 -right-20 w-80 h-80 rounded-full opacity-40 lc-float" style={{ background: `radial-gradient(circle, ${GOLD_SOFT} 0%, transparent 70%)`, animationDelay: "1.4s" }} />
         <div className="relative max-w-4xl mx-auto px-5 pt-16 pb-20 text-center">
-          <img src="/lucentia-logo.png" alt="Lucentia — Gestionale per parrucchieri ed estetisti" className="h-28 sm:h-36 w-auto mx-auto mb-8 lc-pop-in" />
+          <img src="/lucentia-logo.png" alt="Lucentia — Gestionale per parrucchieri ed estetisti" width="825" height="360" className="h-28 sm:h-36 w-auto mx-auto mb-8 lc-pop-in" />
           <div className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full mb-5 lc-fade-up" style={{ background: GOLD_SOFT, color: GOLD, animationDelay: "120ms" }}><Sparkles size={13} className="lc-float" /> Gestionale per parrucchieri ed estetisti</div>
           <h1 className="font-display text-4xl sm:text-6xl font-bold leading-[1.08] tracking-tight text-stone-900 lc-fade-up" style={{ animationDelay: "200ms" }}>Tutto il tuo salone,<br className="hidden sm:block" /> in un'unica app <span className="font-display-i" style={{ color: GOLD }}>elegante</span>.</h1>
           <p className="mt-5 text-base sm:text-lg text-stone-500 max-w-2xl mx-auto lc-fade-up" style={{ animationDelay: "300ms" }}>Agenda, clienti, fidelity, vendite, magazzino e statistiche. Sul cloud, sempre con te, semplice da usare ogni giorno.</p>

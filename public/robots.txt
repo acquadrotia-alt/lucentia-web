@@ -1,6 +1,5 @@
 User-agent: *
 Allow: /
 Disallow: /api/
-Disallow: /setup.html
 
 Sitemap: https://lucentia-app.com/sitemap.xml

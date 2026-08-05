@@ -48,7 +48,7 @@ The salon app does **not** have a normalized schema. All salon content is six JS
 
 `config`, `bookings`, `clients`, `catalog`, `sales`, `vouchers` (see `COLLEZIONI` in the API).
 
-`SalonApp.jsx` holds each as React state, loads them via `GET /api/data/:coll` on mount, and persists changes with a debounced `PUT /api/data/:coll` (`apiSaveDebounced`, 800ms). The server rejects writes when the license is inactive. **Demo tenants are read-only**: saving is skipped client-side (`demoRef`) and the demo is seeded server-side by `demoSeed()`.
+`SalonApp.jsx` holds each as React state, loads them via `GET /api/data/:coll` on mount, and persists changes with a debounced `PUT /api/data/:coll` (`apiSaveDebounced`, 800ms; pending saves are flushed with `keepalive` on `pagehide`, failures surface a banner and retry). The server rejects writes when the license is inactive and caps each collection at ~2 MB. **Demo tenants save their data** (10-day license, per-demo random password, seeded server-side by `demoSeed()`), with client-side limits on how many records they can create.
 
 ### Feature gating ("moduli" / operators)
 Each salon has a `moduli` JSON array on its `aziende` row controlling which features are on: `fidelity`, `vendite`, `statistiche`, `marketing`, `allergeni`, `pacchetti`, `online` (client self-booking add-on, €4/mo — not part of any plan, requires a non-Basic tier so `cleanModuli` strips it when there's no `op3`/`opinf`), plus operator-limit flags `op3` (≤3) / `opinf` (unlimited; default 1). A `null` moduli column means "legacy salon, everything on" (`parseModuli`). The limit is enforced both server-side (`maxOperatoriOf` blocks the `/api/operatori` create) and client-side (`has()` / `maxOperatori` in `SalonApp.jsx` near line 634 hides tabs). Old module keys are remapped via `OLD_MAP`. Pricing fields (`prezzo_imponibile`, `prezzo_finale`) are reseller-only commercial notes, never sent to the salon.
@@ -60,7 +60,8 @@ License create/renew events are logged to `licenze_eventi` (`logEvento`). `/api/
 
 - `schema.sql` is the full, idempotent (`CREATE TABLE IF NOT EXISTS`) schema — safe to re-run. The `migrazione-*.sql` files are incremental `ALTER TABLE` migrations added over time; re-running them throws harmless "duplicate column" errors. `LEGGIMI.md` (Italian) is the operator runbook for updating the live site and running these.
 - Deployment is via Cloudflare Pages auto-building from GitHub. To redeploy, push a real commit — do **not** use "Retry deployment" (it replays the old commit). Required env var: `SETUP_TOKEN` (Production).
-- `public/setup.html` is a one-time bootstrap page to create the first (master) reseller, gated by `SETUP_TOKEN`. It refuses to run once a reseller exists; the runbook says to delete it after first use.
+- `public/setup.html` (one-time bootstrap for the first master reseller, gated by `SETUP_TOKEN`) has been deleted from the repo after first use; `POST /api/setup` still exists but refuses once a reseller exists. Restore the page from git history only if a from-scratch setup is ever needed.
+- `public/_headers` sets the security headers (CSP, X-Frame-Options, nosniff) and immutable caching for `/assets/*` — keep it in sync when adding external resources.
 
 ## Conventions
 

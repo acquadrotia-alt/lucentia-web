@@ -11,7 +11,9 @@ e le loro licenze da un pannello dedicato. Ogni salone vede solo i propri dati.
 - src/main.jsx, index.html, package.json, vite.config.js
 - functions/api/[[path]].js → API con login, sessioni, licenze, isolamento per azienda
 - schema.sql         → tabelle del database (utenti, aziende, sessioni, dati_app)
-- public/setup.html  → paginetta usata UNA volta per creare il tuo account rivenditore
+- (setup: la paginetta public/setup.html è stata RIMOSSA dal repository dopo il
+  primo uso, come da istruzioni sotto; se mai servisse rifare il setup da zero,
+  recuperala dalla cronologia git)
 
 ## AGGIORNARE il sito già online (passi)
 1. GitHub: carica/sostituisci tutti questi file nel repository
@@ -29,6 +31,8 @@ e le loro licenze da un pannello dedicato. Ogni salone vede solo i propri dati.
    (NON usare "Retry deployment", rifà il commit vecchio).
 
 ## CREARE il tuo account rivenditore (una volta sola)
+NB: già fatto — public/setup.html è stato rimosso dal repository. I passi restano
+qui solo come promemoria storico (per rifarli serve ripristinare il file da git).
 1. Apri  https://TUO-SITO.pages.dev/setup.html
 2. Inserisci il SETUP_TOKEN, la tua email e una password → Crea rivenditore.
 3. Vai su  https://TUO-SITO.pages.dev  e accedi con quella email/password:

@@ -45,6 +45,8 @@ function getCookie(request, name) {
 const b64 = (bytes) => btoa(String.fromCharCode.apply(null, Array.from(bytes)));
 const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 function randomToken() { const a = crypto.getRandomValues(new Uint8Array(24)); return Array.from(a).map((x) => x.toString(16).padStart(2, "0")).join(""); }
+// Password leggibile (senza caratteri ambigui) per le demo: ogni demo ha la sua.
+function randomPassword(len = 10) { const chars = "abcdefghjkmnpqrstuvwxyz23456789"; const a = crypto.getRandomValues(new Uint8Array(len)); return Array.from(a).map((x) => chars[x % chars.length]).join(""); }
 
 async function hashPassword(password, iterations = 100000) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
@@ -67,6 +69,7 @@ async function verifyPassword(password, stored) {
 function pad2(n) { return String(n).padStart(2, "0"); }
 function todayISO() { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
 function addMonthsISO(months) { const d = new Date(); d.setMonth(d.getMonth() + Number(months || 0)); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
+function addMonthsFromISO(dateStr, months) { const p = String(dateStr).split("-").map(Number); const d = new Date(p[0], (p[1] || 1) - 1, p[2] || 1); d.setMonth(d.getMonth() + Number(months || 0)); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
 function addDaysISO(days) { const d = new Date(); d.setDate(d.getDate() + Number(days || 0)); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
 function demoSeed() {
   const W = { 1: [[540, 780], [840, 1080]], 2: [[540, 780], [840, 1080]], 3: [[540, 780], [840, 1080]], 4: [[540, 780], [840, 1080]], 5: [[540, 780], [840, 1080]], 6: [[540, 780]] };
@@ -307,18 +310,19 @@ export async function onRequest(context) {
     const dup = await env.DB.prepare("SELECT id FROM utenti WHERE email = ?").bind(email).first();
     if (dup) return json({ error: "Questa email è già registrata: usala per accedere oppure contattaci." }, 409);
     const aid = crypto.randomUUID(); const uidv = crypto.randomUUID();
-    const ph = await hashPassword("demo");
+    const password = randomPassword(); // ogni demo ha una password propria, mai fissa
+    const ph = await hashPassword(password);
     const scad = addDaysISO(10);
     const moduli = JSON.stringify(MODULI.slice());
-    await env.DB.prepare("INSERT INTO aziende (id, denominazione, licenza_scadenza, attiva, note, moduli, demo) VALUES (?, ?, ?, 1, 'DEMO', ?, 1)").bind(aid, rs, scad, moduli).run();
-    await env.DB.prepare("INSERT INTO utenti (id, email, password_hash, ruolo, azienda_id, nome) VALUES (?, ?, ?, 'azienda', ?, ?)").bind(uidv, email, ph, aid, rs).run();
     const seed = demoSeed();
     const seedRows = [["config", seed.config], ["catalog", seed.catalog], ["clients", seed.clients], ["bookings", seed.bookings], ["vouchers", seed.vouchers], ["sales", seed.sales]];
-    for (const [coll, data] of seedRows) {
-      await env.DB.prepare("INSERT INTO dati_app (id, azienda_id, collezione, dati) VALUES (?, ?, ?, ?)").bind(aid + ":" + coll, aid, coll, JSON.stringify(data)).run();
-    }
-    await env.DB.prepare("INSERT INTO richieste (id, tipo, ragione_sociale, piva, email, telefono, messaggio, azienda_id, stato) VALUES (?, 'demo', ?, ?, ?, ?, '', ?, 'attiva')").bind(crypto.randomUUID(), rs, piva, email, tel, aid).run();
-    return json({ ok: true, email });
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO aziende (id, denominazione, licenza_scadenza, attiva, note, moduli, demo) VALUES (?, ?, ?, 1, 'DEMO', ?, 1)").bind(aid, rs, scad, moduli),
+      env.DB.prepare("INSERT INTO utenti (id, email, password_hash, ruolo, azienda_id, nome) VALUES (?, ?, ?, 'azienda', ?, ?)").bind(uidv, email, ph, aid, rs),
+      ...seedRows.map(([coll, data]) => env.DB.prepare("INSERT INTO dati_app (id, azienda_id, collezione, dati) VALUES (?, ?, ?, ?)").bind(aid + ":" + coll, aid, coll, JSON.stringify(data))),
+      env.DB.prepare("INSERT INTO richieste (id, tipo, ragione_sociale, piva, email, telefono, messaggio, azienda_id, stato) VALUES (?, 'demo', ?, ?, ?, ?, '', ?, 'attiva')").bind(crypto.randomUUID(), rs, piva, email, tel, aid),
+    ]);
+    return json({ ok: true, email, password });
   }
 
   // ---- /api/prenota/:aid  (PUBBLICA: prenotazioni online dei clienti) ----
@@ -482,7 +486,8 @@ export async function onRequest(context) {
     }
     return json({
       user: { email: sess.email, ruolo: sess.ruolo, nome: sess.nome, azienda_id: sess.azienda_id, staff_id: sess.staff_id || null, master: isMaster(sess) },
-      azienda: az ? { id: az.id, denominazione: az.denominazione, licenza_scadenza: az.licenza_scadenza, attiva: !!az.attiva, stato: licStatus(az), demo: !!az.demo, moduli: parseModuli(az.moduli), prezzo_imponibile: az.prezzo_imponibile || null, prezzo_finale: az.prezzo_finale || null } : null,
+      // Nota: prezzo_imponibile/prezzo_finale sono note commerciali del rivenditore e NON vengono inviate al salone.
+      azienda: az ? { id: az.id, denominazione: az.denominazione, licenza_scadenza: az.licenza_scadenza, attiva: !!az.attiva, stato: licStatus(az), demo: !!az.demo, moduli: parseModuli(az.moduli) } : null,
       reseller,
     });
   }
@@ -498,6 +503,11 @@ export async function onRequest(context) {
   // ---- /api/aziende  (solo reseller) ----
   if (segs[0] === "aziende") {
     if (sess.ruolo !== "reseller") return json({ error: "riservato al rivenditore" }, 403);
+    // Un sub-rivenditore sospeso o con licenza scaduta non può più operare sui saloni.
+    if (!isMaster(sess)) {
+      const riv = await env.DB.prepare("SELECT attiva, licenza_scadenza FROM rivenditori WHERE id = ?").bind(sess.uid).first();
+      if (!riv || licStatus(riv) !== "active") return json({ error: "La tua licenza rivenditore non è attiva. Contatta il fornitore." }, 403);
+    }
 
     if (!segs[1]) {
       if (method === "GET") {
@@ -545,7 +555,13 @@ export async function onRequest(context) {
       if (body.denominazione != null) await env.DB.prepare("UPDATE aziende SET denominazione = ? WHERE id = ?").bind(String(body.denominazione), aid).run();
       if (body.note != null) await env.DB.prepare("UPDATE aziende SET note = ? WHERE id = ?").bind(String(body.note), aid).run();
       if (body.attiva != null) await env.DB.prepare("UPDATE aziende SET attiva = ? WHERE id = ?").bind(body.attiva ? 1 : 0, aid).run();
-      if (body.rinnovaMesi != null) { const m = Number(body.rinnovaMesi); const scad = m > 0 ? addMonthsISO(m) : null; await env.DB.prepare("UPDATE aziende SET licenza_scadenza = ? WHERE id = ?").bind(scad, aid).run(); await logEvento(env, aid, az.reseller_id, "rinnovo", m, az.prezzo_imponibile, az.prezzo_finale); }
+      if (body.rinnovaMesi != null) {
+        const m = Number(body.rinnovaMesi);
+        // Il rinnovo estende dalla scadenza attuale se ancora futura (i mesi residui non si perdono), altrimenti da oggi.
+        const scad = m > 0 ? (az.licenza_scadenza && az.licenza_scadenza >= todayISO() ? addMonthsFromISO(az.licenza_scadenza, m) : addMonthsISO(m)) : null;
+        await env.DB.prepare("UPDATE aziende SET licenza_scadenza = ? WHERE id = ?").bind(scad, aid).run();
+        await logEvento(env, aid, az.reseller_id, "rinnovo", m, az.prezzo_imponibile, az.prezzo_finale);
+      }
       if (body.scadenza !== undefined) await env.DB.prepare("UPDATE aziende SET licenza_scadenza = ? WHERE id = ?").bind(body.scadenza || null, aid).run();
       if (body.moduli != null) await env.DB.prepare("UPDATE aziende SET moduli = ? WHERE id = ?").bind(cleanModuli(body.moduli), aid).run();
       if (body.prezzo_imponibile !== undefined) await env.DB.prepare("UPDATE aziende SET prezzo_imponibile = ? WHERE id = ?").bind(cleanPrezzo(body.prezzo_imponibile), aid).run();
@@ -553,17 +569,23 @@ export async function onRequest(context) {
       if (body.nuovaPassword) {
         if (String(body.nuovaPassword).length < 6) return json({ error: "password troppo corta" }, 400);
         const ph = await hashPassword(String(body.nuovaPassword));
-        await env.DB.prepare("UPDATE utenti SET password_hash = ? WHERE azienda_id = ? AND ruolo = 'azienda'").bind(ph, aid).run();
+        // Cambio password: le sessioni esistenti dell'utente vengono invalidate.
+        await env.DB.batch([
+          env.DB.prepare("UPDATE utenti SET password_hash = ? WHERE azienda_id = ? AND ruolo = 'azienda'").bind(ph, aid),
+          env.DB.prepare("DELETE FROM sessioni WHERE utente_id IN (SELECT id FROM utenti WHERE azienda_id = ? AND ruolo = 'azienda')").bind(aid),
+        ]);
       }
       return json({ ok: true });
     }
     if (method === "DELETE") {
       const azd = await getAzienda(env, aid);
       if (azd && !isMaster(sess) && azd.reseller_id !== sess.uid) return json({ error: "non autorizzato" }, 403);
-      await env.DB.prepare("DELETE FROM sessioni WHERE utente_id IN (SELECT id FROM utenti WHERE azienda_id = ?)").bind(aid).run();
-      await env.DB.prepare("DELETE FROM utenti WHERE azienda_id = ?").bind(aid).run();
-      await env.DB.prepare("DELETE FROM dati_app WHERE azienda_id = ?").bind(aid).run();
-      await env.DB.prepare("DELETE FROM aziende WHERE id = ?").bind(aid).run();
+      await env.DB.batch([
+        env.DB.prepare("DELETE FROM sessioni WHERE utente_id IN (SELECT id FROM utenti WHERE azienda_id = ?)").bind(aid),
+        env.DB.prepare("DELETE FROM utenti WHERE azienda_id = ?").bind(aid),
+        env.DB.prepare("DELETE FROM dati_app WHERE azienda_id = ?").bind(aid),
+        env.DB.prepare("DELETE FROM aziende WHERE id = ?").bind(aid),
+      ]);
       return json({ ok: true });
     }
     return json({ error: "metodo non consentito" }, 405);
@@ -575,12 +597,8 @@ export async function onRequest(context) {
 
     if (!segs[1]) {
       if (method === "GET") {
-        const res = await env.DB.prepare("SELECT * FROM rivenditori ORDER BY creato_il DESC").all();
-        const items = await Promise.all((res.results || []).map(async (r) => {
-          const c = await env.DB.prepare("SELECT COUNT(*) AS n FROM aziende WHERE reseller_id = ?").bind(r.id).first();
-          const em = await env.DB.prepare("SELECT email FROM utenti WHERE id = ?").bind(r.id).first();
-          return { ...r, attiva: !!r.attiva, stato: licStatus({ attiva: r.attiva, licenza_scadenza: r.licenza_scadenza }), clienti: c ? c.n : 0, email: (em && em.email) || r.email };
-        }));
+        const res = await env.DB.prepare("SELECT r.*, (SELECT COUNT(*) FROM aziende a WHERE a.reseller_id = r.id) AS clienti, COALESCE((SELECT u.email FROM utenti u WHERE u.id = r.id), r.email) AS email FROM rivenditori r ORDER BY r.creato_il DESC").all();
+        const items = (res.results || []).map((r) => ({ ...r, attiva: !!r.attiva, stato: licStatus({ attiva: r.attiva, licenza_scadenza: r.licenza_scadenza }) }));
         return json({ items });
       }
       if (method === "POST") {
@@ -618,16 +636,21 @@ export async function onRequest(context) {
       if (b.nuovaPassword) {
         if (String(b.nuovaPassword).length < 6) return json({ error: "password troppo corta" }, 400);
         const ph = await hashPassword(String(b.nuovaPassword));
-        await env.DB.prepare("UPDATE utenti SET password_hash = ? WHERE id = ?").bind(ph, rid).run();
+        await env.DB.batch([
+          env.DB.prepare("UPDATE utenti SET password_hash = ? WHERE id = ?").bind(ph, rid),
+          env.DB.prepare("DELETE FROM sessioni WHERE utente_id = ?").bind(rid),
+        ]);
       }
       return json({ ok: true });
     }
     if (method === "DELETE") {
       // i clienti del rivenditore passano al master (reseller_id = NULL)
-      await env.DB.prepare("UPDATE aziende SET reseller_id = NULL WHERE reseller_id = ?").bind(rid).run();
-      await env.DB.prepare("DELETE FROM sessioni WHERE utente_id = ?").bind(rid).run();
-      await env.DB.prepare("DELETE FROM utenti WHERE id = ?").bind(rid).run();
-      await env.DB.prepare("DELETE FROM rivenditori WHERE id = ?").bind(rid).run();
+      await env.DB.batch([
+        env.DB.prepare("UPDATE aziende SET reseller_id = NULL WHERE reseller_id = ?").bind(rid),
+        env.DB.prepare("DELETE FROM sessioni WHERE utente_id = ?").bind(rid),
+        env.DB.prepare("DELETE FROM utenti WHERE id = ?").bind(rid),
+        env.DB.prepare("DELETE FROM rivenditori WHERE id = ?").bind(rid),
+      ]);
       return json({ ok: true });
     }
     return json({ error: "metodo non consentito" }, 405);
@@ -716,7 +739,10 @@ export async function onRequest(context) {
       if (body.nuovaPassword) {
         if (String(body.nuovaPassword).length < 6) return json({ error: "password troppo corta" }, 400);
         const ph = await hashPassword(String(body.nuovaPassword));
-        await env.DB.prepare("UPDATE utenti SET password_hash = ? WHERE id = ?").bind(ph, oid).run();
+        await env.DB.batch([
+          env.DB.prepare("UPDATE utenti SET password_hash = ? WHERE id = ?").bind(ph, oid),
+          env.DB.prepare("DELETE FROM sessioni WHERE utente_id = ?").bind(oid),
+        ]);
       }
       return json({ ok: true });
     }
@@ -755,9 +781,12 @@ export async function onRequest(context) {
     if (method === "PUT") {
       const body = await request.json().catch(() => ({}));
       const value = body && "value" in body ? body.value : null;
+      const dati = JSON.stringify(value);
+      // Limite di dimensione per collezione: protegge il database da payload anomali.
+      if (dati.length > 2000000) return json({ error: "Dati troppo grandi: riduci le immagini caricate (es. logo) o contatta l'assistenza." }, 413);
       await env.DB.prepare(
         "INSERT INTO dati_app (id, azienda_id, collezione, dati, aggiornato_il) VALUES (?, ?, ?, ?, datetime('now')) ON CONFLICT(id) DO UPDATE SET dati = excluded.dati, aggiornato_il = datetime('now')"
-      ).bind(id, azid, coll, JSON.stringify(value)).run();
+      ).bind(id, azid, coll, dati).run();
       return json({ ok: true });
     }
     return json({ error: "metodo non consentito" }, 405);
