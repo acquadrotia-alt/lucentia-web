@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { Calendar, Users, Star, Layers, ShoppingBag, BarChart3, MessageCircle, HeartPulse, KeyRound, Cloud, FileText, Check, ArrowRight, Sparkles, ShieldCheck, Smartphone, X, Gift, CalendarClock, Globe } from "lucide-react";
+import { Calendar, Users, Star, Layers, ShoppingBag, BarChart3, MessageCircle, HeartPulse, KeyRound, Cloud, FileText, Check, ArrowRight, Sparkles, ShieldCheck, Smartphone, X, Gift, CalendarClock, Globe, Phone, Mail, Monitor } from "lucide-react";
+import { CONTACTS } from "./contatti.js";
 
 // Rivela il contenuto con un'animazione quando entra nello schermo (scroll reveal).
 function Reveal({ children, delay = 0, className = "", as: Tag = "div", ...rest }) {
@@ -122,7 +123,9 @@ export default function Landing({ onLogin }) {
           </div>
           <nav className="flex items-center gap-6">
             <a href="#funzionalita" className="hidden sm:inline text-sm text-stone-500 hover:text-stone-900">Funzionalità</a>
+            <a href="#anteprime" className="hidden md:inline text-sm text-stone-500 hover:text-stone-900">Anteprime</a>
             <a href="#piani" className="hidden sm:inline text-sm text-stone-500 hover:text-stone-900">Piani</a>
+            <a href="#contatti" className="hidden sm:inline text-sm text-stone-500 hover:text-stone-900">Contatti</a>
             <button onClick={onLogin} className="text-sm font-semibold text-white px-4 py-2 rounded-lg inline-flex items-center gap-1.5 lc-shine" style={{ background: "#1c1917" }}><KeyRound size={15} /> Login</button>
           </nav>
         </div>
@@ -173,6 +176,87 @@ export default function Landing({ onLogin }) {
               </Reveal>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ANTEPRIME · DENTRO L'APP */}
+      <section id="anteprime" className="relative overflow-hidden">
+        <div className="max-w-6xl mx-auto px-5 py-16">
+          <div className="text-center mb-10">
+            <Reveal className="text-xs font-semibold tracking-[0.2em] uppercase mb-3" style={{ color: GOLD }}>Dentro l'app</Reveal>
+            <Reveal as="h2" delay={80} className="font-display text-3xl sm:text-4xl font-bold text-stone-900">Guarda Lucentia dal vivo</Reveal>
+            <Reveal as="p" delay={160} className="mt-3 text-stone-500 max-w-2xl mx-auto">La stessa app, identica su computer, tablet e telefono: apri l'agenda alla reception e ritrovi tutto sul cellulare, ovunque sei.</Reveal>
+          </div>
+          <Reveal delay={200} className="relative max-w-4xl mx-auto pb-10 sm:pb-14">
+            {/* Cornice "browser" con l'agenda desktop */}
+            <div className="rounded-2xl border border-stone-200 bg-white overflow-hidden" style={{ boxShadow: "var(--lc-shadow-xl)" }}>
+              <div className="flex items-center gap-1.5 px-4 py-2.5 bg-stone-50 border-b border-stone-100">
+                <span className="w-2.5 h-2.5 rounded-full bg-stone-200" /><span className="w-2.5 h-2.5 rounded-full bg-stone-200" /><span className="w-2.5 h-2.5 rounded-full bg-stone-200" />
+                <span className="ml-3 text-[11px] text-stone-300 tracking-wide inline-flex items-center gap-1"><Monitor size={11} /> lucentia-app.com</span>
+              </div>
+              <img src="/anteprime/agenda-desktop.webp" alt="Agenda appuntamenti di Lucentia su desktop: giornata del salone con appuntamenti per operatore" width="1600" height="1000" loading="lazy" className="w-full h-auto" />
+            </div>
+            {/* Telefono in sovrapposizione con l'agenda mobile */}
+            <div className="absolute -bottom-2 -right-2 sm:bottom-0 sm:right-6 w-32 sm:w-44 rounded-[1.8rem] sm:rounded-[2.2rem] border-[5px] sm:border-[6px] border-stone-900 bg-stone-900 overflow-hidden rotate-3 lc-float" style={{ boxShadow: "var(--lc-shadow-xl)" }}>
+              <img src="/anteprime/agenda-mobile.webp" alt="Agenda di Lucentia su smartphone" width="780" height="1688" loading="lazy" className="w-full h-auto" />
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* APPROFONDIMENTO FUNZIONALITÀ */}
+      <section id="dettagli" className="bg-stone-50 border-y border-stone-100">
+        <div className="max-w-6xl mx-auto px-5 py-16 space-y-16 sm:space-y-20">
+          {[
+            {
+              icon: Calendar, kicker: "Agenda & appuntamenti", title: "La giornata del salone, sempre sotto controllo",
+              text: "L'agenda di Lucentia mostra gli appuntamenti di ogni operatore con vista giorno, 3 giorni o settimana. Gli orari disponibili vengono calcolati in automatico su turni e disponibilità, e ogni appuntamento tiene traccia di servizio, durata, cliente e incasso.",
+              points: ["Vista per operatore o per tutto il salone", "Slot calcolati su orari e disponibilità reali", "Stati chiari: da svolgere, svolto, incassato", "Le prenotazioni online arrivano direttamente in agenda"],
+              img: "/anteprime/agenda-desktop.webp", alt: "Agenda del gestionale per parrucchieri Lucentia con appuntamenti della giornata", flip: false,
+            },
+            {
+              icon: Users, kicker: "Clienti, fidelity & pacchetti", title: "Ogni cliente ha la sua storia",
+              text: "Anagrafica completa con storico di appuntamenti e acquisti, tessera digitale, punti fedeltà accumulati in automatico da servizi e vendite, pacchetti prepagati con sedute residue e schede salute con allergie e patologie che generano avvisi sugli appuntamenti.",
+              points: ["Scheda cliente con storico completo", "Punti fedeltà e premi riscattabili", "Pacchetti prepagati con sedute residue", "Avvisi automatici per allergie e patologie"],
+              img: "/anteprime/clienti-desktop.webp", alt: "Scheda clienti del gestionale Lucentia con fidelity e pacchetti", flip: true,
+              phone: { img: "/anteprime/clienti-mobile.webp", alt: "Elenco clienti di Lucentia su smartphone" },
+            },
+            {
+              icon: ShoppingBag, kicker: "Cassa, vendite & magazzino", title: "Vendi prodotti e tieni le scorte in ordine",
+              text: "La cassa integrata registra vendite di prodotti e servizi, con scontrino di riepilogo e possibilità di collegare ogni vendita al cliente. Il magazzino si aggiorna da solo: carichi i prodotti quando arrivano, le giacenze scalano a ogni vendita.",
+              points: ["Cassa rapida con riepilogo di giornata", "Prodotti con formati, prezzi e giacenze", "Carico magazzino e storico movimenti", "Buoni regalo e pacchetti vendibili in cassa"],
+              img: "/anteprime/vendite-desktop.webp", alt: "Cassa e magazzino del gestionale per saloni Lucentia", flip: false,
+            },
+            {
+              icon: BarChart3, kicker: "Statistiche & marketing", title: "Decidi con i numeri, fidelizza con i messaggi",
+              text: "Incassi di servizi e prodotti, servizi più richiesti, clienti più attivi: le statistiche si aggiornano in tempo reale su 30 giorni, 90 giorni o tutto lo storico. E dalla scheda cliente parti con promemoria e promozioni via WhatsApp, senza esportare nulla.",
+              points: ["Andamento incassi servizi e prodotti", "Classifiche di servizi e prodotti più venduti", "Clienti più attivi e frequenza visite", "Messaggi WhatsApp direttamente dalla scheda"],
+              img: "/anteprime/statistiche-desktop.webp", alt: "Statistiche del salone nel gestionale Lucentia: incassi e servizi più richiesti", flip: true,
+            },
+          ].map((r, i) => (
+            <div key={i} className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
+              <Reveal className={r.flip ? "lg:order-2" : ""}>
+                <div className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full mb-4" style={{ background: "#fff", color: GOLD, border: `1px solid ${GOLD_SOFT}` }}><r.icon size={13} /> {r.kicker}</div>
+                <h3 className="font-display text-2xl sm:text-3xl font-bold text-stone-900 leading-tight">{r.title}</h3>
+                <p className="mt-3 text-stone-500 leading-relaxed">{r.text}</p>
+                <ul className="mt-5 space-y-2.5">
+                  {r.points.map((p, j) => (
+                    <li key={j} className="flex items-start gap-2 text-sm text-stone-700"><Check size={16} style={{ color: GOLD }} className="mt-0.5 shrink-0" /> {p}</li>
+                  ))}
+                </ul>
+              </Reveal>
+              <Reveal delay={120} className={`relative ${r.flip ? "lg:order-1" : ""} ${r.phone ? "pb-8 pr-6 sm:pr-10" : ""}`}>
+                <div className="rounded-2xl border border-stone-200 bg-white overflow-hidden lc-lift" style={{ boxShadow: "var(--lc-shadow-lg)" }}>
+                  <img src={r.img} alt={r.alt} width="1600" height="1000" loading="lazy" className="w-full h-auto" />
+                </div>
+                {r.phone ? (
+                  <div className="absolute bottom-0 right-0 w-24 sm:w-32 rounded-[1.4rem] sm:rounded-[1.8rem] border-[4px] sm:border-[5px] border-stone-900 bg-stone-900 overflow-hidden -rotate-3" style={{ boxShadow: "var(--lc-shadow-lg)" }}>
+                    <img src={r.phone.img} alt={r.phone.alt} width="780" height="1688" loading="lazy" className="w-full h-auto" />
+                  </div>
+                ) : null}
+              </Reveal>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -258,11 +342,44 @@ export default function Landing({ onLogin }) {
         </Reveal>
       </section>
 
+      {/* CONTATTI */}
+      <section id="contatti" className="bg-stone-50 border-t border-stone-100">
+        <div className="max-w-6xl mx-auto px-5 py-16">
+          <div className="text-center mb-10">
+            <Reveal className="text-xs font-semibold tracking-[0.2em] uppercase mb-3" style={{ color: GOLD }}>Contatti</Reveal>
+            <Reveal as="h2" delay={80} className="font-display text-3xl sm:text-4xl font-bold text-stone-900">Parliamo del tuo salone</Reveal>
+            <Reveal as="p" delay={160} className="mt-3 text-stone-500 max-w-2xl mx-auto">Lucentia è distribuito da <b className="text-stone-700">{CONTACTS.nome}</b>. Chiamaci, scrivici o lasciaci i tuoi dati: ti rispondiamo noi, senza call center.</Reveal>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-4xl mx-auto">
+            {[
+              [Phone, "Telefono", CONTACTS.tel.replace(/(\d{3})(\d{3})(\d{4})/, "$1 $2 $3"), `tel:+39${CONTACTS.tel}`, "Rispondiamo in orario d'ufficio", false],
+              [MessageCircle, "WhatsApp", "Scrivici subito", `https://wa.me/39${CONTACTS.tel}`, "Il canale più rapido", true],
+              [Mail, "Email", CONTACTS.email, `mailto:${CONTACTS.email}`, "Per richieste e preventivi", false],
+              [Globe, "Sito web", CONTACTS.sito, `https://${CONTACTS.sito}`, "Scopri chi siamo", true],
+            ].map(([Icon, title, value, href, sub, ext], i) => (
+              <Reveal key={i} delay={i * 90}>
+                <a href={href} {...(ext ? { target: "_blank", rel: "noreferrer" } : {})} className="block bg-white rounded-2xl border border-stone-200 p-5 h-full lc-lift">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ background: GOLD_SOFT, color: GOLD }}><Icon size={19} /></div>
+                  <div className="font-semibold text-stone-900 text-sm">{title}</div>
+                  <div className="text-sm mt-0.5 break-all" style={{ color: GOLD }}>{value}</div>
+                  <div className="text-xs text-stone-400 mt-1.5">{sub}</div>
+                </a>
+              </Reveal>
+            ))}
+          </div>
+          <Reveal delay={200} className="mt-8 flex items-center justify-center gap-3 flex-wrap">
+            <button onClick={() => setLead({ kind: "licenza" })} className="text-white font-semibold px-6 py-3 rounded-xl inline-flex items-center gap-2 lc-shine hover:-translate-y-0.5 hover:shadow-lg transition" style={{ background: "#1c1917" }}><Mail size={16} /> Richiedi informazioni</button>
+            <button onClick={() => setLead({ kind: "demo" })} className="font-semibold px-6 py-3 rounded-xl inline-flex items-center gap-2 border hover:-translate-y-0.5 transition bg-white" style={{ borderColor: GOLD, color: GOLD }}><Sparkles size={16} /> Prova gratis 10 giorni</button>
+          </Reveal>
+        </div>
+      </section>
+
       {/* FOOTER */}
       <footer className="border-t border-stone-100">
         <div className="max-w-6xl mx-auto px-5 py-10 flex flex-col items-center gap-3 text-center">
           <img src="/lucentia-logo.png" alt="Lucentia" className="h-12 w-auto opacity-90" />
           <p className="text-xs text-stone-400">Gestionale per parrucchieri ed estetisti</p>
+          <p className="text-xs text-stone-400">Distribuito da {CONTACTS.nome} · <a href={`tel:+39${CONTACTS.tel}`} className="hover:text-stone-600">{CONTACTS.tel.replace(/(\d{3})(\d{3})(\d{4})/, "$1 $2 $3")}</a> · <a href={`mailto:${CONTACTS.email}`} className="hover:text-stone-600">{CONTACTS.email}</a></p>
           <p className="text-[11px] text-stone-300 mt-2">© {new Date().getFullYear()} Lucentia · Tutti i diritti riservati</p>
         </div>
       </footer>

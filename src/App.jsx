@@ -5,6 +5,7 @@ import ResellerPanel from "./ResellerPanel.jsx";
 import OperatorApp from "./OperatorApp.jsx";
 import Landing from "./Landing.jsx";
 import BookingPage from "./BookingPage.jsx";
+import { CONTACTS } from "./contatti.js";
 
 // Versione dell'app (da package.json, iniettata da Vite). Serve per verificare
 // che il deploy si sia aggiornato: per cambiarla basta aggiornare "version" in package.json.
@@ -76,8 +77,6 @@ function Blocked({ stato, denominazione, onLogout }) {
     </div>
   );
 }
-
-const CONTACTS = { nome: "Office Solution", tel: "3920241955", email: "Amministrazione@cmav.it", sito: "officesolutionoleggio.com" };
 
 function DemoExpired({ denominazione, onLogout }) {
   const wa = "39" + CONTACTS.tel.replace(/\D/g, "");
