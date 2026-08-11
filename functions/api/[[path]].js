@@ -378,7 +378,8 @@ export async function onRequest(context) {
           const cat = (await getCollezione(env, aid, "catalog")) || {};
           const categorie = Array.isArray(cat.categories) ? cat.categories.map((c) => ({ id: c.id, name: c.name })) : [];
           const prodotti = Array.isArray(cat.products) ? cat.products.map((p) => ({
-            id: p.id, name: p.name || "", description: p.description || "", categoryId: p.categoryId || null,
+            // Sul sito va SOLO la descrizione pensata per i clienti (mai quella interna).
+            id: p.id, name: p.name || "", description: p.descrizioneSito || "", foto: p.foto || null, categoryId: p.categoryId || null,
             formats: Array.isArray(p.formats) ? p.formats.map((f) => ({ label: f.label || "", price: f.price != null ? f.price : null, disponibile: (Number(f.stock) || 0) > 0 })) : [],
           })).filter((p) => p.name) : [];
           return { categorie, prodotti };

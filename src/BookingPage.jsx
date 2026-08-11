@@ -300,16 +300,19 @@ function ProdottiSection({ catalogo, primary }) {
           <div className="text-xs font-semibold uppercase tracking-[0.15em] mb-2" style={{ color: primary }}>{g.name}</div>
           <div className="space-y-2">
             {g.items.map((p) => (
-              <div key={p.id} className="lc-card p-4">
-                <div className="font-medium text-stone-900">{p.name}</div>
-                {p.description ? <div className="text-sm text-stone-500 mt-0.5">{p.description}</div> : null}
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {(p.formats || []).map((f, i) => (
-                    <span key={i} className={`inline-flex items-center gap-1.5 text-xs border rounded-full px-2.5 py-1 ${f.disponibile ? "border-stone-200 text-stone-600 bg-stone-50" : "border-stone-100 text-stone-300 bg-white"}`}>
-                      {f.label}{f.price != null ? <b className={f.disponibile ? "text-stone-800" : "text-stone-300"}>{eur(f.price)}</b> : null}
-                      {!f.disponibile ? <span className="uppercase text-[9px] font-semibold tracking-wide">Esaurito</span> : null}
-                    </span>
-                  ))}
+              <div key={p.id} className="lc-card p-4 flex gap-3.5">
+                {p.foto ? <img src={p.foto} alt={p.name} className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl object-cover ring-1 ring-stone-100 shrink-0" /> : null}
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-stone-900">{p.name}</div>
+                  {p.description ? <div className="text-sm text-stone-500 mt-0.5 leading-relaxed">{p.description}</div> : null}
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {(p.formats || []).map((f, i) => (
+                      <span key={i} className={`inline-flex items-center gap-1.5 text-xs border rounded-full px-2.5 py-1 ${f.disponibile ? "border-stone-200 text-stone-600 bg-stone-50" : "border-stone-100 text-stone-300 bg-white"}`}>
+                        {f.label}{f.price != null ? <b className={f.disponibile ? "text-stone-800" : "text-stone-300"}>{eur(f.price)}</b> : null}
+                        {!f.disponibile ? <span className="uppercase text-[9px] font-semibold tracking-wide">Esaurito</span> : null}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               </div>
             ))}

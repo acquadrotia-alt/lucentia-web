@@ -178,6 +178,26 @@ function fileToCoverDataURL(file, max = 1200) {
   });
 }
 
+// Foto prodotto: ritaglio quadrato 1:1 centrato, JPEG compatto.
+function fileToSquareDataURL(file, size = 480) {
+  return new Promise((res, rej) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const side = Math.min(img.width, img.height);
+        const sx = (img.width - side) / 2, sy = (img.height - side) / 2;
+        const c = document.createElement("canvas"); c.width = size; c.height = size;
+        const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, size, size);
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+        res(c.toDataURL("image/jpeg", 0.8));
+      };
+      img.onerror = rej; img.src = reader.result;
+    };
+    reader.onerror = rej; reader.readAsDataURL(file);
+  });
+}
+
 // Gli eventi occupano uno o più operatori: per il calcolo degli slot vengono
 // espansi in pseudo-appuntamenti (uno per operatore), così gli orari occupati
 // da un evento non risultano prenotabili.
@@ -2953,17 +2973,27 @@ function ProductEditor({ product, categories, loyalty, onChange, onDelete }) {
   return (
     <div className="bg-white rounded-xl border border-stone-200 shadow-sm">
       <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-3 p-3 text-left">
-        <Package size={18} className="text-stone-400 shrink-0" />
+        {p.foto ? <img src={p.foto} alt="" className="w-10 h-10 rounded-lg object-cover ring-1 ring-stone-200 shrink-0" /> : <div className="w-10 h-10 rounded-lg bg-stone-50 border border-stone-100 flex items-center justify-center shrink-0"><Package size={17} className="text-stone-300" /></div>}
         <div className="flex-1 min-w-0"><div className="font-medium truncate">{p.name}</div><div className="text-xs text-stone-400">{priceLabel} · {p.formats.length} format{p.formats.length === 1 ? "o" : "i"} · giacenza {totalStock} pz</div></div>
         <ChevronRight size={18} className={`text-stone-300 shrink-0 transition-transform ${open ? "rotate-90" : ""}`} />
       </button>
       {open ? (
         <div className="px-3 pb-3 border-t border-stone-100 pt-3 space-y-3">
-          <div className="grid sm:grid-cols-2 gap-3">
-            <Field label="Nome"><input value={p.name} onChange={(e) => onChange({ name: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
-            <Field label="Categoria"><select value={p.categoryId || ""} onChange={(e) => onChange({ categoryId: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm bg-white brand-ring"><option value="">Senza categoria</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
+          <div className="flex items-start gap-3">
+            <label className="w-20 h-20 rounded-xl border border-stone-200 bg-stone-50 overflow-hidden flex items-center justify-center cursor-pointer shrink-0 hover:border-stone-300 relative" title="Foto del prodotto (quadrata 1:1)">
+              {p.foto ? <img src={p.foto} alt="" className="w-full h-full object-cover" /> : <span className="flex flex-col items-center gap-1 text-stone-300"><ImageIcon size={18} /><span className="text-[9px] font-medium">Foto 1:1</span></span>}
+              <input type="file" accept="image/*" className="hidden" onChange={async (e) => { const file = e.target.files && e.target.files[0]; if (!file) return; try { onChange({ foto: await fileToSquareDataURL(file, 480) }); } catch (err) { alert("Impossibile caricare la foto."); } e.target.value = ""; }} />
+            </label>
+            <div className="flex-1 min-w-0 space-y-3">
+              <div className="grid sm:grid-cols-2 gap-3">
+                <Field label="Nome"><input value={p.name} onChange={(e) => onChange({ name: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
+                <Field label="Categoria"><select value={p.categoryId || ""} onChange={(e) => onChange({ categoryId: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm bg-white brand-ring"><option value="">Senza categoria</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
+              </div>
+              {p.foto ? <button type="button" onClick={() => onChange({ foto: null })} className="text-xs text-stone-400 hover:text-red-500 flex items-center gap-1"><Trash2 size={12} /> Rimuovi foto</button> : null}
+            </div>
           </div>
-          <Field label="Descrizione"><input value={p.description || ""} onChange={(e) => onChange({ description: e.target.value })} placeholder="Breve descrizione" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
+          <Field label="Descrizione (interna)"><input value={p.description || ""} onChange={(e) => onChange({ description: e.target.value })} placeholder="Breve descrizione" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
+          <Field label="Descrizione per il mini-sito · visibile solo ai clienti online"><textarea value={p.descrizioneSito || ""} onChange={(e) => onChange({ descrizioneSito: e.target.value })} rows={2} placeholder="Es. Idratazione profonda per capelli secchi e trattati, con olio di argan. Profumo delicato." className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
           {F.fidelity && loyalty && loyalty.fromSales ? <Field label="Punti fedeltà per pezzo venduto"><div className="flex items-center gap-1"><input type="number" min={0} step={1} value={p.points != null ? p.points : 0} onChange={(e) => onChange({ points: Math.max(0, Math.round(Number(e.target.value) || 0)) })} className="w-24 px-3 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring" /><span className="text-xs text-stone-400">punti</span></div></Field> : null}
           <div>
             <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Formati · prezzo · giacenza</div>
