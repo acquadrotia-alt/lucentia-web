@@ -10,7 +10,7 @@
 //   disattivata, l'azienda non può leggere/salvare i dati.
 // ============================================================================
 
-const COLLEZIONI = ["config", "bookings", "clients", "catalog", "sales", "vouchers"];
+const COLLEZIONI = ["config", "bookings", "clients", "catalog", "sales", "vouchers", "eventi"];
 const MODULI = ["fidelity", "vendite", "statistiche", "marketing", "allergeni", "pacchetti", "online", "op3", "opinf"];
 const OLD_MAP = { shop: "vendite", stats: "statistiche" };
 // "online" (prenotazioni online) è un add-on non disponibile col piano Basic:
@@ -140,6 +140,17 @@ function weekdayOf(dateStr) { const p = String(dateStr).split("-").map(Number); 
 async function getCollezione(env, aziendaId, coll) {
   const row = await env.DB.prepare("SELECT dati FROM dati_app WHERE azienda_id = ? AND collezione = ?").bind(aziendaId, coll).first();
   try { return row ? JSON.parse(row.dati) : null; } catch (e) { return null; }
+}
+// Gli eventi occupano uno o più operatori: per il calcolo degli slot vengono
+// espansi in pseudo-appuntamenti, uno per ciascun operatore coinvolto.
+function eventiComeImpegni(eventi, dateStr) {
+  if (!Array.isArray(eventi)) return [];
+  const out = [];
+  for (const ev of eventi) {
+    if (!ev || ev.date !== dateStr || ev.cancellato) continue;
+    for (const sid of (ev.staffIds || [])) out.push({ id: `ev-${ev.id}-${sid}`, staffId: sid, date: ev.date, startMin: ev.startMin, endMin: ev.endMin, status: undefined });
+  }
+  return out;
 }
 async function onlineBookingsOf(env, aziendaId, dateStr) {
   const res = await env.DB.prepare("SELECT id, staff_id, start_min, end_min FROM prenotazioni_online WHERE azienda_id = ? AND data = ? AND stato = 'attiva'").bind(aziendaId, dateStr).all();
@@ -334,16 +345,34 @@ export async function onRequest(context) {
     const mode = booking.mode === "griglia" ? "griglia" : "antivuoto";
     const services = (config.services || []).filter((s) => Number(s.durationMin) > 0 && (config.staff || []).some((st) => (st.serviceIds || []).includes(s.id) && (st.availability && Object.keys(st.availability).length)));
 
-    // info attività + servizi prenotabili
+    // info attività + servizi prenotabili + contenuti del mini-sito
     if (segs[2] == null && method === "GET") {
       const b = config.branding || {};
       const staffPub = (config.staff || []).filter((st) => st.availability && Object.keys(st.availability).length && (st.serviceIds || []).some((sid) => services.find((s) => s.id === sid))).map((st) => ({ id: st.id, name: st.name, role: st.role || "", avatar: st.avatar || null, photo: st.photo || null, serviceIds: st.serviceIds || [] }));
+      const sito = config.sito || {};
+      const eventiRaw = (await getCollezione(env, aid, "eventi")) || [];
+      const oggi = todayISO();
+      const eventiPub = sito.mostraEventi === false ? [] : (Array.isArray(eventiRaw) ? eventiRaw : [])
+        .filter((ev) => ev && ev.date >= oggi)
+        .sort((x, y) => (x.date === y.date ? x.startMin - y.startMin : (x.date < y.date ? -1 : 1)))
+        .slice(0, 6)
+        .map((ev) => ({ id: ev.id, titolo: ev.titolo || "Evento", descrizione: ev.descrizione || "", copertina: ev.copertina || null, date: ev.date, startMin: ev.startMin, endMin: ev.endMin }));
       return json({
         ok: true,
         salone: { nome: az.denominazione, brandName: b.name || az.denominazione, tagline: b.tagline || "", logo: b.logo || null, primary: b.primary || "#b8893b", phone: b.phone || "", email: b.email || "", address: b.address || "" },
         services: services.map((s) => ({ id: s.id, name: s.name, durationMin: s.durationMin, price: s.price != null ? s.price : null })),
         staff: staffPub,
         horizonDays,
+        sito: {
+          descrizione: sito.descrizione || "",
+          copertina: sito.copertina || null,
+          orari: sito.orari || "",
+          instagram: sito.instagram || "",
+          facebook: sito.facebook || "",
+          sitoWeb: sito.sitoWeb || "",
+          sezioni: Array.isArray(sito.sezioni) ? sito.sezioni.filter((s) => s && (s.titolo || s.testo)).map((s) => ({ titolo: s.titolo || "", testo: s.testo || "" })) : [],
+        },
+        eventi: eventiPub,
       });
     }
 
@@ -356,7 +385,8 @@ export async function onRequest(context) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !serviceId) return json({ slots: [] });
       const bookings = (await getCollezione(env, aid, "bookings")) || [];
       const online = (await onlineBookingsOf(env, aid, date)).filter((b) => b.id !== exclude);
-      const slots = computeStarts(config, [...(Array.isArray(bookings) ? bookings : []), ...online], date, serviceId, leadMin, mode, staffSel || undefined);
+      const impegniEventi = eventiComeImpegni(await getCollezione(env, aid, "eventi"), date);
+      const slots = computeStarts(config, [...(Array.isArray(bookings) ? bookings : []), ...online, ...impegniEventi], date, serviceId, leadMin, mode, staffSel || undefined);
       return json({ slots: slots.map((s) => ({ start: s.start, label: `${pad2(Math.floor(s.start / 60))}:${pad2(s.start % 60)}` })) });
     }
 
@@ -435,13 +465,31 @@ export async function onRequest(context) {
       const dur = svc ? (Number(svc.durationMin) || (row.end_min - row.start_min)) : (row.end_min - row.start_min);
       const bookings = (await getCollezione(env, aid, "bookings")) || [];
       const online = (await onlineBookingsOf(env, aid, ndate)).filter((b) => b.id !== row.id);
-      const slots = computeStarts(config, [...(Array.isArray(bookings) ? bookings : []), ...online], ndate, row.service_id, leadMin, mode, row.staff_id || undefined);
+      const impegniEventi = eventiComeImpegni(await getCollezione(env, aid, "eventi"), ndate);
+      const slots = computeStarts(config, [...(Array.isArray(bookings) ? bookings : []), ...online, ...impegniEventi], ndate, row.service_id, leadMin, mode, row.staff_id || undefined);
       if (!slots.find((s) => s.start === nstart)) return json({ error: "Questo orario non è più disponibile. Scegline un altro." }, 409);
       await env.DB.prepare("UPDATE prenotazioni_online SET data = ?, start_min = ?, end_min = ? WHERE id = ?").bind(ndate, nstart, nstart + dur, row.id).run();
       return json({ ok: true, conferma: { date: ndate, start: nstart, label: lbl(nstart), service: svcName(row.service_id), salone: az.denominazione } });
     }
 
     return json({ error: "metodo non consentito" }, 405);
+  }
+
+  // ---- /api/evento/:aid/:eid (PUBBLICA: pagina evento condivisa via link) ----
+  if (segs[0] === "evento" && segs[1] && segs[2] && method === "GET") {
+    const az = await getAzienda(env, segs[1]);
+    if (!az || licStatus(az) !== "active") return json({ error: "Evento non disponibile." }, 404);
+    const eventi = (await getCollezione(env, segs[1], "eventi")) || [];
+    const ev = (Array.isArray(eventi) ? eventi : []).find((e) => e && e.id === segs[2] && !e.cancellato);
+    if (!ev) return json({ error: "Evento non trovato." }, 404);
+    const config = (await getCollezione(env, segs[1], "config")) || {};
+    const b = config.branding || {};
+    const staffPub = (ev.staffIds || []).map((sid) => { const st = (config.staff || []).find((s) => s.id === sid); return st ? { name: st.name, role: st.role || "", avatar: st.avatar || null, photo: st.photo || null } : null; }).filter(Boolean);
+    return json({
+      ok: true,
+      evento: { id: ev.id, titolo: ev.titolo || "Evento", descrizione: ev.descrizione || "", copertina: ev.copertina || null, date: ev.date, startMin: ev.startMin, endMin: ev.endMin, dettagli: Array.isArray(ev.dettagli) ? ev.dettagli.filter((d) => d && (d.label || d.testo)) : [], staff: staffPub },
+      salone: { nome: az.denominazione, brandName: b.name || az.denominazione, tagline: b.tagline || "", logo: b.logo || null, primary: b.primary || "#b8893b", phone: b.phone || "", email: b.email || "", address: b.address || "" },
+    });
   }
 
   // ---- da qui in poi serve la sessione ----
@@ -741,10 +789,11 @@ export async function onRequest(context) {
 
     if (sess.ruolo === "operatore") {
       if (method !== "GET") return json({ error: "sola lettura" }, 403);
-      if (coll !== "config" && coll !== "bookings") return json({ value: null });
+      if (coll !== "config" && coll !== "bookings" && coll !== "eventi") return json({ value: null });
       const row = await env.DB.prepare("SELECT dati FROM dati_app WHERE azienda_id = ? AND collezione = ?").bind(azid, coll).first();
       let value = row ? JSON.parse(row.dati) : null;
       if (coll === "bookings" && Array.isArray(value)) value = value.filter((b) => b && b.staffId === sess.staff_id);
+      if (coll === "eventi" && Array.isArray(value)) value = value.filter((ev) => ev && (ev.staffIds || []).includes(sess.staff_id));
       return json({ value });
     }
 

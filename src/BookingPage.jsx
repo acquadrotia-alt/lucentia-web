@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Calendar, Clock, Check, ChevronRight, ChevronLeft, User, Users, Phone, Mail, Sparkles, MapPin, ArrowRight, Scissors, AlertCircle, CalendarClock, Trash2, X } from "lucide-react";
+import { Calendar, Clock, Check, ChevronRight, ChevronLeft, User, Users, Phone, Mail, Sparkles, MapPin, ArrowRight, Scissors, AlertCircle, CalendarClock, Trash2, X, PartyPopper, Info, MessageCircle, Instagram, Facebook, Globe } from "lucide-react";
 import { AvatarSvg, avatarIdFor } from "./avatars.jsx";
 import { setBrandTab } from "./favicon.js";
 
@@ -47,7 +47,7 @@ export default function BookingPage({ aid }) {
   useEffect(() => {
     (async () => {
       const r = await api(aid);
-      if (r.ok && r.data && r.data.ok) { setInfo(r.data); setState("ready"); setBrandTab(r.data.salone.logo, `${r.data.salone.brandName} · Prenota online`); }
+      if (r.ok && r.data && r.data.ok) { setInfo(r.data); setState("ready"); setBrandTab(r.data.salone.logo, r.data.salone.brandName); }
       else setState("error");
     })();
   }, [aid]);
@@ -123,28 +123,49 @@ export default function BookingPage({ aid }) {
     );
   }
 
+  const sito = info.sito || {};
+  const eventiPub = Array.isArray(info.eventi) ? info.eventi : [];
+  const hasInfoTab = !!(sito.descrizione || (sito.sezioni || []).length || sito.orari || sito.instagram || sito.facebook || sito.sitoWeb || b.address || b.phone);
+  const NAVS = [["book", "Prenota", Calendar], ...(eventiPub.length ? [["eventi", "Eventi", PartyPopper]] : []), ...(hasInfoTab ? [["info", "Info", Info]] : [])];
+
   return (
     <div className="min-h-screen bg-stone-50" style={{ "--brand": primary }}>
-      {/* Cover */}
-      <div className="relative overflow-hidden border-b border-stone-100" style={{ background: `radial-gradient(70% 80% at 50% 0%, ${primary}14 0%, #ffffff 70%)` }}>
-        <div className="max-w-2xl mx-auto px-4 pt-10 pb-7 text-center lc-fade-up">
-          {b.logo ? <img src={b.logo} alt={b.brandName} className="h-16 w-16 rounded-2xl object-cover mx-auto mb-4 ring-1 ring-stone-200" /> : <div className="h-16 w-16 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: primary, color: "#fff" }}><Sparkles size={28} /></div>}
+      {/* Copertina + intestazione del mini-sito */}
+      <div className="relative overflow-hidden border-b border-stone-100 bg-white">
+        {sito.copertina ? (
+          <div className="relative">
+            <img src={sito.copertina} alt={b.brandName} className="w-full h-44 sm:h-64 object-cover" />
+            <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 55%)" }} />
+          </div>
+        ) : <div className="absolute inset-0" style={{ background: `radial-gradient(70% 80% at 50% 0%, ${primary}14 0%, #ffffff 70%)` }} />}
+        <div className={`relative max-w-2xl mx-auto px-4 ${sito.copertina ? "-mt-10 pb-6" : "pt-10 pb-6"} text-center lc-fade-up`}>
+          {b.logo ? <img src={b.logo} alt={b.brandName} className="h-16 w-16 rounded-2xl object-cover mx-auto mb-4 ring-2 ring-white shadow-md" /> : <div className="h-16 w-16 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-md ring-2 ring-white" style={{ background: primary, color: "#fff" }}><Sparkles size={28} /></div>}
           <h1 className="font-display text-3xl font-semibold tracking-tight text-stone-900">{b.brandName}</h1>
           {b.tagline ? <p className="text-stone-500 mt-1">{b.tagline}</p> : null}
+          {sito.descrizione ? <p className="text-sm text-stone-500 mt-3 max-w-lg mx-auto leading-relaxed">{sito.descrizione}</p> : null}
           <div className="mt-3 flex items-center justify-center gap-4 text-xs text-stone-400 flex-wrap">
-            {b.phone ? <span className="inline-flex items-center gap-1.5"><Phone size={13} /> {b.phone}</span> : null}
+            {b.phone ? <a href={`tel:+39${String(b.phone).replace(/\D/g, "")}`} className="inline-flex items-center gap-1.5 hover:text-stone-600"><Phone size={13} /> {b.phone}</a> : null}
             {b.address ? <span className="inline-flex items-center gap-1.5"><MapPin size={13} /> {b.address}</span> : null}
           </div>
-          <div className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full mt-4" style={{ background: `${primary}18`, color: primary }}><Calendar size={13} /> {view === "manage" ? "Le tue prenotazioni" : "Prenota online il tuo appuntamento"}</div>
-          <div className="mt-3">
-            {view === "book"
-              ? <button onClick={() => setView("manage")} className="text-sm font-medium hover:underline" style={{ color: primary }}>Hai già prenotato? Gestisci le tue prenotazioni →</button>
-              : <button onClick={() => setView("book")} className="text-sm font-medium text-stone-500 hover:text-stone-700 inline-flex items-center gap-1"><ChevronLeft size={15} /> Nuova prenotazione</button>}
+          {/* Navigazione del mini-sito */}
+          <div className="mt-5 inline-flex gap-1 bg-stone-100/80 rounded-xl p-1">
+            {NAVS.map(([k, l, Icon]) => { const on = view === k || (k === "book" && view === "manage"); return (
+              <button key={k} onClick={() => setView(k)} aria-current={on ? "true" : undefined} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-[background-color,color,box-shadow] duration-200" style={on ? { background: "#fff", color: "#1c1917", boxShadow: "0 1px 2px rgba(28,25,23,0.08)" } : { color: "#78716c" }}><Icon size={15} /> {l}{k === "eventi" ? <span className="text-[10px] font-semibold px-1.5 rounded-full text-white" style={{ background: primary }}>{eventiPub.length}</span> : null}</button>
+            ); })}
           </div>
+          {view === "book" || view === "manage" ? (
+            <div className="mt-3">
+              {view === "book"
+                ? <button onClick={() => setView("manage")} className="text-sm font-medium hover:underline" style={{ color: primary }}>Hai già prenotato? Gestisci le tue prenotazioni →</button>
+                : <button onClick={() => setView("book")} className="text-sm font-medium text-stone-500 hover:text-stone-700 inline-flex items-center gap-1"><ChevronLeft size={15} /> Nuova prenotazione</button>}
+            </div>
+          ) : null}
         </div>
       </div>
 
-      {view === "manage" ? <ManageBookings aid={aid} primary={primary} /> : (
+      {view === "eventi" ? <EventiSection aid={aid} eventi={eventiPub} primary={primary} /> :
+       view === "info" ? <InfoSection salone={b} sito={sito} primary={primary} /> :
+       view === "manage" ? <ManageBookings aid={aid} primary={primary} /> : (
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
         {/* 1. Servizio */}
@@ -238,6 +259,71 @@ export default function BookingPage({ aid }) {
 
 function Field({ icon: Icon, children }) {
   return <div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2.5 transition-colors focus-within:border-stone-400"><Icon size={16} className="text-stone-400 shrink-0" />{children}</div>;
+}
+
+// Sezione "Eventi": i prossimi eventi del salone, ognuno con la sua pagina dedicata.
+function EventiSection({ aid, eventi, primary }) {
+  return (
+    <div className="max-w-2xl mx-auto px-4 py-6 space-y-3">
+      {eventi.map((ev) => (
+        <a key={ev.id} href={`/?evento=${encodeURIComponent(aid)}:${encodeURIComponent(ev.id)}`} className="lc-card lc-card-hover lc-fade-up block overflow-hidden">
+          {ev.copertina ? <img src={ev.copertina} alt={`Copertina di ${ev.titolo}`} className="w-full h-36 sm:h-44 object-cover" /> : null}
+          <div className="p-4">
+            <div className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full text-white mb-2" style={{ background: primary }}><PartyPopper size={11} /> Evento</div>
+            <div className="font-display text-lg font-semibold text-stone-900 leading-tight">{ev.titolo}</div>
+            <div className="text-sm text-stone-500 mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+              <span className="capitalize inline-flex items-center gap-1"><Calendar size={13} className="text-stone-400" /> {fmtLong(ev.date)}</span>
+              <span className="inline-flex items-center gap-1 tabular-nums"><Clock size={13} className="text-stone-400" /> {pad2(Math.floor(ev.startMin / 60))}:{pad2(ev.startMin % 60)}–{pad2(Math.floor(ev.endMin / 60))}:{pad2(ev.endMin % 60)}</span>
+            </div>
+            {ev.descrizione ? <p className="text-sm text-stone-500 mt-2 leading-relaxed" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{ev.descrizione}</p> : null}
+            <div className="mt-3 text-sm font-medium inline-flex items-center gap-1" style={{ color: primary }}>Scopri l'evento <ArrowRight size={14} /></div>
+          </div>
+        </a>
+      ))}
+      <p className="text-center text-[11px] text-stone-300 pt-2">Prenotazioni online · powered by Lucentia</p>
+    </div>
+  );
+}
+
+// Sezione "Info": descrizione, contenuti personalizzati, orari, contatti e social.
+function InfoSection({ salone: b, sito, primary }) {
+  const wa = b.phone ? "39" + String(b.phone).replace(/\D/g, "") : "";
+  const social = [
+    sito.instagram ? [Instagram, "Instagram", sito.instagram.startsWith("http") ? sito.instagram : `https://instagram.com/${sito.instagram.replace(/^@/, "")}`] : null,
+    sito.facebook ? [Facebook, "Facebook", sito.facebook.startsWith("http") ? sito.facebook : `https://facebook.com/${sito.facebook}`] : null,
+    sito.sitoWeb ? [Globe, "Sito web", sito.sitoWeb.startsWith("http") ? sito.sitoWeb : `https://${sito.sitoWeb}`] : null,
+  ].filter(Boolean);
+  return (
+    <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
+      {(sito.sezioni || []).map((s, i) => (
+        <section key={i} className="lc-card p-5 lc-fade-up">
+          {s.titolo ? <h2 className="font-display text-lg font-semibold text-stone-900 mb-2">{s.titolo}</h2> : null}
+          {s.testo ? <p className="text-sm text-stone-600 leading-relaxed whitespace-pre-line">{s.testo}</p> : null}
+        </section>
+      ))}
+      {sito.orari ? (
+        <section className="lc-card p-5 lc-fade-up">
+          <h2 className="font-semibold text-stone-900 mb-2 flex items-center gap-2"><Clock size={16} style={{ color: primary }} /> Orari</h2>
+          <p className="text-sm text-stone-600 leading-relaxed whitespace-pre-line">{sito.orari}</p>
+        </section>
+      ) : null}
+      {(b.phone || b.address || b.email || social.length) ? (
+        <section className="lc-card p-5 lc-fade-up">
+          <h2 className="font-semibold text-stone-900 mb-3 flex items-center gap-2"><Phone size={16} style={{ color: primary }} /> Contatti</h2>
+          <div className="space-y-2">
+            {b.phone ? <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="flex items-center gap-3 border border-stone-200 rounded-xl p-3 hover:bg-stone-50 transition"><MessageCircle size={17} className="text-green-600 shrink-0" /><span className="text-sm"><b>WhatsApp</b> · scrivici subito</span></a> : null}
+            {b.phone ? <a href={`tel:+${wa}`} className="flex items-center gap-3 border border-stone-200 rounded-xl p-3 hover:bg-stone-50 transition"><Phone size={17} className="text-stone-500 shrink-0" /><span className="text-sm"><b>Telefono</b> · {b.phone}</span></a> : null}
+            {b.email ? <a href={`mailto:${b.email}`} className="flex items-center gap-3 border border-stone-200 rounded-xl p-3 hover:bg-stone-50 transition"><Mail size={17} className="text-stone-500 shrink-0" /><span className="text-sm break-all"><b>Email</b> · {b.email}</span></a> : null}
+            {b.address ? <a href={`https://maps.google.com/?q=${encodeURIComponent(b.address)}`} target="_blank" rel="noreferrer" className="flex items-center gap-3 border border-stone-200 rounded-xl p-3 hover:bg-stone-50 transition"><MapPin size={17} className="text-stone-500 shrink-0" /><span className="text-sm"><b>Dove siamo</b> · {b.address}</span></a> : null}
+            {social.map(([Icon, label, href], i) => (
+              <a key={i} href={href} target="_blank" rel="noreferrer" className="flex items-center gap-3 border border-stone-200 rounded-xl p-3 hover:bg-stone-50 transition"><Icon size={17} className="text-stone-500 shrink-0" /><span className="text-sm"><b>{label}</b></span></a>
+            ))}
+          </div>
+        </section>
+      ) : null}
+      <p className="text-center text-[11px] text-stone-300 pt-2">Prenotazioni online · powered by Lucentia</p>
+    </div>
+  );
 }
 
 // "Le mie prenotazioni": consulta / sposta / annulla, ricerca per telefono.

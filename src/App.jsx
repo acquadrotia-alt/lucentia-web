@@ -5,6 +5,7 @@ import ResellerPanel from "./ResellerPanel.jsx";
 import OperatorApp from "./OperatorApp.jsx";
 import Landing from "./Landing.jsx";
 import BookingPage from "./BookingPage.jsx";
+import EventoPage from "./EventoPage.jsx";
 import { CONTACTS } from "./contatti.js";
 
 // Versione dell'app (da package.json, iniettata da Vite). Serve per verificare
@@ -104,8 +105,12 @@ function DemoExpired({ denominazione, onLogout }) {
 }
 
 export default function App() {
-  // Link pubblico di prenotazione online: ?prenota=<aziendaId> (nessun login).
-  const prenotaId = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("prenota") : null;
+  // Link pubblici (nessun login): ?prenota=<aziendaId> per il mini-sito con
+  // prenotazione, ?evento=<aziendaId>:<eventoId> per la pagina di un evento.
+  const qs = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const prenotaId = qs ? qs.get("prenota") : null;
+  const eventoToken = qs ? qs.get("evento") : null;
+  if (eventoToken) return <EventoPage token={eventoToken} />;
   if (prenotaId) return <BookingPage aid={prenotaId} />;
 
   const [stato, setStato] = useState("loading"); // loading | login | ready

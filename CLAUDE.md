@@ -44,9 +44,11 @@ Tenant isolation is enforced **server-side**, never trust the client:
 - Deleting a salon cascades to its `utenti`, `sessioni`, and `dati_app`; deleting a reseller reassigns its salons to the master (`reseller_id = NULL`).
 
 ### Salon data storage (the `dati_app` pattern)
-The salon app does **not** have a normalized schema. All salon content is six JSON blobs ("collezioni") stored as rows in `dati_app`, keyed `${azienda_id}:${collezione}`:
+The salon app does **not** have a normalized schema. All salon content is seven JSON blobs ("collezioni") stored as rows in `dati_app`, keyed `${azienda_id}:${collezione}`:
 
-`config`, `bookings`, `clients`, `catalog`, `sales`, `vouchers` (see `COLLEZIONI` in the API).
+`config`, `bookings`, `clients`, `catalog`, `sales`, `vouchers`, `eventi` (see `COLLEZIONI` in the API).
+
+`eventi` are salon events (courses, open days…) that occupy one or more operators (their time slots become unavailable, both in-app and for online booking). Each event has a public shareable page at `/?evento=<azienda_id>:<evento_id>` (`EventoPage.jsx`, public API `/api/evento/:aid/:eid`). The booking link `/?prenota=<azienda_id>` is a mini-site (`BookingPage.jsx`) with booking, upcoming events and custom content configured in `config.sito` (Impostazioni → "Il tuo mini-sito").
 
 `SalonApp.jsx` holds each as React state, loads them via `GET /api/data/:coll` on mount, and persists changes with a debounced `PUT /api/data/:coll` (`apiSaveDebounced`, 800ms). The server rejects writes when the license is inactive. **Demo tenants are read-only**: saving is skipped client-side (`demoRef`) and the demo is seeded server-side by `demoSeed()`.
 

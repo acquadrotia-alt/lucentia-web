@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback, createContext, useContext } from "react";
-import { Sparkles, Calendar, Clock, User, Mail, Lock, Settings, LayoutDashboard, Plus, Trash2, Check, ChevronLeft, ChevronRight, X, Users, CalendarPlus, Phone, MapPin, Image as ImageIcon, Palette, Store, Sunrise, Sun, Moon, History, Search, Gift, Star, Hash, LogOut, Ban, UserX, Undo2, Timer, CalendarClock, Wallet, RefreshCw, Printer, Download, Upload, KeyRound, ShieldCheck, CalendarX2, AlertTriangle, BadgeCheck, ShoppingCart, ShoppingBag, Package, Tag, Minus, Boxes, Receipt, Layers, AlertCircle, CalendarRange, CalendarDays, PackagePlus, BarChart3, TrendingUp, MessageCircle, FolderOpen } from "lucide-react";
+import { Sparkles, Calendar, Clock, User, Mail, Lock, Settings, LayoutDashboard, Plus, Trash2, Check, ChevronLeft, ChevronRight, X, Users, CalendarPlus, Phone, MapPin, Image as ImageIcon, Palette, Store, Sunrise, Sun, Moon, History, Search, Gift, Star, Hash, LogOut, Ban, UserX, Undo2, Timer, CalendarClock, Wallet, RefreshCw, Printer, Download, Upload, KeyRound, ShieldCheck, CalendarX2, AlertTriangle, BadgeCheck, ShoppingCart, ShoppingBag, Package, Tag, Minus, Boxes, Receipt, Layers, AlertCircle, CalendarRange, CalendarDays, PackagePlus, BarChart3, TrendingUp, MessageCircle, FolderOpen, PartyPopper, Share2, Pencil, Globe, Instagram, Facebook } from "lucide-react";
 import { AvatarSvg, AVATAR_IDS, avatarIdFor } from "./avatars.jsx";
 import { setBrandTab } from "./favicon.js";
 
@@ -158,6 +158,28 @@ function fileToResizedDataURL(file, max = 256) {
     reader.onload = () => { const img = new Image(); img.onload = () => { let w = img.width, h = img.height; if (w > h && w > max) { h = (h * max) / w; w = max; } else if (h > max) { w = (w * max) / h; h = max; } const c = document.createElement("canvas"); c.width = w; c.height = h; c.getContext("2d").drawImage(img, 0, 0, w, h); res(c.toDataURL("image/png")); }; img.onerror = rej; img.src = reader.result; };
     reader.onerror = rej; reader.readAsDataURL(file);
   });
+}
+
+// Variante per foto/copertine: più grande e in JPEG (pesa molto meno del PNG).
+function fileToCoverDataURL(file, max = 1200) {
+  return new Promise((res, rej) => {
+    const reader = new FileReader();
+    reader.onload = () => { const img = new Image(); img.onload = () => { let w = img.width, h = img.height; if (w > h && w > max) { h = (h * max) / w; w = max; } else if (h > max) { w = (w * max) / h; h = max; } const c = document.createElement("canvas"); c.width = w; c.height = h; const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h); res(c.toDataURL("image/jpeg", 0.82)); }; img.onerror = rej; img.src = reader.result; };
+    reader.onerror = rej; reader.readAsDataURL(file);
+  });
+}
+
+// Gli eventi occupano uno o più operatori: per il calcolo degli slot vengono
+// espansi in pseudo-appuntamenti (uno per operatore), così gli orari occupati
+// da un evento non risultano prenotabili.
+function eventiImpegni(eventi) {
+  if (!Array.isArray(eventi)) return [];
+  const out = [];
+  for (const ev of eventi) {
+    if (!ev) continue;
+    for (const sid of (ev.staffIds || [])) out.push({ id: `ev-${ev.id}-${sid}`, staffId: sid, date: ev.date, startMin: ev.startMin, endMin: ev.endMin });
+  }
+  return out;
 }
 
 function qualifiedStaff(staff, ids) { return staff.filter((st) => ids.every((id) => st.serviceIds.includes(id))); }
@@ -436,8 +458,8 @@ function printPriceList(config) {
 }
 
 // La licenza NON viene inclusa nel backup: il cliente non può estendersela reimportando un file.
-function exportBackup(config, bookings, clients, catalog, sales) {
-  const data = { config, bookings, clients, catalog, sales, exportedAt: new Date().toISOString(), version: 3 };
+function exportBackup(config, bookings, clients, catalog, sales, eventi) {
+  const data = { config, bookings, clients, catalog, sales, eventi, exportedAt: new Date().toISOString(), version: 4 };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a"); a.href = url; a.download = `backup-salone-${todayStr()}.json`; document.body.appendChild(a); a.click(); a.remove();
@@ -445,7 +467,7 @@ function exportBackup(config, bookings, clients, catalog, sales) {
 }
 
 const BACKUP_KEY = "salon-backup-meta-v1";
-function backupPayload(config, bookings, clients, catalog, sales) { return { config, bookings, clients, catalog, sales, exportedAt: new Date().toISOString(), version: 3 }; }
+function backupPayload(config, bookings, clients, catalog, sales, eventi) { return { config, bookings, clients, catalog, sales, eventi, exportedAt: new Date().toISOString(), version: 4 }; }
 function openBackupDB() { return new Promise((res, rej) => { const r = indexedDB.open("lucentia-backup", 1); r.onupgradeneeded = () => { r.result.createObjectStore("h"); }; r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
 async function saveDirHandle(handle) { const db = await openBackupDB(); await new Promise((res, rej) => { const tx = db.transaction("h", "readwrite"); tx.objectStore("h").put(handle, "dir"); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); }
 async function loadDirHandle() { try { const db = await openBackupDB(); return await new Promise((res) => { const tx = db.transaction("h", "readonly"); const rq = tx.objectStore("h").get("dir"); rq.onsuccess = () => res(rq.result || null); rq.onerror = () => res(null); }); } catch (e) { return null; } }
@@ -609,12 +631,12 @@ function SlotPicker({ duration, candidates, bookings, value, onChange, startDate
   );
 }
 
-function RescheduleModal({ booking, config, bookings, onClose, onSave }) {
+function RescheduleModal({ booking, config, bookings, impegniEventi, onClose, onSave }) {
   const services = config.services, staff = config.staff;
   const dur = booking.endMin - booking.startMin;
   const st = staff.find((s) => s.id === booking.staffId);
   const candidates = st ? [st] : qualifiedStaff(staff, booking.serviceIds);
-  const others = useMemo(() => bookings.filter((b) => b.id !== booking.id), [bookings, booking.id]);
+  const others = useMemo(() => [...bookings.filter((b) => b.id !== booking.id), ...(impegniEventi || [])], [bookings, booking.id, impegniEventi]);
   const start = booking.date >= todayStr() ? booking.date : todayStr();
   const [pick, setPick] = useState(null);
   const names = booking.serviceIds.map((id) => { const s = services.find((x) => x.id === id); return s ? s.name : null; }).filter(Boolean).join(", ");
@@ -628,6 +650,164 @@ function RescheduleModal({ booking, config, bookings, onClose, onSave }) {
         <p className="text-sm text-stone-400 mb-4">{names} · {st ? st.name : "operatore"} — attuale: {fmtDate(booking.date)} {minToStr(booking.startMin)}</p>
         <SlotPicker duration={dur} candidates={candidates} bookings={others} value={pick} onChange={setPick} startDate={start} closures={config.closures} />
         <button disabled={!pick} onClick={() => onSave(pick.date, pick.startMin)} className="w-full brand-bg disabled:opacity-40 disabled:cursor-not-allowed font-medium py-2.5 rounded-lg transition mt-5">Conferma nuovo orario</button>
+      </div>
+    </div>
+  );
+}
+
+// ---- Eventi del salone -----------------------------------------------------
+// Un evento (corso, serata, formazione, open day…) occupa uno o più operatori
+// in una fascia oraria: quegli orari non risultano prenotabili. Ogni evento ha
+// una pagina pubblica condivisibile via link (?evento=<azienda>:<id>).
+
+function EventForm({ config, eventi, setEventi, editing, onDone }) {
+  const staff = config.staff || [];
+  const ev = editing || null;
+  const [titolo, setTitolo] = useState(ev ? ev.titolo : "");
+  const [date, setDate] = useState(ev ? ev.date : todayStr());
+  const [dalle, setDalle] = useState(ev ? minToStr(ev.startMin) : "18:00");
+  const [alle, setAlle] = useState(ev ? minToStr(ev.endMin) : "20:00");
+  const [staffIds, setStaffIds] = useState(ev ? (ev.staffIds || []) : []);
+  const [copertina, setCopertina] = useState(ev ? ev.copertina || null : null);
+  const [descrizione, setDescrizione] = useState(ev ? ev.descrizione || "" : "");
+  const [dettagli, setDettagli] = useState(ev && Array.isArray(ev.dettagli) ? ev.dettagli : []);
+  const [caricando, setCaricando] = useState(false);
+  const toggleStaff = (id) => setStaffIds((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const onCover = async (e) => {
+    const file = e.target.files && e.target.files[0]; if (!file) return;
+    setCaricando(true);
+    try { setCopertina(await fileToCoverDataURL(file, 1200)); } catch (err) { alert("Impossibile caricare l'immagine."); }
+    setCaricando(false); e.target.value = "";
+  };
+  const addDettaglio = () => setDettagli((p) => [...p, { id: uid(), label: "", testo: "" }]);
+  const editDettaglio = (id, patch) => setDettagli((p) => p.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+  const delDettaglio = (id) => setDettagli((p) => p.filter((d) => d.id !== id));
+  const startMin = strToMin(dalle), endMin = strToMin(alle);
+  const valido = titolo.trim() && date && Number.isFinite(startMin) && Number.isFinite(endMin) && endMin > startMin && staffIds.length > 0;
+  const save = () => {
+    if (!valido) return;
+    const pulito = { id: ev ? ev.id : uid(), titolo: titolo.trim(), date, startMin, endMin, staffIds, copertina, descrizione: descrizione.trim(), dettagli: dettagli.filter((d) => d.label.trim() || d.testo.trim()), createdAt: ev ? ev.createdAt : Date.now() };
+    setEventi(ev ? eventi.map((x) => (x.id === ev.id ? pulito : x)) : [...eventi, pulito]);
+    onDone();
+  };
+  return (
+    <div className="bg-white rounded-2xl border-2 brand-border p-5 shadow-sm space-y-4">
+      <h3 className="font-semibold flex items-center gap-2"><PartyPopper size={16} className="brand-accent" /> {ev ? "Modifica evento" : "Nuovo evento"}</h3>
+      <div className="grid sm:grid-cols-2 gap-3">
+        <div className="sm:col-span-2">
+          <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Titolo *</div>
+          <input value={titolo} onChange={(e) => setTitolo(e.target.value)} placeholder="Es. Serata colore & consulenza" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+        </div>
+        <div>
+          <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Giorno *</div>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Dalle *</div>
+            <input type="time" value={dalle} step={900} onChange={(e) => setDalle(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+          </div>
+          <div>
+            <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Alle *</div>
+            <input type="time" value={alle} step={900} onChange={(e) => setAlle(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+          </div>
+        </div>
+      </div>
+      <div>
+        <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Operatori coinvolti * <span className="normal-case text-stone-300">· i loro orari risulteranno occupati</span></div>
+        <div className="flex flex-wrap gap-1.5">{staff.map((st) => { const on = staffIds.includes(st.id); return <button key={st.id} type="button" onClick={() => toggleStaff(st.id)} className={`px-2.5 py-1.5 rounded-lg text-xs border transition ${on ? "brand-bg border-transparent" : "bg-white border-stone-200 text-stone-600 brand-hover"}`}>{st.name}{st.role ? ` · ${st.role}` : ""}</button>; })}</div>
+      </div>
+      <div>
+        <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Immagine di copertina</div>
+        {copertina ? (
+          <div className="relative rounded-xl overflow-hidden border border-stone-200">
+            <img src={copertina} alt="Copertina evento" className="w-full h-40 object-cover" />
+            <button type="button" onClick={() => setCopertina(null)} className="absolute top-2 right-2 bg-white/90 text-stone-600 rounded-lg p-1.5 shadow-sm hover:text-red-500" title="Rimuovi copertina"><Trash2 size={15} /></button>
+          </div>
+        ) : (
+          <label className="flex items-center justify-center gap-2 border-2 border-dashed border-stone-200 rounded-xl py-6 text-sm text-stone-400 cursor-pointer hover:border-stone-300 hover:text-stone-500 transition">
+            <ImageIcon size={17} /> {caricando ? "Caricamento…" : "Carica un'immagine (orizzontale, verrà mostrata sulla pagina dell'evento)"}
+            <input type="file" accept="image/*" className="hidden" onChange={onCover} />
+          </label>
+        )}
+      </div>
+      <div>
+        <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Descrizione</div>
+        <textarea value={descrizione} onChange={(e) => setDescrizione(e.target.value)} rows={3} placeholder="Racconta l'evento: cosa succede, per chi è, come partecipare…" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+      </div>
+      <div>
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="text-xs font-medium text-stone-400 uppercase tracking-wide">Dettagli dell'evento <span className="normal-case text-stone-300">· es. programma, prezzo, posti</span></div>
+          <button type="button" onClick={addDettaglio} className="text-xs font-medium brand-accent inline-flex items-center gap-1 hover:underline"><Plus size={13} /> Aggiungi</button>
+        </div>
+        {dettagli.length === 0 ? <p className="text-xs text-stone-300">Nessun dettaglio: aggiungi voci come «Prezzo · gratuito», «Posti · max 15», «Programma · …»</p> : (
+          <div className="space-y-2">{dettagli.map((d) => (
+            <div key={d.id} className="flex gap-2 items-start">
+              <input value={d.label} onChange={(e) => editDettaglio(d.id, { label: e.target.value })} placeholder="Etichetta (es. Prezzo)" className="w-36 px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring shrink-0" />
+              <input value={d.testo} onChange={(e) => editDettaglio(d.id, { testo: e.target.value })} placeholder="Testo (es. Ingresso gratuito)" className="flex-1 px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+              <button type="button" onClick={() => delDettaglio(d.id)} className="p-2 text-stone-400 hover:text-red-500 shrink-0"><Trash2 size={15} /></button>
+            </div>
+          ))}</div>
+        )}
+      </div>
+      <button disabled={!valido} onClick={save} className="w-full brand-bg disabled:opacity-40 disabled:cursor-not-allowed font-medium py-2.5 rounded-lg transition">{ev ? "Salva modifiche" : "Crea evento"}</button>
+    </div>
+  );
+}
+
+function EventCard({ ev, staff, big, onClick }) {
+  const nomi = (ev.staffIds || []).map((id) => { const s = staff.find((x) => x.id === id); return s ? s.name : null; }).filter(Boolean);
+  return (
+    <button onClick={onClick} className={`w-full text-left rounded-xl overflow-hidden border transition lc-lift ${big ? "flex items-stretch" : "block"}`} style={{ borderColor: "var(--brand)", background: "var(--brand-soft)" }}>
+      {ev.copertina ? <img src={ev.copertina} alt="" className={big ? "w-24 sm:w-36 object-cover shrink-0" : "w-full h-16 object-cover"} /> : null}
+      <div className={big ? "flex-1 min-w-0 p-3.5" : "p-2.5"}>
+        <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide brand-accent"><PartyPopper size={11} /> Evento</div>
+        <div className={`font-semibold text-stone-900 truncate ${big ? "mt-0.5" : "text-xs mt-0.5"}`}>{ev.titolo}</div>
+        <div className={`brand-text ${big ? "text-sm" : "text-[11px]"}`}>{minToStr(ev.startMin)}–{minToStr(ev.endMin)}{nomi.length ? ` · ${big ? nomi.join(", ") : nomi.length + " operator" + (nomi.length === 1 ? "e" : "i")}` : ""}</div>
+      </div>
+    </button>
+  );
+}
+
+function EventModal({ ev, staff, aziendaId, onEdit, onDelete, onClose }) {
+  const [copied, setCopied] = useState(false);
+  const url = `${typeof window !== "undefined" ? window.location.origin : ""}/?evento=${aziendaId}:${ev.id}`;
+  const nomi = (ev.staffIds || []).map((id) => { const s = staff.find((x) => x.id === id); return s ? s.name : null; }).filter(Boolean).join(", ");
+  const copy = async () => { try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch (e) {} };
+  const share = async () => { if (navigator.share) { try { await navigator.share({ title: ev.titolo, url }); } catch (e) {} } else copy(); };
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 lc-fade-in" onClick={onClose}>
+      <div className="lc-card lc-scale-in w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        {ev.copertina ? <img src={ev.copertina} alt="" className="w-full h-40 object-cover" /> : null}
+        <div className="p-5">
+          <div className="flex items-start justify-between gap-2 mb-3">
+            <div>
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full brand-soft brand-text inline-flex items-center gap-1"><PartyPopper size={11} /> Evento</span>
+              <h3 className="font-semibold text-lg text-stone-900 mt-2 tracking-tight">{ev.titolo}</h3>
+            </div>
+            <button onClick={onClose} className="text-stone-400 hover:text-stone-600"><X size={20} /></button>
+          </div>
+          <div className="space-y-2 text-sm">
+            <div className="flex items-center gap-2 text-stone-600"><Calendar size={15} className="text-stone-400 shrink-0" /> {fmtDate(ev.date)} · {minToStr(ev.startMin)}–{minToStr(ev.endMin)}</div>
+            {nomi ? <div className="flex items-center gap-2 text-stone-600"><Users size={15} className="text-stone-400 shrink-0" /> {nomi}</div> : null}
+            {ev.descrizione ? <p className="text-stone-600 leading-relaxed">{ev.descrizione}</p> : null}
+            {(ev.dettagli || []).length ? <div className="space-y-1">{ev.dettagli.map((d) => <div key={d.id} className="text-stone-600"><span className="font-medium text-stone-900">{d.label}</span>{d.label && d.testo ? " · " : ""}{d.testo}</div>)}</div> : null}
+          </div>
+          <div className="mt-4 border border-stone-200 rounded-xl bg-stone-50 p-3">
+            <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Pagina pubblica dell'evento</div>
+            <div className="flex items-center gap-2">
+              <input readOnly value={url} onFocus={(e) => e.target.select()} className="flex-1 text-xs bg-transparent focus:outline-none text-stone-600 truncate" />
+              <button onClick={copy} className="text-xs font-medium brand-bg px-2.5 py-1.5 rounded-lg inline-flex items-center gap-1 shrink-0">{copied ? <><Check size={13} /> Copiato</> : "Copia"}</button>
+              <button onClick={share} className="text-xs font-medium border border-stone-300 text-stone-600 px-2 py-1.5 rounded-lg hover:bg-white shrink-0" title="Condividi"><Share2 size={13} /></button>
+              <a href={url} target="_blank" rel="noreferrer" className="text-xs font-medium border border-stone-300 text-stone-600 px-2.5 py-1.5 rounded-lg hover:bg-white shrink-0">Apri</a>
+            </div>
+            <p className="text-[11px] text-stone-400 mt-1.5">Condividilo su WhatsApp, Instagram o con un QR: chi lo apre vede la pagina dell'evento col tuo brand.</p>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <button onClick={onEdit} className="font-medium py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 transition inline-flex items-center justify-center gap-1.5"><Pencil size={15} /> Modifica</button>
+            <button onClick={() => { if (confirm("Eliminare questo evento? La pagina pubblica smetterà di funzionare.")) onDelete(); }} className="font-medium py-2.5 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 transition inline-flex items-center justify-center gap-1.5"><Trash2 size={15} /> Elimina</button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -664,6 +844,7 @@ export default function SalonApp({ onLogout, moduli, azienda, demo }) {
   const [catalog, setCatalog] = useState(DEFAULT_CATALOG);
   const [sales, setSales] = useState([]);
   const [vouchers, setVouchers] = useState([]);
+  const [eventi, setEventi] = useState([]); // eventi del salone (occupano uno o più operatori)
   const [onlineBk, setOnlineBk] = useState([]); // prenotazioni online ricevute (overlay, sola lettura)
   const [loading, setLoading] = useState(true);
   const loadedRef = useRef(false);
@@ -672,6 +853,7 @@ export default function SalonApp({ onLogout, moduli, azienda, demo }) {
   const [view, setView] = useState("agenda");
   const enabledSections = ["agenda", "clienti", "buoni", ...(flags.vendite ? ["shop"] : []), ...(flags.statistiche ? ["stats"] : []), ...(flags.marketing ? ["marketing"] : []), "settings"];
   useEffect(() => { if (!enabledSections.includes(view)) setView("agenda"); }, [moduli, view]);
+  const impegni = useMemo(() => eventiImpegni(eventi), [eventi]);
   const [demoBanner, setDemoBanner] = useState(!!demo);
   const isDemo = !!demo;
   const demoRef = useRef(false); demoRef.current = false;
@@ -690,6 +872,8 @@ export default function SalonApp({ onLogout, moduli, azienda, demo }) {
       if (!alive) return;
       const vch = await apiLoad("vouchers", null);
       if (alive) setVouchers(Array.isArray(vch) ? vch : []);
+      const evs = await apiLoad("eventi", null);
+      if (alive) setEventi(Array.isArray(evs) ? evs : []);
       if (cfg == null && bk == null && cl == null && sl == null) {
         const s = buildSampleData();
         setConfig(DEFAULT_CONFIG); setBookings(s.bookings); setClients(s.clients); setSales(s.sales); setCatalog(DEFAULT_CATALOG);
@@ -730,7 +914,8 @@ export default function SalonApp({ onLogout, moduli, azienda, demo }) {
   useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("catalog", catalog); }, [catalog]);
   useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("sales", sales); }, [sales]);
   useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("vouchers", vouchers); }, [vouchers]);
-  dataRef.current = { config, bookings, clients, catalog, sales };
+  useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("eventi", eventi); }, [eventi]);
+  dataRef.current = { config, bookings, clients, catalog, sales, eventi };
   useEffect(() => { loadDirHandle().then((h) => { if (h) { setBackupDir(h); setBackupDirName(h.name || "cartella"); } }); }, []);
   useEffect(() => {
     const tick = async () => {
@@ -741,7 +926,7 @@ export default function SalonApp({ onLogout, moduli, azienda, demo }) {
       const today = todayStr(); const last = loadKey(BACKUP_KEY, null);
       if (last && last.date === today) return;
       const now = new Date(); const hhmm = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-      if (hhmm >= bkc.time) { try { await writeBackupToDir(h, backupPayload(d.config, d.bookings, d.clients, d.catalog, d.sales)); const info = { date: today, at: Date.now() }; saveKey(BACKUP_KEY, info); setLastBackup(info); } catch (e) {} }
+      if (hhmm >= bkc.time) { try { await writeBackupToDir(h, backupPayload(d.config, d.bookings, d.clients, d.catalog, d.sales, d.eventi)); const info = { date: today, at: Date.now() }; saveKey(BACKUP_KEY, info); setLastBackup(info); } catch (e) {} }
     };
     const id = setInterval(tick, 60000); const t0 = setTimeout(tick, 5000);
     return () => { clearInterval(id); clearTimeout(t0); };
@@ -780,7 +965,7 @@ export default function SalonApp({ onLogout, moduli, azienda, demo }) {
   };
   const backupNow = async () => {
     const h = backupDirRef.current; if (!h) { alert("Scegli prima una cartella di destinazione."); return; }
-    try { await writeBackupToDir(h, backupPayload(config, bookings, clients, catalog, sales)); const info = { date: todayStr(), at: Date.now() }; saveKey(BACKUP_KEY, info); setLastBackup(info); alert("Backup salvato nella cartella scelta."); } catch (e) { alert("Backup non riuscito: permesso negato o cartella non disponibile. Riprova."); }
+    try { await writeBackupToDir(h, backupPayload(config, bookings, clients, catalog, sales, eventi)); const info = { date: todayStr(), at: Date.now() }; saveKey(BACKUP_KEY, info); setLastBackup(info); alert("Backup salvato nella cartella scelta."); } catch (e) { alert("Backup non riuscito: permesso negato o cartella non disponibile. Riprova."); }
   };
   const clearBackupDir = async () => { await clearDirHandle(); setBackupDir(null); setBackupDirName(""); };
 
@@ -829,7 +1014,7 @@ export default function SalonApp({ onLogout, moduli, azienda, demo }) {
       </header>
 
       <main key={view} className="max-w-5xl w-full mx-auto px-4 py-6 flex-1 lc-fade-up">
-        {view === "agenda" && <AgendaPage config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={session.hidePartial} canAddBooking={canAddBooking} canAddClient={canAddClient} onlineBk={flags.online ? onlineBk : []} onImportOnline={importOnline} onCancelOnline={cancelOnline} canManageOnline={session.role !== "operator"} />}
+        {view === "agenda" && <AgendaPage config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={session.hidePartial} canAddBooking={canAddBooking} canAddClient={canAddClient} onlineBk={flags.online ? onlineBk : []} onImportOnline={importOnline} onCancelOnline={cancelOnline} canManageOnline={session.role !== "operator"} eventi={eventi} setEventi={setEventi} impegniEventi={impegni} aziendaId={azienda && azienda.id} />}
         {view === "clienti" && <ClientsView config={config} bookings={bookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} vouchers={vouchers} setVouchers={setVouchers} />}
         {view === "buoni" && <GiftCardsView config={config} vouchers={vouchers} setVouchers={setVouchers} clients={clients} canAddVoucher={canAddVoucher} />}
         {view === "shop" && <ShopView catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} clients={clients} setClients={setClients} branding={b} loyalty={config.loyalty} hidePartial={session.hidePartial} canAddClient={canAddClient} demo={isDemo} />}
@@ -839,11 +1024,11 @@ export default function SalonApp({ onLogout, moduli, azienda, demo }) {
           <div>
             <div className="mb-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2"><AlertCircle size={16} className="shrink-0 mt-0.5" /> In versione demo le impostazioni sono <b>visibili ma non modificabili</b>.</div>
             <fieldset disabled style={{ border: 0, margin: 0, padding: 0, minInlineSize: "auto" }}>
-              <SettingsView config={config} saveConfig={saveConfig} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} session={session} online={flags.online} aziendaId={azienda && azienda.id} license={license} onSaveLicense={updateLicense} backupDirName={backupDirName} onPickBackupDir={pickBackupDir} onClearBackupDir={clearBackupDir} onBackupNow={backupNow} lastBackup={lastBackup} licenza={{ plan: planName(moduli), prezzo_finale: azienda && azienda.prezzo_finale, scadenza: azienda && azienda.licenza_scadenza }} />
+              <SettingsView config={config} saveConfig={saveConfig} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} eventi={eventi} setEventi={setEventi} session={session} online={flags.online} aziendaId={azienda && azienda.id} license={license} onSaveLicense={updateLicense} backupDirName={backupDirName} onPickBackupDir={pickBackupDir} onClearBackupDir={clearBackupDir} onBackupNow={backupNow} lastBackup={lastBackup} licenza={{ plan: planName(moduli), prezzo_finale: azienda && azienda.prezzo_finale, scadenza: azienda && azienda.licenza_scadenza }} />
             </fieldset>
           </div>
         ) : (
-          <SettingsView config={config} saveConfig={saveConfig} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} session={session} online={flags.online} aziendaId={azienda && azienda.id} license={license} onSaveLicense={updateLicense} backupDirName={backupDirName} onPickBackupDir={pickBackupDir} onClearBackupDir={clearBackupDir} onBackupNow={backupNow} lastBackup={lastBackup} licenza={{ plan: planName(moduli), prezzo_finale: azienda && azienda.prezzo_finale, scadenza: azienda && azienda.licenza_scadenza }} />
+          <SettingsView config={config} saveConfig={saveConfig} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} eventi={eventi} setEventi={setEventi} session={session} online={flags.online} aziendaId={azienda && azienda.id} license={license} onSaveLicense={updateLicense} backupDirName={backupDirName} onPickBackupDir={pickBackupDir} onClearBackupDir={clearBackupDir} onBackupNow={backupNow} lastBackup={lastBackup} licenza={{ plan: planName(moduli), prezzo_finale: azienda && azienda.prezzo_finale, scadenza: azienda && azienda.licenza_scadenza }} />
         ))}
       </main>
 
@@ -968,8 +1153,10 @@ function ApptItem({ b, staff, services, onCal, onCancel, onEdit, canCancel, canc
   );
 }
 
-function AgendaPage({ config, bookings, setBookings, clients, setClients, sales, catalog, hidePartial, canAddBooking, canAddClient, onlineBk, onImportOnline, onCancelOnline, canManageOnline }) {
+function AgendaPage({ config, bookings, setBookings, clients, setClients, sales, catalog, hidePartial, canAddBooking, canAddClient, onlineBk, onImportOnline, onCancelOnline, canManageOnline, eventi, setEventi, impegniEventi, aziendaId }) {
   const [adding, setAdding] = useState(false);
+  const [addingEv, setAddingEv] = useState(false);
+  const [editingEv, setEditingEv] = useState(null);
   const onlineCount = (onlineBk || []).length;
   return (
     <div className="space-y-5">
@@ -978,10 +1165,15 @@ function AgendaPage({ config, bookings, setBookings, clients, setClients, sales,
           <h2 className="text-xl font-semibold tracking-tight text-stone-900 leading-none">Agenda</h2>
           <p className="text-[13px] text-stone-400 mt-1">Appuntamenti e disponibilità{onlineCount ? <span className="brand-accent font-medium"> · {onlineCount} online</span> : null}</p>
         </div>
-        <button onClick={() => setAdding((a) => !a)} className="flex items-center gap-1.5 text-sm font-medium brand-bg px-3.5 py-2 rounded-lg shadow-[var(--lc-shadow-xs)] hover:shadow-[var(--lc-shadow-sm)]">{adding ? <X size={15} /> : <Plus size={15} />} {adding ? "Chiudi" : "Appuntamento"}</button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => { setAddingEv((a) => !a); setAdding(false); setEditingEv(null); }} className="flex items-center gap-1.5 text-sm font-medium border brand-border brand-accent bg-white px-3.5 py-2 rounded-lg shadow-[var(--lc-shadow-xs)] hover:brand-soft transition">{addingEv ? <X size={15} /> : <PartyPopper size={15} />} {addingEv ? "Chiudi" : "Evento"}</button>
+          <button onClick={() => { setAdding((a) => !a); setAddingEv(false); }} className="flex items-center gap-1.5 text-sm font-medium brand-bg px-3.5 py-2 rounded-lg shadow-[var(--lc-shadow-xs)] hover:shadow-[var(--lc-shadow-sm)]">{adding ? <X size={15} /> : <Plus size={15} />} {adding ? "Chiudi" : "Appuntamento"}</button>
+        </div>
       </div>
-      {adding ? <ManualBooking config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} canAddBooking={canAddBooking} canAddClient={canAddClient} onDone={() => setAdding(false)} /> : null}
-      <AgendaView config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={hidePartial} onlineBk={onlineBk || []} onImportOnline={onImportOnline} onCancelOnline={onCancelOnline} canManageOnline={canManageOnline} />
+      {adding ? <ManualBooking config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} canAddBooking={canAddBooking} canAddClient={canAddClient} impegniEventi={impegniEventi} onDone={() => setAdding(false)} /> : null}
+      {addingEv ? <EventForm config={config} eventi={eventi} setEventi={setEventi} onDone={() => setAddingEv(false)} /> : null}
+      {editingEv ? <EventForm config={config} eventi={eventi} setEventi={setEventi} editing={editingEv} onDone={() => setEditingEv(null)} /> : null}
+      <AgendaView config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={hidePartial} onlineBk={onlineBk || []} onImportOnline={onImportOnline} onCancelOnline={onCancelOnline} canManageOnline={canManageOnline} eventi={eventi} setEventi={setEventi} impegniEventi={impegniEventi} aziendaId={aziendaId} onEditEvento={(ev) => { setEditingEv(ev); setAddingEv(false); setAdding(false); }} />
     </div>
   );
 }
@@ -989,19 +1181,21 @@ function AgendaPage({ config, bookings, setBookings, clients, setClients, sales,
 const VIEW_MODES = [["day", "Giorno", CalendarDays], ["3day", "3 giorni", CalendarRange], ["week", "Settimana", Calendar]];
 function mondayOf(dateStr) { const d = parseDate(dateStr); const wd = (d.getDay() + 6) % 7; return addDays(dateStr, -wd); }
 
-function AgendaView({ config, bookings, setBookings, clients, setClients, sales, catalog, hidePartial, onlineBk, onImportOnline, onCancelOnline, canManageOnline }) {
+function AgendaView({ config, bookings, setBookings, clients, setClients, sales, catalog, hidePartial, onlineBk, onImportOnline, onCancelOnline, canManageOnline, eventi, setEventi, impegniEventi, aziendaId, onEditEvento }) {
   const staff = config.staff, services = config.services;
   const [anchor, setAnchor] = useState(todayStr());
   const [mode, setMode] = useState("day");
   const [filter, setFilter] = useState("all");
   const [sel, setSel] = useState(null);
   const [selOnline, setSelOnline] = useState(null);
+  const [selEvento, setSelEvento] = useState(null);
   const [resch, setResch] = useState(null);
 
   const span = mode === "week" ? 7 : mode === "3day" ? 3 : 1;
   const days = useMemo(() => { const start = mode === "week" ? mondayOf(anchor) : anchor; return Array.from({ length: span }, (_, i) => addDays(start, i)); }, [anchor, mode, span]);
-  const byDay = useMemo(() => { const m = {}; days.forEach((ds) => { const reg = bookings.filter((b) => b.date === ds && (filter === "all" || b.staffId === filter) && !(hidePartial && b.status === "partial")); const onl = (onlineBk || []).filter((b) => b.date === ds && (filter === "all" || b.staffId === filter)); m[ds] = [...reg, ...onl].sort((a, b) => a.startMin - b.startMin); }); return m; }, [bookings, onlineBk, days, filter, hidePartial]);
-  const totalCount = days.reduce((a, ds) => a + byDay[ds].length, 0);
+  const byDay = useMemo(() => { const m = {}; days.forEach((ds) => { const reg = bookings.filter((b) => b.date === ds && (filter === "all" || b.staffId === filter) && !(hidePartial && b.status === "partial")); const onl = (onlineBk || []).filter((b) => b.date === ds && (filter === "all" || b.staffId === filter)); const evs = (eventi || []).filter((ev) => ev.date === ds && (filter === "all" || (ev.staffIds || []).includes(filter))).map((ev) => ({ ...ev, _evento: true })); m[ds] = [...reg, ...onl, ...evs].sort((a, b) => a.startMin - b.startMin); }); return m; }, [bookings, onlineBk, eventi, days, filter, hidePartial]);
+  const totalCount = days.reduce((a, ds) => a + byDay[ds].filter((x) => !x._evento).length, 0);
+  const eventCount = days.reduce((a, ds) => a + byDay[ds].filter((x) => x._evento).length, 0);
 
   const shift = (dir) => setAnchor((a) => addDays(mode === "week" ? mondayOf(a) : a, dir * span));
   const consumesStatus = (s) => s === "done" || s === "partial";
@@ -1060,7 +1254,7 @@ function AgendaView({ config, bookings, setBookings, clients, setClients, sales,
               <p className="text-sm font-medium text-stone-600">Nessun appuntamento</p>
               <p className="text-xs text-stone-400 mt-1">Tocca «Appuntamento» in alto per aggiungerne uno.</p>
             </div>
-          ) : byDay[days[0]].map((b, i) => <ApptCard key={b.id} b={b} staff={staff} services={services} big index={i} onClick={() => (b.online ? setSelOnline(b) : setSel(b))} />)}
+          ) : byDay[days[0]].map((b, i) => (b._evento ? <EventCard key={b.id} ev={b} staff={staff} big onClick={() => setSelEvento(b)} /> : <ApptCard key={b.id} b={b} staff={staff} services={services} big index={i} onClick={() => (b.online ? setSelOnline(b) : setSel(b))} />))}
         </div>
       ) : (
         <div className="overflow-x-auto -mx-1 px-1 pb-1">
@@ -1072,7 +1266,7 @@ function AgendaView({ config, bookings, setBookings, clients, setClients, sales,
                   <div className={`text-sm font-semibold leading-none mt-0.5 ${isToday ? "" : "text-stone-700"}`}>{d.getDate()}<span className="text-stone-400 font-normal">/{d.getMonth() + 1}</span></div>
                 </div>
                 <div className="space-y-1.5">
-                  {list.length === 0 ? <div className="text-center text-xs text-stone-300 py-4 rounded-lg border border-dashed border-stone-200/70">—</div> : list.map((b, i) => <ApptCard key={b.id} b={b} staff={staff} services={services} index={i} onClick={() => (b.online ? setSelOnline(b) : setSel(b))} />)}
+                  {list.length === 0 ? <div className="text-center text-xs text-stone-300 py-4 rounded-lg border border-dashed border-stone-200/70">—</div> : list.map((b, i) => (b._evento ? <EventCard key={b.id} ev={b} staff={staff} onClick={() => setSelEvento(b)} /> : <ApptCard key={b.id} b={b} staff={staff} services={services} index={i} onClick={() => (b.online ? setSelOnline(b) : setSel(b))} />))}
                 </div>
               </div>
             ); })}
@@ -1080,11 +1274,12 @@ function AgendaView({ config, bookings, setBookings, clients, setClients, sales,
         </div>
       )}
 
-      {totalCount > 0 ? <p className="text-xs text-stone-400 text-center pt-1">{totalCount} appuntament{totalCount === 1 ? "o" : "i"} nel periodo · tocca una card per gestirla</p> : null}
+      {totalCount + eventCount > 0 ? <p className="text-xs text-stone-400 text-center pt-1">{totalCount} appuntament{totalCount === 1 ? "o" : "i"}{eventCount ? ` e ${eventCount} event${eventCount === 1 ? "o" : "i"}` : ""} nel periodo · tocca una card per gestirla</p> : null}
 
       {sel ? <ApptActions booking={sel} config={config} clients={clients} setClients={setClients} bookings={bookings} sales={sales} catalog={catalog} hidePartial={hidePartial} onStatus={setStatus} onResch={(bk) => { setResch(bk); setSel(null); }} onClose={() => setSel(null)} /> : null}
       {selOnline ? <OnlineApptModal booking={selOnline} config={config} canManage={canManageOnline} onImport={(bk) => { onImportOnline && onImportOnline(bk); setSelOnline(null); }} onCancel={(bk) => { onCancelOnline && onCancelOnline(bk); setSelOnline(null); }} onClose={() => setSelOnline(null)} /> : null}
-      {resch ? <RescheduleModal booking={resch} config={config} bookings={bookings} onClose={() => setResch(null)} onSave={(d2, startMin) => applyResch(resch, d2, startMin)} /> : null}
+      {resch ? <RescheduleModal booking={resch} config={config} bookings={bookings} impegniEventi={impegniEventi} onClose={() => setResch(null)} onSave={(d2, startMin) => applyResch(resch, d2, startMin)} /> : null}
+      {selEvento ? <EventModal ev={selEvento} staff={staff} aziendaId={aziendaId} onEdit={() => { onEditEvento && onEditEvento(eventi.find((e) => e.id === selEvento.id)); setSelEvento(null); }} onDelete={() => { setEventi(eventi.filter((e) => e.id !== selEvento.id)); setSelEvento(null); }} onClose={() => setSelEvento(null)} /> : null}
     </div>
   );
 }
@@ -1575,7 +1770,8 @@ function GiftCardsView({ config, vouchers, setVouchers, clients, canAddVoucher }
   );
 }
 
-function ManualBooking({ config, bookings, setBookings, clients, setClients, canAddBooking, canAddClient, onDone }) {
+function ManualBooking({ config, bookings, setBookings, clients, setClients, canAddBooking, canAddClient, impegniEventi, onDone }) {
+  const occupati = useMemo(() => [...bookings, ...(impegniEventi || [])], [bookings, impegniEventi]);
   const services = config.services, staff = config.staff;
   const [sel, setSel] = useState([]);
   const [staffId, setStaffId] = useState("");
@@ -1596,7 +1792,7 @@ function ManualBooking({ config, bookings, setBookings, clients, setClients, can
   const candidates = staffId ? qualified.filter((s) => s.id === staffId) : qualified;
   const closed = salonClosure(config, date);
   const opOff = selStaff ? staffOff(selStaff, date) : false;
-  const slotMap = sel.length && candidates.length ? computeSlots(date, duration, candidates, bookings, config.closures) : {};
+  const slotMap = sel.length && candidates.length ? computeSlots(date, duration, candidates, occupati, config.closures) : {};
   const slotTimes = Object.keys(slotMap).map(Number).sort((a, b) => a - b);
   const maxDate = pd(new Date(Date.now() + ADVANCE_DAYS * 864e5));
   const onCode = (v) => { v = v.replace(/\D/g, "").slice(0, 6); setCode(v); const c = clients.find((x) => x.code === v); if (c) { setName(c.name || ""); setEmail(c.email || ""); setPhone(c.phone || ""); } };
@@ -1604,7 +1800,7 @@ function ManualBooking({ config, bookings, setBookings, clients, setClients, can
 
   const save = () => {
     if (canAddBooking === false) { alert("Limite demo raggiunto: massimo 20 appuntamenti. Per usare il programma senza limiti contatta Office Solution."); return; }
-    const map = computeSlots(date, duration, candidates, bookings, config.closures);
+    const map = computeSlots(date, duration, candidates, occupati, config.closures);
     const avail = map[slot];
     if (!avail || !avail.length) { alert("Orario non disponibile."); setSlot(null); return; }
     const cm = clients.find((c) => c.code === code);
@@ -1961,7 +2157,91 @@ function BookingLinkCard({ aziendaId, config, saveConfig }) {
   );
 }
 
-function SettingsView({ config, saveConfig, bookings, setBookings, clients, setClients, catalog, setCatalog, sales, setSales, session, online, aziendaId, license, onSaveLicense, backupDirName, onPickBackupDir, onClearBackupDir, onBackupNow, lastBackup, licenza }) {
+// Personalizzazione del mini-sito pubblico (il link di prenotazione è una
+// pagina web dell'attività: descrizione, copertina, orari, social, sezioni).
+function SitoWebCard({ config, saveConfig }) {
+  const sito = config.sito || {};
+  const save = (patch) => saveConfig({ ...config, sito: { ...sito, ...patch } });
+  const [caricando, setCaricando] = useState(false);
+  const onCover = async (e) => {
+    const file = e.target.files && e.target.files[0]; if (!file) return;
+    setCaricando(true);
+    try { save({ copertina: await fileToCoverDataURL(file, 1600) }); } catch (err) { alert("Impossibile caricare l'immagine."); }
+    setCaricando(false); e.target.value = "";
+  };
+  const sezioni = Array.isArray(sito.sezioni) ? sito.sezioni : [];
+  const addSezione = () => save({ sezioni: [...sezioni, { id: uid(), titolo: "", testo: "" }] });
+  const editSezione = (id, patch) => save({ sezioni: sezioni.map((s) => (s.id === id ? { ...s, ...patch } : s)) });
+  const delSezione = (id) => save({ sezioni: sezioni.filter((s) => s.id !== id) });
+  return (
+    <section className="lc-card p-5">
+      <h3 className="font-semibold flex items-center gap-2 mb-1 text-stone-900 tracking-tight"><Globe size={16} className="brand-accent" /> Il tuo mini-sito</h3>
+      <p className="text-sm text-stone-500 mb-4">Il link di prenotazione è una vera pagina web della tua attività: qui personalizzi copertina, presentazione, orari, social e contenuti. Gli eventi futuri compaiono da soli.</p>
+
+      <div className="space-y-4">
+        <div>
+          <span className="text-xs font-medium text-stone-400 uppercase tracking-wide block mb-1.5">Foto di copertina</span>
+          {sito.copertina ? (
+            <div className="relative rounded-xl overflow-hidden border border-stone-200">
+              <img src={sito.copertina} alt="Copertina del mini-sito" className="w-full h-36 object-cover" />
+              <button type="button" onClick={() => save({ copertina: null })} className="absolute top-2 right-2 bg-white/90 text-stone-600 rounded-lg p-1.5 shadow-sm hover:text-red-500" title="Rimuovi copertina"><Trash2 size={15} /></button>
+            </div>
+          ) : (
+            <label className="flex items-center justify-center gap-2 border-2 border-dashed border-stone-200 rounded-xl py-5 text-sm text-stone-400 cursor-pointer hover:border-stone-300 hover:text-stone-500 transition">
+              <ImageIcon size={16} /> {caricando ? "Caricamento…" : "Carica una foto orizzontale del tuo salone"}
+              <input type="file" accept="image/*" className="hidden" onChange={onCover} />
+            </label>
+          )}
+        </div>
+
+        <label className="text-sm block"><span className="text-xs font-medium text-stone-400 uppercase tracking-wide block mb-1">Presentazione dell'attività</span>
+          <textarea value={sito.descrizione || ""} onChange={(e) => save({ descrizione: e.target.value })} rows={2} placeholder="Es. Dal 1998 ci prendiamo cura dei tuoi capelli nel cuore di Oleggio…" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+        </label>
+
+        <label className="text-sm block"><span className="text-xs font-medium text-stone-400 uppercase tracking-wide block mb-1">Orari di apertura <span className="normal-case text-stone-300">· una riga per giorno</span></span>
+          <textarea value={sito.orari || ""} onChange={(e) => save({ orari: e.target.value })} rows={3} placeholder={"Mar–Ven · 9:00–18:00\nSabato · 8:30–17:00\nLunedì e Domenica · chiuso"} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+        </label>
+
+        <div className="grid sm:grid-cols-3 gap-3">
+          <label className="text-sm block"><span className="text-xs font-medium text-stone-400 uppercase tracking-wide block mb-1 flex items-center gap-1"><Instagram size={12} /> Instagram</span>
+            <input value={sito.instagram || ""} onChange={(e) => save({ instagram: e.target.value })} placeholder="@iltuosalone" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+          </label>
+          <label className="text-sm block"><span className="text-xs font-medium text-stone-400 uppercase tracking-wide block mb-1 flex items-center gap-1"><Facebook size={12} /> Facebook</span>
+            <input value={sito.facebook || ""} onChange={(e) => save({ facebook: e.target.value })} placeholder="nomepagina" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+          </label>
+          <label className="text-sm block"><span className="text-xs font-medium text-stone-400 uppercase tracking-wide block mb-1 flex items-center gap-1"><Globe size={12} /> Sito web</span>
+            <input value={sito.sitoWeb || ""} onChange={(e) => save({ sitoWeb: e.target.value })} placeholder="www.iltuosalone.it" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+          </label>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-medium text-stone-400 uppercase tracking-wide">Sezioni personalizzate <span className="normal-case text-stone-300">· es. «Chi siamo», «I nostri servizi», «Promozioni»</span></span>
+            <button type="button" onClick={addSezione} className="text-xs font-medium brand-accent inline-flex items-center gap-1 hover:underline"><Plus size={13} /> Aggiungi</button>
+          </div>
+          {sezioni.length === 0 ? <p className="text-xs text-stone-300">Nessuna sezione: aggiungi i contenuti che vuoi mostrare nella pagina «Info» del mini-sito.</p> : (
+            <div className="space-y-2">{sezioni.map((s) => (
+              <div key={s.id} className="rounded-xl border border-stone-200 p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <input value={s.titolo} onChange={(e) => editSezione(s.id, { titolo: e.target.value })} placeholder="Titolo sezione" className="flex-1 px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+                  <button type="button" onClick={() => delSezione(s.id)} className="p-2 text-stone-400 hover:text-red-500 shrink-0"><Trash2 size={15} /></button>
+                </div>
+                <textarea value={s.testo} onChange={(e) => editSezione(s.id, { testo: e.target.value })} rows={2} placeholder="Testo della sezione" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+              </div>
+            ))}</div>
+          )}
+        </div>
+
+        <label className="flex items-center gap-2.5 cursor-pointer">
+          <input type="checkbox" checked={sito.mostraEventi !== false} onChange={(e) => save({ mostraEventi: e.target.checked })} style={{ accentColor: "var(--brand)" }} className="w-4 h-4" />
+          <span className="text-sm text-stone-700">Mostra gli eventi futuri sul mini-sito</span>
+        </label>
+      </div>
+    </section>
+  );
+}
+
+function SettingsView({ config, saveConfig, bookings, setBookings, clients, setClients, catalog, setCatalog, sales, setSales, eventi, setEventi, session, online, aziendaId, license, onSaveLicense, backupDirName, onPickBackupDir, onClearBackupDir, onBackupNow, lastBackup, licenza }) {
   const F = useMods();
   const services = config.services, staff = config.staff, branding = config.branding;
   const isReseller = session && session.role === "reseller";
@@ -1979,10 +2259,10 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
   const azzeraGiacenze = () => { if (confirm("Azzerare TUTTE le giacenze a 0? Prodotti, formati e prezzi restano invariati: solo le quantità in magazzino verranno messe a zero. L'operazione non è reversibile.")) { setCatalog({ ...catalog, products: catalog.products.map((p) => ({ ...p, formats: p.formats.map((f) => ({ ...f, stock: 0 })) })) }); alert("Giacenze azzerate."); } };
   const importBackup = async (e) => {
     const file = e.target.files && e.target.files[0]; if (!file) return;
-    try { const text = await file.text(); const d = JSON.parse(text); if (d.config) saveConfig({ ...DEFAULT_CONFIG, ...d.config }); if (Array.isArray(d.bookings)) setBookings(d.bookings); if (Array.isArray(d.clients)) setClients(d.clients); if (d.catalog && Array.isArray(d.catalog.products)) setCatalog(d.catalog); if (Array.isArray(d.sales)) setSales(d.sales); alert("Backup importato."); } catch (err) { alert("File di backup non valido."); }
+    try { const text = await file.text(); const d = JSON.parse(text); if (d.config) saveConfig({ ...DEFAULT_CONFIG, ...d.config }); if (Array.isArray(d.bookings)) setBookings(d.bookings); if (Array.isArray(d.clients)) setClients(d.clients); if (d.catalog && Array.isArray(d.catalog.products)) setCatalog(d.catalog); if (Array.isArray(d.sales)) setSales(d.sales); if (Array.isArray(d.eventi)) setEventi(d.eventi); alert("Backup importato."); } catch (err) { alert("File di backup non valido."); }
     e.target.value = "";
   };
-  const azzeraTutto = () => { if (confirm("Azzerare COMPLETAMENTE la configurazione (servizi, operatori, clienti, appuntamenti, catalogo, vendite e dati dell'attività)? Da usare per preparare una nuova installazione cliente. Operazione non reversibile.")) { saveConfig({ ...DEFAULT_CONFIG, services: [], staff: [], branding: BLANK_BRANDING, loyalty: DEFAULT_LOYALTY }); setBookings([]); setClients([]); setCatalog({ categories: [], products: [] }); setSales([]); alert("Configurazione azzerata. Puoi impostare il salone da zero."); } };
+  const azzeraTutto = () => { if (confirm("Azzerare COMPLETAMENTE la configurazione (servizi, operatori, clienti, appuntamenti, catalogo, vendite e dati dell'attività)? Da usare per preparare una nuova installazione cliente. Operazione non reversibile.")) { saveConfig({ ...DEFAULT_CONFIG, services: [], staff: [], branding: BLANK_BRANDING, loyalty: DEFAULT_LOYALTY }); setBookings([]); setClients([]); setCatalog({ categories: [], products: [] }); setSales([]); setEventi([]); alert("Configurazione azzerata. Puoi impostare il salone da zero."); } };
   const loyalty = loyaltyConfig(config);
   const updLoyalty = (patch) => saveConfig({ ...config, loyalty: { ...loyalty, ...patch } });
   const addReward = () => updLoyalty({ rewards: [...loyalty.rewards, { id: uid(), points: 5, label: "Nuovo premio" }] });
@@ -2001,6 +2281,8 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
       <div className="flex items-center justify-between gap-3 flex-wrap"><h2 className="text-xl font-semibold tracking-tight text-stone-900">Impostazioni</h2>{isReseller ? <div className="flex items-center gap-2"><button onClick={reset} className="flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-700"><RefreshCw size={14} /> Ripristina demo</button><button onClick={azzeraTutto} className="flex items-center gap-1.5 text-sm text-red-600 border border-red-300 px-2.5 py-1.5 rounded-lg hover:bg-red-50"><AlertTriangle size={14} /> Azzera tutto</button></div> : null}</div>
 
       {online && aziendaId ? <BookingLinkCard aziendaId={aziendaId} config={config} saveConfig={saveConfig} /> : null}
+
+      {online && aziendaId ? <SitoWebCard config={config} saveConfig={saveConfig} /> : null}
 
       {isReseller ? <LicensePanel license={license} onSave={onSaveLicense} /> : null}
 
@@ -2026,7 +2308,7 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
         <h3 className="font-semibold flex items-center gap-2 mb-3"><Download size={16} className="brand-accent" /> Backup dei dati</h3>
         <p className="text-sm text-stone-500 mb-3">I dati sono salvati su questo PC. Esporta regolarmente un backup per sicurezza. (La licenza non è inclusa nel backup.)</p>
         <div className="flex flex-wrap gap-2">
-          <button onClick={() => exportBackup(config, bookings, clients, catalog, sales)} className="text-sm brand-bg px-3 py-2 rounded-lg inline-flex items-center gap-2"><Download size={15} /> Esporta backup</button>
+          <button onClick={() => exportBackup(config, bookings, clients, catalog, sales, eventi)} className="text-sm brand-bg px-3 py-2 rounded-lg inline-flex items-center gap-2"><Download size={15} /> Esporta backup</button>
           <label className="text-sm border border-stone-300 text-stone-700 px-3 py-2 rounded-lg inline-flex items-center gap-2 cursor-pointer hover:bg-stone-50"><Upload size={15} /> Importa backup<input type="file" accept="application/json" onChange={importBackup} className="hidden" /></label>
         </div>
       </section>
