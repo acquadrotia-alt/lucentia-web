@@ -373,6 +373,16 @@ export async function onRequest(context) {
           sezioni: Array.isArray(sito.sezioni) ? sito.sezioni.filter((s) => s && (s.titolo || s.testo)).map((s) => ({ titolo: s.titolo || "", testo: s.testo || "" })) : [],
         },
         eventi: eventiPub,
+        catalogo: await (async () => {
+          if (sito.mostraCatalogo !== true) return null;
+          const cat = (await getCollezione(env, aid, "catalog")) || {};
+          const categorie = Array.isArray(cat.categories) ? cat.categories.map((c) => ({ id: c.id, name: c.name })) : [];
+          const prodotti = Array.isArray(cat.products) ? cat.products.map((p) => ({
+            id: p.id, name: p.name || "", description: p.description || "", categoryId: p.categoryId || null,
+            formats: Array.isArray(p.formats) ? p.formats.map((f) => ({ label: f.label || "", price: f.price != null ? f.price : null, disponibile: (Number(f.stock) || 0) > 0 })) : [],
+          })).filter((p) => p.name) : [];
+          return { categorie, prodotti };
+        })(),
       });
     }
 
@@ -485,9 +495,10 @@ export async function onRequest(context) {
     const config = (await getCollezione(env, segs[1], "config")) || {};
     const b = config.branding || {};
     const staffPub = (ev.staffIds || []).map((sid) => { const st = (config.staff || []).find((s) => s.id === sid); return st ? { name: st.name, role: st.role || "", avatar: st.avatar || null, photo: st.photo || null } : null; }).filter(Boolean);
+    const ospitiPub = Array.isArray(ev.ospiti) ? ev.ospiti.filter((o) => o && o.nome).map((o) => ({ nome: o.nome, ruolo: o.ruolo || "", foto: o.foto || null })) : [];
     return json({
       ok: true,
-      evento: { id: ev.id, titolo: ev.titolo || "Evento", descrizione: ev.descrizione || "", copertina: ev.copertina || null, date: ev.date, startMin: ev.startMin, endMin: ev.endMin, dettagli: Array.isArray(ev.dettagli) ? ev.dettagli.filter((d) => d && (d.label || d.testo)) : [], staff: staffPub },
+      evento: { id: ev.id, titolo: ev.titolo || "Evento", descrizione: ev.descrizione || "", copertina: ev.copertina || null, date: ev.date, startMin: ev.startMin, endMin: ev.endMin, dettagli: Array.isArray(ev.dettagli) ? ev.dettagli.filter((d) => d && (d.label || d.testo)) : [], staff: staffPub, ospiti: ospitiPub },
       salone: { nome: az.denominazione, brandName: b.name || az.denominazione, tagline: b.tagline || "", logo: b.logo || null, primary: b.primary || "#b8893b", phone: b.phone || "", email: b.email || "", address: b.address || "" },
     });
   }

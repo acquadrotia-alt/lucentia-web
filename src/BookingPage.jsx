@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Calendar, Clock, Check, ChevronRight, ChevronLeft, User, Users, Phone, Mail, Sparkles, MapPin, ArrowRight, Scissors, AlertCircle, CalendarClock, Trash2, X, PartyPopper, Info, MessageCircle, Instagram, Facebook, Globe } from "lucide-react";
+import { Calendar, Clock, Check, ChevronRight, ChevronLeft, User, Users, Phone, Mail, Sparkles, MapPin, ArrowRight, Scissors, AlertCircle, CalendarClock, Trash2, X, PartyPopper, Info, MessageCircle, Instagram, Facebook, Globe, ShoppingBag } from "lucide-react";
 import { AvatarSvg, avatarIdFor } from "./avatars.jsx";
 import { setBrandTab } from "./favicon.js";
 
@@ -125,8 +125,9 @@ export default function BookingPage({ aid }) {
 
   const sito = info.sito || {};
   const eventiPub = Array.isArray(info.eventi) ? info.eventi : [];
+  const catalogo = info.catalogo && Array.isArray(info.catalogo.prodotti) && info.catalogo.prodotti.length ? info.catalogo : null;
   const hasInfoTab = !!(sito.descrizione || (sito.sezioni || []).length || sito.orari || sito.instagram || sito.facebook || sito.sitoWeb || b.address || b.phone);
-  const NAVS = [["book", "Prenota", Calendar], ...(eventiPub.length ? [["eventi", "Eventi", PartyPopper]] : []), ...(hasInfoTab ? [["info", "Info", Info]] : [])];
+  const NAVS = [["book", "Prenota", Calendar], ...(eventiPub.length ? [["eventi", "Eventi", PartyPopper]] : []), ...(catalogo ? [["prodotti", "Prodotti", ShoppingBag]] : []), ...(hasInfoTab ? [["info", "Info", Info]] : [])];
 
   return (
     <div className="min-h-screen bg-stone-50" style={{ "--brand": primary }}>
@@ -164,6 +165,7 @@ export default function BookingPage({ aid }) {
       </div>
 
       {view === "eventi" ? <EventiSection aid={aid} eventi={eventiPub} primary={primary} /> :
+       view === "prodotti" ? <ProdottiSection catalogo={catalogo} primary={primary} /> :
        view === "info" ? <InfoSection salone={b} sito={sito} primary={primary} /> :
        view === "manage" ? <ManageBookings aid={aid} primary={primary} /> : (
 
@@ -280,6 +282,41 @@ function EventiSection({ aid, eventi, primary }) {
           </div>
         </a>
       ))}
+      <p className="text-center text-[11px] text-stone-300 pt-2">Prenotazioni online · powered by Lucentia</p>
+    </div>
+  );
+}
+
+// Sezione "Prodotti": il catalogo che il salone ha scelto di mostrare (solo
+// listino: nomi, formati e prezzi — le giacenze restano private).
+function ProdottiSection({ catalogo, primary }) {
+  const gruppi = [...(catalogo.categorie || []), { id: null, name: "Altro" }]
+    .map((c) => ({ ...c, items: (catalogo.prodotti || []).filter((p) => (p.categoryId || null) === c.id) }))
+    .filter((g) => g.items.length);
+  return (
+    <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
+      {gruppi.map((g) => (
+        <div key={g.id || "altro"} className="lc-fade-up">
+          <div className="text-xs font-semibold uppercase tracking-[0.15em] mb-2" style={{ color: primary }}>{g.name}</div>
+          <div className="space-y-2">
+            {g.items.map((p) => (
+              <div key={p.id} className="lc-card p-4">
+                <div className="font-medium text-stone-900">{p.name}</div>
+                {p.description ? <div className="text-sm text-stone-500 mt-0.5">{p.description}</div> : null}
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {(p.formats || []).map((f, i) => (
+                    <span key={i} className={`inline-flex items-center gap-1.5 text-xs border rounded-full px-2.5 py-1 ${f.disponibile ? "border-stone-200 text-stone-600 bg-stone-50" : "border-stone-100 text-stone-300 bg-white"}`}>
+                      {f.label}{f.price != null ? <b className={f.disponibile ? "text-stone-800" : "text-stone-300"}>{eur(f.price)}</b> : null}
+                      {!f.disponibile ? <span className="uppercase text-[9px] font-semibold tracking-wide">Esaurito</span> : null}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      <p className="text-center text-xs text-stone-400">I prodotti sono disponibili in negozio: chiedi in salone o scrivici per metterli da parte.</p>
       <p className="text-center text-[11px] text-stone-300 pt-2">Prenotazioni online · powered by Lucentia</p>
     </div>
   );

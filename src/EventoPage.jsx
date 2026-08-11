@@ -109,15 +109,23 @@ export default function EventoPage({ token }) {
               </div>
             ) : null}
 
-            {(ev.staff || []).length ? (
+            {(ev.staff || []).length || (ev.ospiti || []).length ? (
               <div className="mt-6">
                 <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-2 flex items-center gap-1.5"><Users size={13} /> Con te all'evento</div>
                 <div className="flex flex-wrap gap-2">
-                  {ev.staff.map((st, i) => (
-                    <div key={i} className="flex items-center gap-2 bg-stone-50 border border-stone-200 rounded-full pl-1 pr-3 py-1">
+                  {(ev.staff || []).map((st, i) => (
+                    <div key={`s${i}`} className="flex items-center gap-2 bg-stone-50 border border-stone-200 rounded-full pl-1 pr-3 py-1">
                       {st.photo ? <img src={st.photo} alt="" className="w-7 h-7 rounded-full object-cover" /> : <div className="w-7 h-7 rounded-full overflow-hidden"><AvatarSvg id={avatarIdFor(st)} size={28} /></div>}
                       <span className="text-sm font-medium text-stone-700">{st.name}</span>
                       {st.role ? <span className="text-xs text-stone-400">· {st.role}</span> : null}
+                    </div>
+                  ))}
+                  {(ev.ospiti || []).map((o, i) => (
+                    <div key={`o${i}`} className="flex items-center gap-2 border rounded-full pl-1 pr-3 py-1" style={{ background: `${primary}0d`, borderColor: `${primary}55` }}>
+                      {o.foto ? <img src={o.foto} alt="" className="w-7 h-7 rounded-full object-cover" /> : <div className="w-7 h-7 rounded-full flex items-center justify-center text-white" style={{ background: primary }}><Sparkles size={13} /></div>}
+                      <span className="text-sm font-medium text-stone-700">{o.nome}</span>
+                      {o.ruolo ? <span className="text-xs text-stone-400">· {o.ruolo}</span> : null}
+                      <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: primary }}>Ospite</span>
                     </div>
                   ))}
                 </div>

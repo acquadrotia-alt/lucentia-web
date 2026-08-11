@@ -114,6 +114,15 @@ async function apiLoad(coll, fallback) {
   try { const r = await fetch(`/api/data/${coll}`); if (!r.ok) return fallback; const j = await r.json(); return (j && j.value != null) ? j.value : fallback; }
   catch (e) { return fallback; }
 }
+// Variante con esito: usata dove un salvataggio fallito va segnalato subito
+// (es. eventi con immagini: se il payload è troppo grande l'utente deve saperlo).
+async function apiSaveVerificato(coll, value) {
+  try {
+    const r = await fetch(`/api/data/${coll}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ value }) });
+    if (!r.ok) { const j = await r.json().catch(() => ({})); return { ok: false, error: (j && j.error) || `HTTP ${r.status}` }; }
+    return { ok: true };
+  } catch (e) { return { ok: false, error: "errore di rete" }; }
+}
 async function apiSave(coll, value) {
   try { await fetch(`/api/data/${coll}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ value }) }); } catch (e) {}
 }
@@ -671,22 +680,31 @@ function EventForm({ config, eventi, setEventi, editing, onDone }) {
   const [copertina, setCopertina] = useState(ev ? ev.copertina || null : null);
   const [descrizione, setDescrizione] = useState(ev ? ev.descrizione || "" : "");
   const [dettagli, setDettagli] = useState(ev && Array.isArray(ev.dettagli) ? ev.dettagli : []);
+  const [ospiti, setOspiti] = useState(ev && Array.isArray(ev.ospiti) ? ev.ospiti : []);
   const [caricando, setCaricando] = useState(false);
   const toggleStaff = (id) => setStaffIds((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   const onCover = async (e) => {
     const file = e.target.files && e.target.files[0]; if (!file) return;
     setCaricando(true);
-    try { setCopertina(await fileToCoverDataURL(file, 1200)); } catch (err) { alert("Impossibile caricare l'immagine."); }
+    try { setCopertina(await fileToCoverDataURL(file, 1000)); } catch (err) { alert("Impossibile caricare l'immagine."); }
     setCaricando(false); e.target.value = "";
   };
   const addDettaglio = () => setDettagli((p) => [...p, { id: uid(), label: "", testo: "" }]);
   const editDettaglio = (id, patch) => setDettagli((p) => p.map((d) => (d.id === id ? { ...d, ...patch } : d)));
   const delDettaglio = (id) => setDettagli((p) => p.filter((d) => d.id !== id));
+  const addOspite = () => setOspiti((p) => [...p, { id: uid(), nome: "", ruolo: "", foto: null }]);
+  const editOspite = (id, patch) => setOspiti((p) => p.map((o) => (o.id === id ? { ...o, ...patch } : o)));
+  const delOspite = (id) => setOspiti((p) => p.filter((o) => o.id !== id));
+  const onFotoOspite = (id) => async (e) => {
+    const file = e.target.files && e.target.files[0]; if (!file) return;
+    try { editOspite(id, { foto: await fileToCoverDataURL(file, 320) }); } catch (err) { alert("Impossibile caricare la foto."); }
+    e.target.value = "";
+  };
   const startMin = strToMin(dalle), endMin = strToMin(alle);
   const valido = titolo.trim() && date && Number.isFinite(startMin) && Number.isFinite(endMin) && endMin > startMin && staffIds.length > 0;
   const save = () => {
     if (!valido) return;
-    const pulito = { id: ev ? ev.id : uid(), titolo: titolo.trim(), date, startMin, endMin, staffIds, copertina, descrizione: descrizione.trim(), dettagli: dettagli.filter((d) => d.label.trim() || d.testo.trim()), createdAt: ev ? ev.createdAt : Date.now() };
+    const pulito = { id: ev ? ev.id : uid(), titolo: titolo.trim(), date, startMin, endMin, staffIds, copertina, descrizione: descrizione.trim(), dettagli: dettagli.filter((d) => d.label.trim() || d.testo.trim()), ospiti: ospiti.filter((o) => o.nome.trim()), createdAt: ev ? ev.createdAt : Date.now() };
     setEventi(ev ? eventi.map((x) => (x.id === ev.id ? pulito : x)) : [...eventi, pulito]);
     onDone();
   };
@@ -736,6 +754,23 @@ function EventForm({ config, eventi, setEventi, editing, onDone }) {
         <textarea value={descrizione} onChange={(e) => setDescrizione(e.target.value)} rows={3} placeholder="Racconta l'evento: cosa succede, per chi è, come partecipare…" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
       </div>
       <div>
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="text-xs font-medium text-stone-400 uppercase tracking-wide">Ospiti dell'evento <span className="normal-case text-stone-300">· es. formatori, artisti, brand ambassador</span></div>
+          <button type="button" onClick={addOspite} className="text-xs font-medium brand-accent inline-flex items-center gap-1 hover:underline"><Plus size={13} /> Aggiungi</button>
+        </div>
+        {ospiti.length === 0 ? <p className="text-xs text-stone-300 mb-3">Nessun ospite: aggiungi chi sarà presente oltre al tuo team — comparirà sulla pagina dell'evento.</p> : (
+          <div className="space-y-2 mb-3">{ospiti.map((o) => (
+            <div key={o.id} className="flex gap-2 items-center">
+              <label className="w-10 h-10 rounded-full border border-stone-200 bg-stone-50 overflow-hidden flex items-center justify-center cursor-pointer shrink-0 hover:border-stone-300" title="Foto dell'ospite (facoltativa)">
+                {o.foto ? <img src={o.foto} alt="" className="w-full h-full object-cover" /> : <ImageIcon size={15} className="text-stone-300" />}
+                <input type="file" accept="image/*" className="hidden" onChange={onFotoOspite(o.id)} />
+              </label>
+              <input value={o.nome} onChange={(e) => editOspite(o.id, { nome: e.target.value })} placeholder="Nome ospite" className="flex-1 px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring min-w-0" />
+              <input value={o.ruolo} onChange={(e) => editOspite(o.id, { ruolo: e.target.value })} placeholder="Ruolo (es. Color specialist)" className="flex-1 px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring min-w-0" />
+              <button type="button" onClick={() => delOspite(o.id)} className="p-2 text-stone-400 hover:text-red-500 shrink-0"><Trash2 size={15} /></button>
+            </div>
+          ))}</div>
+        )}
         <div className="flex items-center justify-between mb-1.5">
           <div className="text-xs font-medium text-stone-400 uppercase tracking-wide">Dettagli dell'evento <span className="normal-case text-stone-300">· es. programma, prezzo, posti</span></div>
           <button type="button" onClick={addDettaglio} className="text-xs font-medium brand-accent inline-flex items-center gap-1 hover:underline"><Plus size={13} /> Aggiungi</button>
@@ -790,6 +825,9 @@ function EventModal({ ev, staff, aziendaId, onEdit, onDelete, onClose }) {
           <div className="space-y-2 text-sm">
             <div className="flex items-center gap-2 text-stone-600"><Calendar size={15} className="text-stone-400 shrink-0" /> {fmtDate(ev.date)} · {minToStr(ev.startMin)}–{minToStr(ev.endMin)}</div>
             {nomi ? <div className="flex items-center gap-2 text-stone-600"><Users size={15} className="text-stone-400 shrink-0" /> {nomi}</div> : null}
+            {(ev.ospiti || []).length ? (
+              <div className="flex items-center gap-2 text-stone-600 flex-wrap"><Sparkles size={15} className="text-stone-400 shrink-0" /> Ospiti: {ev.ospiti.map((o) => o.nome + (o.ruolo ? ` (${o.ruolo})` : "")).join(", ")}</div>
+            ) : null}
             {ev.descrizione ? <p className="text-stone-600 leading-relaxed">{ev.descrizione}</p> : null}
             {(ev.dettagli || []).length ? <div className="space-y-1">{ev.dettagli.map((d) => <div key={d.id} className="text-stone-600"><span className="font-medium text-stone-900">{d.label}</span>{d.label && d.testo ? " · " : ""}{d.testo}</div>)}</div> : null}
           </div>
@@ -914,7 +952,16 @@ export default function SalonApp({ onLogout, moduli, azienda, demo }) {
   useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("catalog", catalog); }, [catalog]);
   useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("sales", sales); }, [sales]);
   useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("vouchers", vouchers); }, [vouchers]);
-  useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("eventi", eventi); }, [eventi]);
+  // Gli eventi si salvano SUBITO (niente debounce) e con esito verificato: il
+  // link pubblico viene condiviso a stretto giro, un salvataggio fallito e
+  // silenzioso produrrebbe una pagina "evento non disponibile".
+  useEffect(() => {
+    if (demoRef.current || !loadedRef.current) return;
+    (async () => {
+      const r = await apiSaveVerificato("eventi", eventi);
+      if (!r.ok) alert(`Attenzione: il salvataggio degli eventi non è riuscito (${r.error}). Se hai caricato un'immagine molto grande, riprova con una foto più leggera.`);
+    })();
+  }, [eventi]);
   dataRef.current = { config, bookings, clients, catalog, sales, eventi };
   useEffect(() => { loadDirHandle().then((h) => { if (h) { setBackupDir(h); setBackupDirName(h.name || "cartella"); } }); }, []);
   useEffect(() => {
@@ -2235,6 +2282,10 @@ function SitoWebCard({ config, saveConfig }) {
         <label className="flex items-center gap-2.5 cursor-pointer">
           <input type="checkbox" checked={sito.mostraEventi !== false} onChange={(e) => save({ mostraEventi: e.target.checked })} style={{ accentColor: "var(--brand)" }} className="w-4 h-4" />
           <span className="text-sm text-stone-700">Mostra gli eventi futuri sul mini-sito</span>
+        </label>
+        <label className="flex items-center gap-2.5 cursor-pointer">
+          <input type="checkbox" checked={sito.mostraCatalogo === true} onChange={(e) => save({ mostraCatalogo: e.target.checked })} style={{ accentColor: "var(--brand)" }} className="w-4 h-4" />
+          <span className="text-sm text-stone-700">Mostra il catalogo prodotti sul mini-sito <span className="text-xs text-stone-400">· nomi, formati e prezzi di listino (mai le giacenze)</span></span>
         </label>
       </div>
     </section>
