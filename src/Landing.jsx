@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Calendar, Users, Star, Layers, ShoppingBag, BarChart3, MessageCircle, HeartPulse, KeyRound, Cloud, FileText, Check, ArrowRight, Sparkles, ShieldCheck, Smartphone, X, Gift, CalendarClock, Globe, Phone, Mail, Monitor } from "lucide-react";
+import { Calendar, Users, Star, Layers, ShoppingBag, BarChart3, MessageCircle, HeartPulse, KeyRound, Cloud, FileText, Check, ArrowRight, Sparkles, ShieldCheck, Smartphone, X, Gift, CalendarClock, Globe, Phone, Mail, Monitor, PartyPopper } from "lucide-react";
 import { CONTACTS } from "./contatti.js";
 
 // Rivela il contenuto con un'animazione quando entra nello schermo (scroll reveal).
@@ -39,7 +39,8 @@ const FEATURES = [
   [Cloud, "Cloud & multi-dispositivo", "Dati sincronizzati e al sicuro: lavori da computer, tablet e telefono, ovunque ti trovi."],
   [FileText, "Listino PDF", "Genera un listino servizi elegante e personalizzato col tuo logo e i tuoi colori."],
   [ShieldCheck, "Backup e sicurezza", "Accesso protetto, dati isolati per ogni salone e backup dei tuoi dati."],
-  [CalendarClock, "Prenotazioni online", "I clienti prenotano da soli con un link dedicato. Add-on opzionale, +€4/mese."],
+  [PartyPopper, "Eventi del salone", "Serate, corsi e open day in agenda: occupano gli operatori e hanno una pagina dedicata da condividere con un link."],
+  [CalendarClock, "Mini-sito & prenotazioni online", "Una pagina web della tua attività con prenotazione online, eventi in programma e contenuti personalizzabili. Add-on, +€4/mese."],
 ];
 
 const PLANS = [
@@ -233,6 +234,13 @@ export default function Landing({ onLogin }) {
               points: ["Andamento incassi servizi e prodotti", "Classifiche di servizi e prodotti più venduti", "Clienti più attivi e frequenza visite", "Messaggi WhatsApp direttamente dalla scheda"],
               img: "/anteprime/statistiche-desktop.webp", alt: "Statistiche del salone nel gestionale Lucentia: incassi e servizi più richiesti", flip: true,
             },
+            {
+              icon: PartyPopper, kicker: "Eventi & mini-sito", title: "Il tuo salone ha una pagina web, e i tuoi eventi pure",
+              text: "Il link di prenotazione è un vero mini-sito della tua attività: copertina, presentazione, orari, social e prenotazione online. E quando organizzi una serata, un corso o un open day, l'evento occupa gli operatori coinvolti in agenda e ha una pagina dedicata con foto e dettagli, pronta da condividere su WhatsApp e Instagram con un link.",
+              points: ["Mini-sito con prenotazioni, eventi e contenuti personalizzabili", "Eventi in agenda con operatori occupati automaticamente", "Pagina evento con copertina, dettagli e pulsante WhatsApp", "Tutto col tuo logo e i tuoi colori"],
+              img: "/anteprime/minisito-desktop.webp", alt: "Mini-sito pubblico di un salone su Lucentia con calendario eventi", flip: false,
+              phone: { img: "/anteprime/evento-mobile.webp", alt: "Pagina pubblica di un evento del salone su smartphone" },
+            },
           ].map((r, i) => (
             <div key={i} className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
               <Reveal className={r.flip ? "lg:order-2" : ""}>
@@ -268,14 +276,14 @@ export default function Landing({ onLogin }) {
             <div className="grid lg:grid-cols-2">
               <div className="p-8 sm:p-10">
                 <Reveal className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full mb-4" style={{ background: GOLD_SOFT, color: GOLD }}><Sparkles size={13} /> Add-on · Novità</Reveal>
-                <Reveal as="h2" delay={60} className="font-display text-3xl sm:text-4xl font-bold text-stone-900 leading-tight">I tuoi clienti prenotano <span className="font-display-i" style={{ color: GOLD }}>da soli</span>, online.</Reveal>
-                <Reveal as="p" delay={120} className="mt-3 text-stone-500 leading-relaxed">Condividi un link dedicato — su WhatsApp, Instagram, Google o un QR in negozio — e ricevi prenotazioni 24 ore su 24, senza telefonate.</Reveal>
+                <Reveal as="h2" delay={60} className="font-display text-3xl sm:text-4xl font-bold text-stone-900 leading-tight">Il mini-sito del tuo salone, con prenotazioni <span className="font-display-i" style={{ color: GOLD }}>online</span>.</Reveal>
+                <Reveal as="p" delay={120} className="mt-3 text-stone-500 leading-relaxed">Condividi un link — su WhatsApp, Instagram, Google o un QR in negozio — e i clienti trovano una pagina web della tua attività: prenotano da soli 24 ore su 24, scoprono gli eventi in programma e tutte le info utili.</Reveal>
                 <div className="mt-6 space-y-3">
                   {[
-                    [Globe, "Pagina col tuo brand", "Logo, colori e contatti del tuo salone, senza login per il cliente."],
+                    [Globe, "Mini-sito col tuo brand", "Copertina, presentazione, orari, social e contatti: personalizzi tutto dalle impostazioni, senza login per il cliente."],
                     [CalendarClock, "Niente vuoti in agenda", "Gli orari si incastrano in automatico dopo gli appuntamenti — oppure a griglia, come preferisci."],
-                    [Users, "Scelta dell'operatore", "Il cliente sceglie chi preferisce, con foto o avatar personalizzati."],
-                    [Check, "Gestione autonoma", "Sposta o annulla la prenotazione e la aggiunge al proprio calendario."],
+                    [PartyPopper, "Eventi in vetrina", "Serate, corsi e open day compaiono da soli sul mini-sito, ognuno con la sua pagina condivisibile."],
+                    [Users, "Scelta dell'operatore", "Il cliente sceglie chi preferisce, con foto o avatar personalizzati, e gestisce la prenotazione in autonomia."],
                   ].map(([Icon, t, d], i) => (
                     <Reveal key={i} delay={160 + i * 70} className="flex items-start gap-3">
                       <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: GOLD_SOFT, color: GOLD }}><Icon size={17} /></div>
