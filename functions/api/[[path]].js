@@ -270,7 +270,7 @@ function valutaSlot(gapPrima, gapDopo, durate) {
 function optimizedStarts(config, bookingsAll, dateStr, serviceId, leadMin, staffFilter, opts) {
   if (nelPassato(dateStr)) return [];
   const earliest = primaOraUtile(dateStr, leadMin, false);
-  const cand = orariPossibili(config, [serviceId], dateStr, bookingsAll, { earliest, staffFilter });
+  const cand = orariPossibili(config, [serviceId], dateStr, bookingsAll, { earliest, staffFilter, modo: "ottimizzata" });
   if (!cand.length) return [];
   const durate = durateOnline(opts && opts.servizionline);
   // In conferma conta solo se lo slot è davvero libero: filtrare anche lì

@@ -167,7 +167,9 @@ test("13 · mai 'nessuna disponibilità' se uno slot è tecnicamente prenotabile
   const bk = [appuntamento("a1", h(9), h(10)), appuntamento("a1", h(10, 50), h(18))];
   const out = orari(cfg, bk, "taglio", "ottimizzata", ONLINE());
   assert.ok(out.length > 0, "il fallback deve tenere in vita lo slot");
-  assert.deepEqual(out, ["10:00"]);
+  // 10:00 lascia 5 minuti morti dopo, 10:05 li lascia prima combaciando con
+  // l'appuntamento successivo: pari qualità, entrambi restano come ripiego.
+  assert.deepEqual(out, ["10:00", "10:05"]);
 });
 
 test("13b · spazi buoni e spazi scomodi convivono nella stessa giornata", () => {

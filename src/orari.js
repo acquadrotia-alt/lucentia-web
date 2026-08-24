@@ -330,32 +330,59 @@ function risorseCoinvolte(config, serviceIds, dateStr, wd) {
   return out;
 }
 
+// Spazi liberi di una risorsa dentro una finestra, al netto di ciò che ha già
+// in agenda. Con i servizi a fasi gli impegni di un appuntamento non sono
+// contigui, quindi i buchi vanno letti fase per fase.
+function buchiNellaFinestra(busy, ws, we, earliest) {
+  const out = [];
+  let cursor = Math.max(ws, earliest);
+  for (const b of busy) {
+    if (b.to <= cursor || b.from >= we) continue;
+    if (b.from > cursor) out.push({ from: cursor, to: Math.min(b.from, we) });
+    cursor = Math.max(cursor, b.to);
+  }
+  if (cursor < we) out.push({ from: cursor, to: we });
+  return out;
+}
+
 // Orari da valutare. Non è una griglia globale: come nel gestionale di sempre,
 // ogni finestra di lavoro genera i suoi orari partendo dal proprio inizio, così
 // un turno che apre alle 9:10 propone 9:10 e non 9:15.
-function orariCandidati(risorse, durata, earliest, soloBordi, occ) {
+//
+// modo: "griglia"    passo fisso, come la modalità omonima
+//       "bordi"      solo i punti attaccati a qualcosa (anti-vuoto)
+//       "ottimizzata" griglia PIÙ i bordi di ogni spazio libero: senza di essi
+//                    un buco che comincia alle 10:40 non sarebbe mai riempibile
+//                    esattamente, perché la griglia offre 10:30 e 10:45.
+function orariCandidati(risorse, durata, earliest, modo, occ) {
   const set = new Set();
   for (const r of risorse) {
+    const busy = occ.get(r.id) || [];
     for (const w of r.finestre) {
       const ws = w[0], we = w[1];
-      if (soloBordi) {
+      if (modo === "bordi") {
         // Anti-vuoto: si parte dall'apertura e ci si accoda a ciò che finisce.
         const primo = Math.max(ws, earliest);
         if (primo + durata <= we) set.add(primo);
-        for (const b of occ.get(r.id) || []) {
-          if (b.to >= ws && b.to + durata <= we && b.to >= earliest) set.add(b.to);
-        }
-      } else {
-        for (let t = ws; t + durata <= we; t += PASSO_MIN) if (t >= earliest) set.add(t);
+        for (const b of busy) if (b.to >= ws && b.to + durata <= we && b.to >= earliest) set.add(b.to);
+        continue;
+      }
+      for (let t = ws; t + durata <= we; t += PASSO_MIN) if (t >= earliest) set.add(t);
+      if (modo !== "ottimizzata") continue;
+      // Bordi degli spazi liberi: inizio del buco (riempimento da sinistra) e
+      // fine meno la durata (riempimento da destra, per combaciare con ciò che segue).
+      for (const buco of buchiNellaFinestra(busy, ws, we, earliest)) {
+        if (buco.from + durata <= buco.to) { set.add(buco.from); set.add(buco.to - durata); }
       }
     }
   }
-  return [...set].sort((a, b) => a - b);
+  return [...set].filter((t) => t >= 0).sort((a, b) => a - b);
 }
 
 // Tutti gli inizi in cui l'appuntamento sta in piedi con tutte le sue risorse.
 // È la base comune di ogni modalità di disponibilità.
-// opts.soloBordi limita gli orari ai punti "attaccati" (modalità anti-vuoto).
+// opts.modo: "griglia" (predefinito), "bordi" (anti-vuoto), "ottimizzata".
+// opts.soloBordi resta accettato come sinonimo di modo "bordi".
 export function orariPossibili(config, serviceIds, dateStr, bookings, opts) {
   const o = opts || {};
   if (salonechiuso(config, dateStr)) return [];
@@ -368,7 +395,8 @@ export function orariPossibili(config, serviceIds, dateStr, bookings, opts) {
   const earliest = o.earliest == null ? -1 : o.earliest;
 
   const out = [];
-  for (const t of orariCandidati(risorse, durata, earliest, !!o.soloBordi, occ)) {
+  const modo = o.soloBordi ? "bordi" : (o.modo || "griglia");
+  for (const t of orariCandidati(risorse, durata, earliest, modo, occ)) {
     const a = assegnaRisorse(config, impegni, serviceIds, dateStr, t, occ, o);
     if (a) out.push({ start: t, durata, ...a });
   }

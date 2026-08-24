@@ -152,3 +152,28 @@ test("un servizio a sola cabina è segnalato come senza operatore", async () => 
   assert.equal(dai("spa").senzaOperatore, undefined);
   assert.equal(dai("piega").senzaOperatore, undefined);
 });
+
+test("§22 · online la modalità ottimizzata riempie esattamente un buco fuori griglia", async () => {
+  const st = scenario("ottimizzata", ["sara"]);
+  // agenda di sara: libera solo 10:10 → 10:40, esattamente una piega da 30'
+  st.dati.bookings = [
+    { id: "m", staffId: "sara", date: GIORNO, startMin: h(9), endMin: h(10, 10) },
+    { id: "p", staffId: "sara", date: GIORNO, startMin: h(10, 40), endMin: h(19) },
+  ];
+  assert.deepEqual(await slots(st, "piega"), ["10:10"], "il buco viene riempito al minuto giusto");
+  // e la prenotazione va a buon fine su quell'orario
+  const r = await prenota(st, "piega", h(10, 10));
+  assert.equal(r.status, 200);
+  assert.deepEqual(st.inserite[0].impegni, [{ tipo: "operatore", risorsaId: "sara", from: h(10, 10), to: h(10, 40) }]);
+});
+
+test("§27 · le due modalità storiche non raggiungono quel buco e restano com'erano", async () => {
+  const agenda = [
+    { id: "m", staffId: "sara", date: GIORNO, startMin: h(9), endMin: h(10, 10) },
+    { id: "p", staffId: "sara", date: GIORNO, startMin: h(10, 40), endMin: h(19) },
+  ];
+  const griglia = scenario("griglia", ["sara"]); griglia.dati.bookings = agenda;
+  const antivuoto = scenario("antivuoto", ["sara"]); antivuoto.dati.bookings = agenda;
+  assert.deepEqual(await slots(griglia, "piega"), [], "a griglia il buco fuori passo resta invisibile, come prima");
+  assert.deepEqual(await slots(antivuoto, "piega"), ["10:10"], "l'anti-vuoto ci arrivava già");
+});
