@@ -65,11 +65,27 @@ The salon app does **not** have a normalized schema. All salon content is seven 
 
 `eventi` are salon events (courses, open days…) that occupy one or more operators (their time slots become unavailable, both in-app and for online booking). Each event has a public shareable page at `/?evento=<azienda_id>:<evento_id>` (`EventoPage.jsx`, public API `/api/evento/:aid/:eid`). The booking link `/?prenota=<azienda_id>` is a mini-site (`BookingPage.jsx`) with booking, upcoming events and custom content configured in `config.sito` (Impostazioni → "Il tuo mini-sito").
 
+#### Resource model (`src/orari.js`)
+A service is no longer "a duration on one operator": it is a **sequence of resource commitments** (`service.impegni`), which is how colour processing time, multi-operator services and cabins are all expressed:
+
+```
+Colore    { tipo:"operatore", posto:1, da:0,   durata:10 }   // applicazione
+          { tipo:"operatore", posto:1, da:50,  durata:40 }   // fra i due l'operatore è libero
+Lampada   { tipo:"cabina", cabinaId:"cab-lampada", da:0, durata:60 }   // nessun operatore
+Spa       posto 1 0→60, posto 2 170→180, cabina spa 0→180
+```
+
+`posto` is an operator slot: same number = same person, different numbers = **different** people (assignment is always automatic, first eligible in `config.staff` order, with role swapping when the first combination doesn't fit). Cabins live in `config.cabine` (own `availability`/`off`, empty availability = follows the salon) and are not gated by a module. A cabin segment without `cabinaId` inherits the assigned operator's `staff.cabinaId`.
+
+**Backwards compatibility is load-bearing**: a service without `impegni` means one operator for the whole `durationMin`, and a booking without `impegni` means `staffId` busy from `startMin` to `endMin`. Nothing needs migrating. Bookings keep `staffId` (the `posto 1` operator) and `startMin`/`endMin` (the overall span) as the primary view — ~110 places still read them — while the new `impegni` array is what conflict detection and availability use. Read it via `impegniBooking(b)`, never `b.staffId` alone, whenever you mean "what does this appointment occupy".
+
+`src/orari.js` is imported by **both** `SalonApp.jsx` and the API — the slot logic used to be duplicated (`computeSlots` vs `computeStarts`) and with multiple resources the two would inevitably drift. `orariPossibili()` is the single entry point; `assegnaRisorse()` resolves operators and cabins for one candidate time. Manual booking, rescheduling and all three online modes go through it.
+
 #### Online availability (three modes)
 `config.onlineBooking.mode` picks how free slots are offered, and only affects online booking — manual bookings from the salon app are never filtered. All three live in `functions/api/[[path]].js` behind `computeStarts(config, bookingsAll, date, serviceId, leadMin, mode, staffFilter, opts)`:
 - `antivuoto` (default) → `gapFreeStarts`: only the left edge of each free segment.
 - `griglia` → `gridStarts`: every free 15-minute start.
-- `ottimizzata` → `optimizedStarts`: takes the same candidates as `griglia` (via `gridCandidates`, where all the hard rules live — closures, working hours, staff holidays, lead time, overlaps), simulates each insertion and keeps only "clean" placements (`slotPulito`: flush against something on at least one side and leaving no gap shorter than the shortest online-bookable service). `valutaSlot` scores slots to rank fallbacks and to pick the best operator on a tied time. If a free segment has no clean placement its best-scoring ones are kept anyway, so no bookable space ever disappears.
+- `ottimizzata` → `optimizedStarts`: takes the same candidates as `griglia` (via `orariPossibili`, where all the hard rules live — closures, working hours, staff holidays, lead time, overlaps), simulates each insertion and keeps only "clean" placements (`slotPulito`: flush against something on at least one side and leaving no gap shorter than the shortest online-bookable service). `valutaSlot` scores slots to rank fallbacks and to pick the best operator on a tied time. With several resources busy the verdict is that of the worst-placed one — a dead gap in a cabin counts as much as one in the diary. If a free segment has no clean placement its best-scoring ones are kept anyway, so no bookable space ever disappears.
 
 Manual (in-salon) booking never goes through any of this: `NewBookingForm` in `SalonApp.jsx` uses its own client-side `computeSlots`, whose last argument `sovrapponi` (the "Consenti sovrapposizione" checkbox) also offers times that are already taken, so the front desk can deliberately double-book one operator. Such bookings are flagged `sovrapposto: true`. Online booking has no such escape hatch.
 

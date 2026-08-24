@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback, createContext, useContext } from "react";
 import { Sparkles, Calendar, Clock, User, Mail, Lock, Settings, LayoutDashboard, Plus, Trash2, Check, ChevronLeft, ChevronRight, X, Users, CalendarPlus, Phone, MapPin, Image as ImageIcon, Palette, Store, Sunrise, Sun, Moon, History, Search, Gift, Star, Hash, LogOut, Ban, UserX, Undo2, Timer, CalendarClock, Wallet, RefreshCw, Printer, Download, Upload, KeyRound, ShieldCheck, CalendarX2, AlertTriangle, BadgeCheck, ShoppingCart, ShoppingBag, Package, Tag, Minus, Boxes, Receipt, Layers, AlertCircle, CalendarRange, CalendarDays, PackagePlus, BarChart3, TrendingUp, MessageCircle, FolderOpen, PartyPopper, Share2, Pencil, Globe, Instagram, Facebook, DoorOpen } from "lucide-react";
+import { orariPossibili, durataServizio, impegniServizio, senzaOperatore, impegniBooking } from "./orari.js";
 import { AvatarSvg, AVATAR_IDS, avatarIdFor } from "./avatars.jsx";
 import { setBrandTab } from "./favicon.js";
 
@@ -215,31 +216,6 @@ function qualifiedStaff(staff, ids) { return staff.filter((st) => ids.every((id)
 function inRange(date, from, to) { const lo = from || to, hi = to || from; if (!lo) return false; return date >= lo && date <= hi; }
 function staffOff(st, date) { return Array.isArray(st && st.off) && st.off.some((r) => inRange(date, r.from, r.to)); }
 function salonClosure(config, date) { return ((config && config.closures) || []).find((r) => inRange(date, r.from, r.to)) || null; }
-// `sovrapponi` serve solo alla prenotazione fatta in negozio: propone anche gli
-// orari già occupati, così alla reception si possono accavallare due
-// appuntamenti. Le prenotazioni online non passano di qui e restano invariate.
-function computeSlots(dateStr, duration, staffList, bookings, closures, sovrapponi) {
-  if (Array.isArray(closures) && closures.some((r) => inRange(dateStr, r.from, r.to))) return {};
-  const wd = parseDate(dateStr).getDay();
-  const isToday = dateStr === todayStr();
-  const now = new Date();
-  const nowMin = now.getHours() * 60 + now.getMinutes();
-  const map = {};
-  staffList.forEach((st) => {
-    if (staffOff(st, dateStr)) return;
-    const windows = (st.availability && st.availability[wd]) || [];
-    const stBk = bookings.filter((b) => b.staffId === st.id && b.date === dateStr && b.status !== "cancelled");
-    windows.forEach((win) => {
-      const ws = win[0], we = win[1];
-      for (let t = ws; t + duration <= we; t += STEP) {
-        if (isToday && t < nowMin + 15) continue;
-        const clash = stBk.some((b) => t < b.endMin && t + duration > b.startMin);
-        if (!clash || sovrapponi) { if (!map[t]) map[t] = []; map[t].push(st.id); }
-      }
-    });
-  });
-  return map;
-}
 function generateCode(clients) { let c; do { c = String(Math.floor(10000 + Math.random() * 90000)); } while (clients.some((x) => x.code === c)); return c; }
 function upsertClient(info, clients) {
   const name = info.name, email = info.email, phone = info.phone, code = info.code;
@@ -620,12 +596,14 @@ function VoucherCard({ branding, v, services }) {
   );
 }
 
-function SlotPicker({ duration, candidates, bookings, value, onChange, startDate, closures }) {
+function SlotPicker({ config, serviceIds, staffFilter, bookings, value, onChange, startDate }) {
   const [weekStart, setWeekStart] = useState(startDate);
   const [date, setDate] = useState(startDate);
   const maxDate = pd(new Date(Date.now() + ADVANCE_DAYS * 864e5));
-  const slotMap = useMemo(() => computeSlots(date, duration, candidates, bookings, closures), [date, duration, candidates, bookings, closures]);
-  const slotTimes = useMemo(() => Object.keys(slotMap).map(Number).sort((a, b) => a - b), [slotMap]);
+  const cerca = (ds) => orariPossibili(config, serviceIds, ds, bookings, { staffFilter: staffFilter || undefined, earliest: ds === todayStr() ? new Date().getHours() * 60 + new Date().getMinutes() + 15 : -1 });
+  const proposti = useMemo(() => cerca(date), [config, serviceIds, staffFilter, bookings, date]);
+  const perOrario = useMemo(() => new Map(proposti.map((x) => [x.start, x])), [proposti]);
+  const slotTimes = useMemo(() => proposti.map((x) => x.start), [proposti]);
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const d0 = parseDate(weekDays[0]); const d6 = parseDate(weekDays[6]);
   const rangeLabel = `${d0.getDate()} – ${d6.getDate()} ${MONTHS[d6.getMonth()]} ${d6.getFullYear()}`;
@@ -642,7 +620,7 @@ function SlotPicker({ duration, candidates, bookings, value, onChange, startDate
         <button disabled={addDays(weekStart, 7) > maxDate} onClick={() => setWeekStart((w) => addDays(w, 7))} className="p-1.5 rounded-lg text-stone-500 hover:bg-stone-100 disabled:opacity-30"><ChevronRight size={18} /></button>
       </div>
       <div className="grid grid-cols-7 gap-1.5">
-        {weekDays.map((ds) => { const d = parseDate(ds); const beyond = ds > maxDate; const has = !beyond && Object.keys(computeSlots(ds, duration, candidates, bookings, closures)).length > 0; const isSel = ds === date; return (
+        {weekDays.map((ds) => { const d = parseDate(ds); const beyond = ds > maxDate; const has = !beyond && cerca(ds).length > 0; const isSel = ds === date; return (
           <button key={ds} disabled={!has} onClick={() => { setDate(ds); onChange(null); }} className={`flex flex-col items-center py-2 rounded-xl border transition ${isSel ? "brand-bg border-transparent" : has ? "bg-white border-stone-200 brand-hover" : "bg-stone-50 border-stone-100 text-stone-300 cursor-not-allowed"}`}>
             <span className={`text-xs uppercase ${isSel ? "opacity-80" : "text-stone-400"}`}>{WDAY_SHORT[d.getDay()]}</span>
             <span className="text-base font-semibold leading-tight">{d.getDate()}</span>
@@ -654,7 +632,7 @@ function SlotPicker({ duration, candidates, bookings, value, onChange, startDate
           <div className="space-y-4">{groups.map((g) => (
             <div key={g.label}>
               <div className="flex items-center gap-1.5 text-xs font-medium text-stone-400 uppercase tracking-wide mb-2"><g.Icon size={13} className="brand-accent" /> {g.label}</div>
-              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">{g.times.map((t) => { const on = value && value.date === date && value.startMin === t; return <button key={t} onClick={() => onChange({ date, startMin: t })} className={`py-2 rounded-lg border text-sm font-medium transition ${on ? "brand-bg border-transparent" : "bg-white border-stone-200 brand-hover"}`}>{minToStr(t)}</button>; })}</div>
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">{g.times.map((t) => { const on = value && value.date === date && value.startMin === t; return <button key={t} onClick={() => onChange({ date, startMin: t, slot: perOrario.get(t) })} className={`py-2 rounded-lg border text-sm font-medium transition ${on ? "brand-bg border-transparent" : "bg-white border-stone-200 brand-hover"}`}>{minToStr(t)}</button>; })}</div>
             </div>
           ))}</div>
         )}
@@ -667,7 +645,6 @@ function RescheduleModal({ booking, config, bookings, impegniEventi, onClose, on
   const services = config.services, staff = config.staff;
   const dur = booking.endMin - booking.startMin;
   const st = staff.find((s) => s.id === booking.staffId);
-  const candidates = st ? [st] : qualifiedStaff(staff, booking.serviceIds);
   const others = useMemo(() => [...bookings.filter((b) => b.id !== booking.id), ...(impegniEventi || [])], [bookings, booking.id, impegniEventi]);
   const start = booking.date >= todayStr() ? booking.date : todayStr();
   const [pick, setPick] = useState(null);
@@ -680,8 +657,8 @@ function RescheduleModal({ booking, config, bookings, impegniEventi, onClose, on
           <button onClick={onClose} className="text-stone-400 hover:text-stone-600"><X size={20} /></button>
         </div>
         <p className="text-sm text-stone-400 mb-4">{names} · {st ? st.name : "operatore"} — attuale: {fmtDate(booking.date)} {minToStr(booking.startMin)}</p>
-        <SlotPicker duration={dur} candidates={candidates} bookings={others} value={pick} onChange={setPick} startDate={start} closures={config.closures} />
-        <button disabled={!pick} onClick={() => onSave(pick.date, pick.startMin)} className="w-full brand-bg disabled:opacity-40 disabled:cursor-not-allowed font-medium py-2.5 rounded-lg transition mt-5">Conferma nuovo orario</button>
+        <SlotPicker config={config} serviceIds={booking.serviceIds} staffFilter={booking.staffId} bookings={others} value={pick} onChange={setPick} startDate={start} />
+        <button disabled={!pick} onClick={() => onSave(pick.date, pick.startMin, pick.slot)} className="w-full brand-bg disabled:opacity-40 disabled:cursor-not-allowed font-medium py-2.5 rounded-lg transition mt-5">Conferma nuovo orario</button>
       </div>
     </div>
   );
@@ -1263,7 +1240,10 @@ function AgendaView({ config, bookings, setBookings, clients, setClients, sales,
 
   const span = mode === "week" ? 7 : mode === "3day" ? 3 : 1;
   const days = useMemo(() => { const start = mode === "week" ? mondayOf(anchor) : anchor; return Array.from({ length: span }, (_, i) => addDays(start, i)); }, [anchor, mode, span]);
-  const byDay = useMemo(() => { const m = {}; days.forEach((ds) => { const reg = bookings.filter((b) => b.date === ds && (filter === "all" || b.staffId === filter) && !(hidePartial && b.status === "partial")); const onl = (onlineBk || []).filter((b) => b.date === ds && (filter === "all" || b.staffId === filter)); const evs = (eventi || []).filter((ev) => ev.date === ds && (filter === "all" || (ev.staffIds || []).includes(filter))).map((ev) => ({ ...ev, _evento: true })); m[ds] = [...reg, ...onl, ...evs].sort((a, b) => a.startMin - b.startMin); }); return m; }, [bookings, onlineBk, eventi, days, filter, hidePartial]);
+  // Un appuntamento può impegnare più operatori: il filtro guarda tutte le
+  // risorse coinvolte, non solo l'operatore principale.
+  const coinvolge = (b, id) => id === "all" || impegniBooking(b).some((i) => i.risorsaId === id);
+  const byDay = useMemo(() => { const m = {}; days.forEach((ds) => { const reg = bookings.filter((b) => b.date === ds && coinvolge(b, filter) && !(hidePartial && b.status === "partial")); const onl = (onlineBk || []).filter((b) => b.date === ds && coinvolge(b, filter)); const evs = (eventi || []).filter((ev) => ev.date === ds && (filter === "all" || (ev.staffIds || []).includes(filter))).map((ev) => ({ ...ev, _evento: true })); m[ds] = [...reg, ...onl, ...evs].sort((a, b) => a.startMin - b.startMin); }); return m; }, [bookings, onlineBk, eventi, days, filter, hidePartial]);
   const totalCount = days.reduce((a, ds) => a + byDay[ds].filter((x) => !x._evento).length, 0);
   const eventCount = days.reduce((a, ds) => a + byDay[ds].filter((x) => x._evento).length, 0);
 
@@ -1291,7 +1271,16 @@ function AgendaView({ config, bookings, setBookings, clients, setClients, sales,
     setBookings(bookings.map((x) => (x.id === id ? { ...x, ...patch } : x)));
     setSel(null);
   };
-  const applyResch = (bk, d2, startMin) => { const dur = bk.endMin - bk.startMin; setBookings(bookings.map((x) => (x.id === bk.id ? { ...x, date: d2, startMin, endMin: startMin + dur } : x))); setResch(null); };
+  // Spostando l'appuntamento cambiano anche le risorse impegnate e i minuti in
+  // cui lo sono: vanno riscritti, altrimenti resterebbero al vecchio orario.
+  const applyResch = (bk, d2, startMin, slot) => {
+    const dur = bk.endMin - bk.startMin;
+    const patch = slot
+      ? { date: d2, startMin, endMin: startMin + (slot.durata || dur), staffId: slot.staffId, impegni: slot.impegni }
+      : { date: d2, startMin, endMin: startMin + dur };
+    setBookings(bookings.map((x) => (x.id === bk.id ? { ...x, ...patch } : x)));
+    setResch(null);
+  };
 
   const first = parseDate(days[0]), last = parseDate(days[days.length - 1]);
   const rangeLabel = mode === "day" ? fmtDate(anchor) : `${first.getDate()} ${MONTHS[first.getMonth()]} – ${last.getDate()} ${MONTHS[last.getMonth()]} ${last.getFullYear()}`;
@@ -1324,7 +1313,7 @@ function AgendaView({ config, bookings, setBookings, clients, setClients, sales,
               <p className="text-sm font-medium text-stone-600">Nessun appuntamento</p>
               <p className="text-xs text-stone-400 mt-1">Tocca «Appuntamento» in alto per aggiungerne uno.</p>
             </div>
-          ) : byDay[days[0]].map((b, i) => (b._evento ? <EventCard key={b.id} ev={b} staff={staff} big onClick={() => setSelEvento(b)} /> : <ApptCard key={b.id} b={b} staff={staff} services={services} big index={i} onClick={() => (b.online ? setSelOnline(b) : setSel(b))} />))}
+          ) : byDay[days[0]].map((b, i) => (b._evento ? <EventCard key={b.id} ev={b} staff={staff} big onClick={() => setSelEvento(b)} /> : <ApptCard key={b.id} b={b} staff={staff} services={services} cabine={config.cabine} big index={i} onClick={() => (b.online ? setSelOnline(b) : setSel(b))} />))}
         </div>
       ) : (
         <div className="overflow-x-auto -mx-1 px-1 pb-1">
@@ -1336,7 +1325,7 @@ function AgendaView({ config, bookings, setBookings, clients, setClients, sales,
                   <div className={`text-sm font-semibold leading-none mt-0.5 ${isToday ? "" : "text-stone-700"}`}>{d.getDate()}<span className="text-stone-400 font-normal">/{d.getMonth() + 1}</span></div>
                 </div>
                 <div className="space-y-1.5">
-                  {list.length === 0 ? <div className="text-center text-xs text-stone-300 py-4 rounded-lg border border-dashed border-stone-200/70">—</div> : list.map((b, i) => (b._evento ? <EventCard key={b.id} ev={b} staff={staff} onClick={() => setSelEvento(b)} /> : <ApptCard key={b.id} b={b} staff={staff} services={services} index={i} onClick={() => (b.online ? setSelOnline(b) : setSel(b))} />))}
+                  {list.length === 0 ? <div className="text-center text-xs text-stone-300 py-4 rounded-lg border border-dashed border-stone-200/70">—</div> : list.map((b, i) => (b._evento ? <EventCard key={b.id} ev={b} staff={staff} onClick={() => setSelEvento(b)} /> : <ApptCard key={b.id} b={b} staff={staff} services={services} cabine={config.cabine} index={i} onClick={() => (b.online ? setSelOnline(b) : setSel(b))} />))}
                 </div>
               </div>
             ); })}
@@ -1348,7 +1337,7 @@ function AgendaView({ config, bookings, setBookings, clients, setClients, sales,
 
       {sel ? <ApptActions booking={sel} config={config} clients={clients} setClients={setClients} bookings={bookings} sales={sales} catalog={catalog} hidePartial={hidePartial} onStatus={setStatus} onResch={(bk) => { setResch(bk); setSel(null); }} onClose={() => setSel(null)} /> : null}
       {selOnline ? <OnlineApptModal booking={selOnline} config={config} canManage={canManageOnline} onImport={(bk) => { onImportOnline && onImportOnline(bk); setSelOnline(null); }} onCancel={(bk) => { onCancelOnline && onCancelOnline(bk); setSelOnline(null); }} onClose={() => setSelOnline(null)} /> : null}
-      {resch ? <RescheduleModal booking={resch} config={config} bookings={bookings} impegniEventi={impegniEventi} onClose={() => setResch(null)} onSave={(d2, startMin) => applyResch(resch, d2, startMin)} /> : null}
+      {resch ? <RescheduleModal booking={resch} config={config} bookings={bookings} impegniEventi={impegniEventi} onClose={() => setResch(null)} onSave={(d2, startMin, slot) => applyResch(resch, d2, startMin, slot)} /> : null}
       {selEvento ? <EventModal ev={selEvento} staff={staff} aziendaId={aziendaId} onEdit={() => { onEditEvento && onEditEvento(eventi.find((e) => e.id === selEvento.id)); setSelEvento(null); }} onDelete={() => { setEventi(eventi.filter((e) => e.id !== selEvento.id)); setSelEvento(null); }} onClose={() => setSelEvento(null)} /> : null}
     </div>
   );
@@ -1390,8 +1379,18 @@ function OnlineApptModal({ booking, config, canManage, onImport, onCancel, onClo
 
 const initials = (name) => (name || "").trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase() || "—";
 
-function ApptCard({ b, staff, services, onClick, big, index = 0 }) {
+// Chi e cosa è impegnato da un appuntamento: con più operatori o una cabina il
+// solo staffId non basta più a raccontarlo.
+function risorseDi(b, staff, cabine) {
+  const ids = [...new Set(impegniBooking(b).map((i) => i.risorsaId).filter(Boolean))];
+  const persone = ids.map((id) => (staff || []).find((x) => x.id === id)).filter(Boolean).map((x) => x.name);
+  const stanze = ids.map((id) => (cabine || []).find((c) => c.id === id)).filter(Boolean).map((c) => c.name);
+  return { persone, stanze, etichetta: [persone.join(", "), stanze.join(", ")].filter(Boolean).join(" · ") || "—" };
+}
+
+function ApptCard({ b, staff, services, cabine, onClick, big, index = 0 }) {
   const st = staff.find((s) => s.id === b.staffId);
+  const ris = risorseDi(b, staff, cabine);
   const names = b.serviceIds.map((id) => { const s = services.find((x) => x.id === id); return s ? s.name : null; }).filter(Boolean).join(", ");
   const meta = b.status ? STATUS[b.status] : null;
   const muted = b.status === "cancelled" || b.status === "noshow";
@@ -1408,8 +1407,8 @@ function ApptCard({ b, staff, services, onClick, big, index = 0 }) {
           <div className={`text-[15px] font-semibold truncate leading-tight ${muted ? "text-stone-500" : "text-stone-900"}`}>{b.clientName}{b.clientCode ? <span className="text-xs text-stone-400 font-normal"> #{b.clientCode}</span> : null}</div>
           <div className="text-[13px] text-stone-500 truncate mt-0.5">{names || "—"}</div>
           <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-stone-400">
-            <span className="inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-stone-100 text-[9px] font-semibold text-stone-500 shrink-0">{initials(st ? st.name : "")}</span>
-            <span className="truncate">{st ? st.name : "—"}</span>
+            <span className="inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-stone-100 text-[9px] font-semibold text-stone-500 shrink-0">{ris.persone.length ? initials(ris.persone[0]) : <DoorOpen size={10} />}</span>
+            <span className="truncate">{ris.etichetta}</span>
           </div>
         </div>
         <div className="flex flex-col items-end justify-between shrink-0">
@@ -1437,6 +1436,7 @@ function ApptActions({ booking, config, clients, setClients, bookings, sales, ca
   const F = useMods();
   const b = booking;
   const st = config.staff.find((s) => s.id === b.staffId);
+  const ris = risorseDi(b, config.staff, config.cabine);
   const cl = (clients || []).find((x) => x.code === b.clientCode);
   const names = b.serviceIds.map((id) => { const s = config.services.find((x) => x.id === id); return s ? s.name : null; }).filter(Boolean).join(", ");
   const meta = b.status ? STATUS[b.status] : null;
@@ -1471,7 +1471,7 @@ function ApptActions({ booking, config, clients, setClients, bookings, sales, ca
         </div>
         <div className="bg-stone-50 rounded-xl p-3 text-sm space-y-1 mb-4">
           <div className="flex items-center gap-2"><Sparkles size={14} className="text-stone-400" /> {names}</div>
-          <div className="flex items-center gap-2"><User size={14} className="text-stone-400" /> {st ? st.name : "—"}</div>
+          <div className="flex items-center gap-2">{ris.persone.length ? <User size={14} className="text-stone-400" /> : <DoorOpen size={14} className="text-stone-400" />} {ris.etichetta}</div>
           {cl && cl.phone ? <div className="flex items-center gap-2"><Phone size={14} className="text-stone-400" /> {cl.phone}</div> : null}
           {b.clientEmail ? <div className="flex items-center gap-2"><Mail size={14} className="text-stone-400" /> {b.clientEmail}</div> : null}
           {meta ? <div className="flex items-center gap-2"><meta.Icon size={14} className="text-stone-400" /> {meta.label}</div> : null}
@@ -1857,31 +1857,36 @@ function ManualBooking({ config, bookings, setBookings, clients, setClients, can
   const pickClient = (c) => { setCode(c.code); setName(c.name || ""); setEmail(c.email || ""); setPhone(c.phone || ""); setLk(""); };
 
   const selStaff = staffId ? staff.find((s) => s.id === staffId) : null;
-  const duration = sel.reduce((a, id) => { const s = services.find((x) => x.id === id); return a + (s ? s.durationMin : 0); }, 0);
+  const duration = sel.reduce((a, id) => { const s = services.find((x) => x.id === id); return a + (s ? durataServizio(s) : 0); }, 0);
   const qualified = qualifiedStaff(staff, sel);
   const candidates = staffId ? qualified.filter((s) => s.id === staffId) : qualified;
   const closed = salonClosure(config, date);
   const opOff = selStaff ? staffOff(selStaff, date) : false;
   const [sovrapponi, setSovrapponi] = useState(false);
-  const slotMap = sel.length && candidates.length ? computeSlots(date, duration, candidates, occupati, config.closures, sovrapponi) : {};
-  const slotTimes = Object.keys(slotMap).map(Number).sort((a, b) => a - b);
+  // Nessun operatore serve se tutti i servizi scelti occupano solo cabine.
+  const soloCabina = sel.length > 0 && sel.every((id) => { const sv = services.find((x) => x.id === id); return sv && senzaOperatore(impegniServizio(sv)); });
+  const cerca = (conSovrapposizione) => sel.length ? orariPossibili(config, sel, date, occupati, {
+    earliest: date === todayStr() ? new Date().getHours() * 60 + new Date().getMinutes() + 15 : -1,
+    staffFilter: staffId || undefined, sovrapponi: conSovrapposizione,
+  }) : [];
+  const proposti = cerca(sovrapponi);
+  const slotTimes = proposti.map((x) => x.start);
+  const perOrario = new Map(proposti.map((x) => [x.start, x]));
   // Orari liberi davvero: serve solo a segnalare quali dei proposti si accavallano.
-  const slotLiberi = sovrapponi && sel.length && candidates.length ? computeSlots(date, duration, candidates, occupati, config.closures) : slotMap;
+  const liberi = new Set((sovrapponi ? cerca(false) : proposti).map((x) => x.start));
   const maxDate = pd(new Date(Date.now() + ADVANCE_DAYS * 864e5));
   const onCode = (v) => { v = v.replace(/\D/g, "").slice(0, 6); setCode(v); const c = clients.find((x) => x.code === v); if (c) { setName(c.name || ""); setEmail(c.email || ""); setPhone(c.phone || ""); } };
   const toggle = (id) => { if (selStaff && !selStaff.serviceIds.includes(id)) return; setSel((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id])); setSlot(null); };
 
   const save = () => {
     if (canAddBooking === false) { alert("Limite demo raggiunto: massimo 20 appuntamenti. Per usare il programma senza limiti contatta Office Solution."); return; }
-    const map = computeSlots(date, duration, candidates, occupati, config.closures, sovrapponi);
-    const avail = map[slot];
-    if (!avail || !avail.length) { alert("Orario non disponibile."); setSlot(null); return; }
+    const scelto = cerca(sovrapponi).find((x) => x.start === slot);
+    if (!scelto) { alert("Orario non disponibile."); setSlot(null); return; }
     const cm = clients.find((c) => c.code === code);
     if (!cm && canAddClient === false) { alert("Limite demo raggiunto: massimo 3 clienti. Per usare il programma senza limiti contatta Office Solution."); return; }
-    const assigned = staffId && avail.includes(staffId) ? staffId : avail[0];
     const r = upsertClient({ code: cm ? cm.code : null, name: name.trim(), email: email.trim(), phone: phone.trim() }, clients);
-    const accavallato = sovrapponi && !(slotLiberi[slot] || []).includes(assigned);
-    const booking = { id: uid(), date, startMin: slot, endMin: slot + duration, serviceIds: sel, staffId: assigned, clientCode: r.code, clientName: name.trim(), clientEmail: email.trim(), sovrapposto: accavallato || undefined, createdAt: Date.now() };
+    const accavallato = sovrapponi && !liberi.has(slot);
+    const booking = { id: uid(), date, startMin: slot, endMin: slot + duration, serviceIds: sel, staffId: scelto.staffId, impegni: scelto.impegni, clientCode: r.code, clientName: name.trim(), clientEmail: email.trim(), sovrapposto: accavallato || undefined, createdAt: Date.now() };
     setBookings([...bookings, booking]);
     setClients(r.clients);
     onDone();
@@ -1916,8 +1921,8 @@ function ManualBooking({ config, bookings, setBookings, clients, setClients, can
               Consenti sovrapposizione
             </label>
           </div>
-          {closed ? <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-2.5">Salone chiuso in questa data{closed.label ? ` (${closed.label})` : ""}.</p> : opOff ? <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5">{selStaff.name} è assente in questa data (malattia/ferie).</p> : candidates.length === 0 ? <p className="text-sm text-amber-600">Nessun operatore può fare tutti questi servizi.</p> : slotTimes.length === 0 ? <p className="text-sm text-stone-400">Nessuno slot libero.</p> : <>
-            <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">{slotTimes.map((t) => { const pieno = !(slotLiberi[t] || []).length; return (
+          {closed ? <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-2.5">Salone chiuso in questa data{closed.label ? ` (${closed.label})` : ""}.</p> : opOff ? <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5">{selStaff.name} è assente in questa data (malattia/ferie).</p> : (!soloCabina && candidates.length === 0) ? <p className="text-sm text-amber-600">Nessun operatore può fare tutti questi servizi.</p> : slotTimes.length === 0 ? <p className="text-sm text-stone-400">Nessuno slot libero.</p> : <>
+            <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">{slotTimes.map((t) => { const pieno = !liberi.has(t); return (
               <button key={t} onClick={() => setSlot(t)} title={pieno ? "Orario già occupato: si sovrapporrà" : undefined} className={`py-1.5 rounded-lg border text-sm font-medium transition ${slot === t ? "brand-bg border-transparent" : pieno ? "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100" : "bg-white border-stone-200 brand-hover"}`}>{minToStr(t)}</button>
             ); })}</div>
             {sovrapponi ? <p className="text-[11px] text-amber-700 mt-2 flex items-center gap-1"><AlertTriangle size={12} /> Gli orari in ambra sono già occupati: scegliendoli l'appuntamento si accavalla a quello esistente.</p> : null}
