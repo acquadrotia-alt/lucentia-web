@@ -459,7 +459,7 @@ export async function onRequest(context) {
       return json({
         ok: true,
         salone: { nome: az.denominazione, brandName: b.name || az.denominazione, tagline: b.tagline || "", logo: b.logo || null, primary: b.primary || "#b8893b", phone: b.phone || "", email: b.email || "", address: b.address || "" },
-        services: services.map((s) => ({ id: s.id, name: s.name, durationMin: durataServizio(s), price: s.price != null ? s.price : null })),
+        services: services.map((s) => ({ id: s.id, name: s.name, durationMin: durataServizio(s), price: s.price != null ? s.price : null, senzaOperatore: senzaOperatore(impegniServizio(s)) || undefined })),
         staff: staffPub,
         horizonDays,
         sito: {

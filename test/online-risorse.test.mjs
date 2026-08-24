@@ -143,3 +143,12 @@ test("un servizio a risorse resta prenotabile anche in anti-vuoto", async () => 
   await prenota(st, "lampada", h(9));
   assert.deepEqual(await slots(st, "lampada"), ["10:00"], "ci si accoda a ciò che finisce");
 });
+
+test("un servizio a sola cabina è segnalato come senza operatore", async () => {
+  const st = scenario();
+  const info = (await chiama(st, `/api/prenota/${AID}`)).body;
+  const dai = (id) => info.services.find((s) => s.id === id);
+  assert.equal(dai("lampada").senzaOperatore, true, "il mini-sito non deve chiedere l'operatore");
+  assert.equal(dai("spa").senzaOperatore, undefined);
+  assert.equal(dai("piega").senzaOperatore, undefined);
+});

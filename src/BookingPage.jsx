@@ -61,7 +61,9 @@ export default function BookingPage({ aid }) {
   useEffect(() => { if (service) loadSlots(service.id, date, staffSel); }, [service, date, staffSel, loadSlots]);
 
   const operators = (info && service && Array.isArray(info.staff)) ? info.staff.filter((st) => (st.serviceIds || []).includes(service.id)) : [];
-  const showOps = operators.length > 1;
+  // Un servizio che occupa solo una cabina (la lampada) non ha un operatore da
+  // scegliere: chiederlo confonderebbe e basta.
+  const showOps = operators.length > 1 && !(service && service.senzaOperatore);
   const stepDate = showOps ? 3 : 2;
   const stepData = showOps ? 4 : 3;
 
