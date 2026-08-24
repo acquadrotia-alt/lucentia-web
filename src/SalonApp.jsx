@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback, createContext, useContext } from "react";
-import { Sparkles, Calendar, Clock, User, Mail, Lock, Settings, LayoutDashboard, Plus, Trash2, Check, ChevronLeft, ChevronRight, X, Users, CalendarPlus, Phone, MapPin, Image as ImageIcon, Palette, Store, Sunrise, Sun, Moon, History, Search, Gift, Star, Hash, LogOut, Ban, UserX, Undo2, Timer, CalendarClock, Wallet, RefreshCw, Printer, Download, Upload, KeyRound, ShieldCheck, CalendarX2, AlertTriangle, BadgeCheck, ShoppingCart, ShoppingBag, Package, Tag, Minus, Boxes, Receipt, Layers, AlertCircle, CalendarRange, CalendarDays, PackagePlus, BarChart3, TrendingUp, MessageCircle, FolderOpen, PartyPopper, Share2, Pencil, Globe, Instagram, Facebook } from "lucide-react";
+import { Sparkles, Calendar, Clock, User, Mail, Lock, Settings, LayoutDashboard, Plus, Trash2, Check, ChevronLeft, ChevronRight, X, Users, CalendarPlus, Phone, MapPin, Image as ImageIcon, Palette, Store, Sunrise, Sun, Moon, History, Search, Gift, Star, Hash, LogOut, Ban, UserX, Undo2, Timer, CalendarClock, Wallet, RefreshCw, Printer, Download, Upload, KeyRound, ShieldCheck, CalendarX2, AlertTriangle, BadgeCheck, ShoppingCart, ShoppingBag, Package, Tag, Minus, Boxes, Receipt, Layers, AlertCircle, CalendarRange, CalendarDays, PackagePlus, BarChart3, TrendingUp, MessageCircle, FolderOpen, PartyPopper, Share2, Pencil, Globe, Instagram, Facebook, DoorOpen } from "lucide-react";
 import { AvatarSvg, AVATAR_IDS, avatarIdFor } from "./avatars.jsx";
 import { setBrandTab } from "./favicon.js";
 
@@ -2334,6 +2334,7 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
   const F = useMods();
   const services = config.services, staff = config.staff, branding = config.branding;
   const isReseller = session && session.role === "reseller";
+  const [seqAperta, setSeqAperta] = useState(null);
   const updServices = (next) => saveConfig({ ...config, services: next });
   const updStaff = (next) => saveConfig({ ...config, staff: next });
   const updBranding = (patch) => saveConfig({ ...config, branding: { ...branding, ...patch } });
@@ -2346,6 +2347,21 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
     ...config,
     services: services.filter((s) => s.id !== id),
     staff: staff.map((st) => ({ ...st, serviceIds: (st.serviceIds || []).filter((x) => x !== id) })),
+  });
+  const cabine = config.cabine || [];
+  const updCabine = (next) => saveConfig({ ...config, cabine: next });
+  const addCabina = () => updCabine([...cabine, { id: uid(), name: "Nuova cabina", availability: {}, off: [] }]);
+  const editCabina = (id, patch) => updCabine(cabine.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  // Togliendo una cabina vanno ripuliti i riferimenti, altrimenti resterebbero
+  // servizi e operatori legati a una cabina che non esiste più.
+  const delCabina = (id) => saveConfig({
+    ...config,
+    cabine: cabine.filter((c) => c.id !== id),
+    staff: staff.map((st) => (st.cabinaId === id ? { ...st, cabinaId: null } : st)),
+    services: services.map((sv) => {
+      const imp = Array.isArray(sv.impegni) ? sv.impegni.map((x) => (x.cabinaId === id ? { ...x, cabinaId: null } : x)) : sv.impegni;
+      return { ...sv, cabinaId: sv.cabinaId === id ? null : sv.cabinaId, ...(imp ? { impegni: imp } : {}) };
+    }),
   });
   const addStaff = () => updStaff([...staff, { id: uid(), name: "Nuovo operatore", role: "", serviceIds: [], availability: {} }]);
   const editStaff = (id, patch) => updStaff(staff.map((st) => (st.id === id ? { ...st, ...patch } : st)));
@@ -2511,14 +2527,24 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
             <div className="flex items-center gap-1"><input type="number" min={5} step={5} value={s.durationMin} onChange={(e) => editService(s.id, { durationMin: Math.max(5, Number(e.target.value) || 5) })} className="w-16 px-2 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring" title="Durata" /><span className="text-xs text-stone-400">min</span></div>
             <div className="flex items-center gap-1"><input type="number" min={0} step={0.5} value={s.price != null ? s.price : ""} onChange={(e) => editService(s.id, { price: e.target.value === "" ? null : Math.max(0, Number(e.target.value) || 0) })} placeholder="—" className="w-20 px-2 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring" title="Prezzo" /><span className="text-xs text-stone-400">€</span></div>
             {F.fidelity && loyalty.mode === "perService" ? <div className="flex items-center gap-1"><input type="number" min={0} step={1} value={s.points != null ? s.points : 1} onChange={(e) => editService(s.id, { points: Math.max(0, Math.round(Number(e.target.value) || 0)) })} className="w-14 px-2 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring" title="Punti fedeltà" /><span className="text-xs text-stone-400">pt</span></div> : null}
+            <button onClick={() => setSeqAperta((v) => (v === s.id ? null : s.id))} title="Sequenza degli impegni" className={`p-2 rounded-lg transition ${seqAperta === s.id || Array.isArray(s.impegni) ? "brand-soft brand-accent" : "text-stone-400 hover:text-stone-600"}`}><Layers size={16} /></button>
             <button onClick={() => delService(s.id)} className="p-2 text-stone-400 hover:text-red-500"><Trash2 size={16} /></button>
+            {seqAperta === s.id ? <div className="w-full"><ImpegniEditor svc={s} cabine={cabine} onChange={(patch) => editService(s.id, patch)} /></div> : null}
           </div>
         ))}</div>
+        <p className="text-xs text-stone-400 mt-3">Con <Layers size={12} className="inline align--1" /> imposti come il servizio occupa le risorse: una posa che libera l'operatore, due operatori diversi, o una cabina senza nessun operatore.</p>
       </section>
 
       <section className="lc-card p-5">
         <div className="flex items-center justify-between mb-4"><h3 className="font-semibold flex items-center gap-2"><Users size={16} className="brand-accent" /> Operatori {F.maxOperatori !== Infinity ? <span className="text-xs font-normal text-stone-400">· max {F.maxOperatori}</span> : null}</h3><button onClick={addStaff} disabled={staff.length >= F.maxOperatori} title={staff.length >= F.maxOperatori ? "Limite operatori raggiunto per questo piano" : ""} className="flex items-center gap-1 text-sm brand-bg px-3 py-1.5 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"><Plus size={15} /> Aggiungi</button></div>
-        <div className="space-y-4">{staff.map((st) => <StaffEditor key={st.id} st={st} services={services} onEdit={(patch) => editStaff(st.id, patch)} onDelete={() => delStaff(st.id)} />)}</div>
+        <div className="space-y-4">{staff.map((st) => <StaffEditor key={st.id} st={st} services={services} cabine={cabine} onEdit={(patch) => editStaff(st.id, patch)} onDelete={() => delStaff(st.id)} />)}</div>
+      </section>
+
+      <section className="lc-card p-5">
+        <div className="flex items-center justify-between mb-4"><h3 className="font-semibold flex items-center gap-2"><DoorOpen size={16} className="brand-accent" /> Cabine</h3><button onClick={addCabina} className="flex items-center gap-1 text-sm brand-bg px-3 py-1.5 rounded-lg"><Plus size={15} /> Aggiungi</button></div>
+        {cabine.length === 0
+          ? <p className="text-sm text-stone-400">Nessuna cabina. Servono ai servizi che occupano uno spazio del salone — la lampada, la sala spa — anche quando non impegnano nessun operatore.</p>
+          : <div className="space-y-3">{cabine.map((c) => <CabinaEditor key={c.id} c={c} onEdit={(patch) => editCabina(c.id, patch)} onDelete={() => { if (confirm(`Eliminare la cabina "${c.name}"? I servizi e gli operatori collegati resteranno senza cabina.`)) delCabina(c.id); }} />)}</div>}
       </section>
 
       {F.maxOperatori > 1 ? <OperatorAccounts staff={staff} /> : null}
@@ -2665,19 +2691,178 @@ function OperatorAccounts({ staff }) {
   );
 }
 
-function StaffEditor({ st, services, onEdit, onDelete }) {
+// Orari settimanali di una risorsa (operatore o cabina): stessa forma per
+// entrambi, così l'editor è uno solo.
+function OrariSettimana({ availability, onChange, titolo, vuoto }) {
+  const av = availability || {};
+  const setRanges = (day, ranges) => onChange({ ...av, [day]: ranges });
+  const addRange = (day) => setRanges(day, [...(av[day] || []), [540, 780]]);
+  const editRange = (day, i, idx, val) => { const r = (av[day] || []).map((x) => x.slice()); r[i][idx] = strToMin(val); setRanges(day, r); };
+  const delRange = (day, i) => setRanges(day, (av[day] || []).filter((_, j) => j !== i));
+  return (
+    <div>
+      <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">{titolo || "Orari di disponibilità"}</div>
+      <div className="space-y-1.5">{DAYS.map((dd) => { const k = dd.k, l = dd.l; const ranges = av[k] || []; return (
+        <div key={k} className="flex items-start gap-2 text-sm">
+          <span className="w-9 pt-1.5 text-stone-500 font-medium">{l}</span>
+          <div className="flex-1 flex flex-wrap items-center gap-2">
+            {ranges.length === 0 ? <span className="text-xs text-stone-300 pt-1.5">{vuoto || "Chiuso"}</span> : null}
+            {ranges.map((r, i) => (
+              <div key={i} className="flex items-center gap-1 bg-stone-50 rounded-lg px-1.5 py-1">
+                <input type="time" value={minToStr(r[0])} step={900} onChange={(e) => editRange(k, i, 0, e.target.value)} className="text-xs bg-transparent focus:outline-none" />
+                <span className="text-stone-300">–</span>
+                <input type="time" value={minToStr(r[1])} step={900} onChange={(e) => editRange(k, i, 1, e.target.value)} className="text-xs bg-transparent focus:outline-none" />
+                <button onClick={() => delRange(k, i)} className="text-stone-300 hover:text-red-500"><X size={13} /></button>
+              </div>
+            ))}
+            <button onClick={() => addRange(k)} className="text-xs brand-accent hover:opacity-70 flex items-center gap-0.5 pt-1"><Plus size={13} /> fascia</button>
+          </div>
+        </div>
+      ); })}</div>
+    </div>
+  );
+}
+
+// Periodi in cui la risorsa non è disponibile: ferie e malattia per gli
+// operatori, manutenzione o chiusura per le cabine.
+function Assenze({ off, onChange, titolo, vuoto }) {
+  const lista = off || [];
+  const add = () => onChange([...lista, { id: uid(), from: todayStr(), to: todayStr() }]);
+  const edit = (id, patch) => onChange(lista.map((o) => (o.id === id ? { ...o, ...patch } : o)));
+  const del = (id) => onChange(lista.filter((o) => o.id !== id));
+  return (
+    <div className="mt-3">
+      <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">{titolo || "Assenze (malattia / ferie)"}</div>
+      <div className="space-y-1.5">
+        {lista.length === 0 ? <span className="text-xs text-stone-300">{vuoto || "Nessuna assenza programmata."}</span> : null}
+        {lista.map((o) => (
+          <div key={o.id} className="flex flex-wrap items-center gap-1.5 text-sm bg-stone-50 rounded-lg px-2 py-1.5">
+            <span className="text-xs text-stone-400">dal</span><input type="date" value={o.from} onChange={(e) => edit(o.id, { from: e.target.value })} className="text-xs bg-transparent focus:outline-none" />
+            <span className="text-xs text-stone-400">al</span><input type="date" value={o.to} onChange={(e) => edit(o.id, { to: e.target.value })} className="text-xs bg-transparent focus:outline-none" />
+            <button onClick={() => del(o.id)} className="text-stone-300 hover:text-red-500 ml-auto"><X size={14} /></button>
+          </div>
+        ))}
+      </div>
+      <button onClick={add} className="text-xs brand-accent hover:opacity-70 flex items-center gap-0.5 mt-1.5"><Plus size={13} /> aggiungi periodo</button>
+    </div>
+  );
+}
+
+// Una cabina è una risorsa come l'operatore: ha orari propri e periodi di
+// fermo. Serve ai servizi che occupano uno spazio del salone (lampada, spa)
+// anche quando non impegnano nessuna persona.
+function CabinaEditor({ c, onEdit, onDelete }) {
+  const [aperta, setAperta] = useState(false);
+  const suoiOrari = c.availability && Object.keys(c.availability).length;
+  return (
+    <div className="border border-stone-200 rounded-xl p-4">
+      <div className="flex items-center gap-2">
+        <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 brand-soft brand-accent"><DoorOpen size={17} /></div>
+        <input value={c.name} onChange={(e) => onEdit({ name: e.target.value })} placeholder="Nome cabina" className="font-medium px-2 py-1.5 rounded-lg border border-stone-300 text-sm brand-ring min-w-0 flex-1" />
+        <button onClick={() => setAperta((o) => !o)} className="text-xs font-medium border border-stone-300 text-stone-600 px-2.5 py-1.5 rounded-lg hover:bg-stone-50 shrink-0">{aperta ? "Chiudi" : "Orari"}</button>
+        <button onClick={onDelete} className="p-2 text-stone-400 hover:text-red-500 shrink-0"><Trash2 size={16} /></button>
+      </div>
+      {!aperta ? <p className="text-[11px] text-stone-400 mt-1.5">{suoiOrari ? "Con orari propri." : "Disponibile quando è aperto il salone."}</p> : null}
+      {aperta ? (
+        <div className="mt-3">
+          <OrariSettimana availability={c.availability} onChange={(av) => onEdit({ availability: av })} titolo="Orari propri (lascia vuoto per seguire il salone)" vuoto="Come il salone" />
+          <Assenze off={c.off} onChange={(off) => onEdit({ off })} titolo="Fermi (manutenzione)" vuoto="Nessun fermo programmato." />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// Sequenza di impegni di un servizio: chi e cosa occupa, e in quali minuti.
+// Senza sequenza il servizio occupa un operatore per tutta la durata, com'è
+// sempre stato.
+function ImpegniEditor({ svc, cabine, onChange }) {
+  const durata = Math.max(0, Number(svc.durationMin) || 0);
+  const seq = Array.isArray(svc.impegni) ? svc.impegni : null;
+  const attiva = () => onChange({ impegni: [{ tipo: "operatore", posto: 1, da: 0, durata }] });
+  const disattiva = () => onChange({ impegni: null });
+  const set = (i, patch) => onChange({ impegni: seq.map((x, j) => (j === i ? { ...x, ...patch } : x)) });
+  const del = (i) => onChange({ impegni: seq.filter((_, j) => j !== i) });
+  const fine = seq ? seq.reduce((m, x) => Math.max(m, (Number(x.da) || 0) + (Number(x.durata) || 0)), 0) : durata;
+  // Un impegno aggiunto parte dove finisce l'ultimo, così non si accavalla da
+  // solo; una cabina invece copre di norma tutto il servizio.
+  const add = (tipo) => onChange({ impegni: [...seq, tipo === "cabina"
+    ? { tipo: "cabina", cabinaId: (cabine[0] && cabine[0].id) || null, da: 0, durata: Math.max(durata, fine) }
+    : { tipo: "operatore", posto: 1, da: fine, durata: 15 }] });
+  const scala = Math.max(durata, fine, 1);
+
+  if (!seq) return (
+    <div className="mt-2 text-xs text-stone-500 flex items-center gap-2 flex-wrap">
+      <span>Occupa un operatore per tutti i {durata} minuti.</span>
+      <button onClick={attiva} className="brand-accent hover:opacity-70 font-medium">Personalizza la sequenza →</button>
+    </div>
+  );
+  return (
+    <div className="mt-2 border border-stone-200 rounded-xl p-3 bg-stone-50/60">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="text-xs font-medium text-stone-500">Sequenza degli impegni</div>
+        <button onClick={disattiva} className="text-xs text-stone-400 hover:text-stone-700">Torna al servizio semplice</button>
+      </div>
+      {/* Barra di riepilogo: si legge a colpo d'occhio dove la risorsa è libera */}
+      <div className="space-y-1 mb-2.5">
+        {[...new Set(seq.map((x) => (x.tipo === "cabina" ? `cabina:${x.cabinaId || ""}` : `operatore:${x.posto || 1}`)))].map((chiave) => {
+          const [tipo, val] = chiave.split(":");
+          const nome = tipo === "cabina" ? ((cabine.find((c) => c.id === val) || {}).name || "Cabina") : `Operatore ${val}`;
+          const parti = seq.filter((x) => (x.tipo === "cabina" ? `cabina:${x.cabinaId || ""}` : `operatore:${x.posto || 1}`) === chiave);
+          return (
+            <div key={chiave} className="flex items-center gap-2">
+              <span className="text-[11px] text-stone-500 w-24 shrink-0 truncate">{nome}</span>
+              <div className="relative flex-1 h-3 rounded bg-stone-200/70 overflow-hidden">
+                {parti.map((x, i) => (
+                  <div key={i} className="absolute top-0 bottom-0 brand-bg rounded-sm" style={{ left: `${((Number(x.da) || 0) / scala) * 100}%`, width: `${((Number(x.durata) || 0) / scala) * 100}%` }} />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="space-y-1.5">
+        {seq.map((x, i) => (
+          <div key={i} className="flex flex-wrap items-center gap-1.5 text-sm bg-white rounded-lg px-2 py-1.5 border border-stone-200">
+            <select value={x.tipo === "cabina" ? "cabina" : "operatore"} onChange={(e) => set(i, e.target.value === "cabina" ? { tipo: "cabina", posto: null, cabinaId: (cabine[0] && cabine[0].id) || null } : { tipo: "operatore", posto: 1, cabinaId: null })} className="text-xs px-1.5 py-1 rounded border border-stone-200 bg-white">
+              <option value="operatore">Operatore</option>
+              <option value="cabina">Cabina</option>
+            </select>
+            {x.tipo === "cabina" ? (
+              <select value={x.cabinaId || ""} onChange={(e) => set(i, { cabinaId: e.target.value || null })} className="text-xs px-1.5 py-1 rounded border border-stone-200 bg-white">
+                <option value="">Quella dell'operatore</option>
+                {cabine.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            ) : (
+              <select value={x.posto || 1} onChange={(e) => set(i, { posto: Number(e.target.value) })} className="text-xs px-1.5 py-1 rounded border border-stone-200 bg-white">
+                {[1, 2, 3].map((n) => <option key={n} value={n}>n° {n}</option>)}
+              </select>
+            )}
+            <span className="text-xs text-stone-400">dal minuto</span>
+            <input type="number" min={0} step={5} value={Number(x.da) || 0} onChange={(e) => set(i, { da: Math.max(0, Number(e.target.value) || 0) })} className="w-16 text-xs px-1.5 py-1 rounded border border-stone-200 text-right" />
+            <span className="text-xs text-stone-400">per</span>
+            <input type="number" min={5} step={5} value={Number(x.durata) || 0} onChange={(e) => set(i, { durata: Math.max(0, Number(e.target.value) || 0) })} className="w-16 text-xs px-1.5 py-1 rounded border border-stone-200 text-right" />
+            <span className="text-xs text-stone-400">min</span>
+            <button onClick={() => del(i)} className="text-stone-300 hover:text-red-500 ml-auto"><X size={14} /></button>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center gap-3 mt-2">
+        <button onClick={() => add("operatore")} className="text-xs brand-accent hover:opacity-70 flex items-center gap-0.5"><Plus size={13} /> operatore</button>
+        {cabine.length ? <button onClick={() => add("cabina")} className="text-xs brand-accent hover:opacity-70 flex items-center gap-0.5"><Plus size={13} /> cabina</button> : null}
+        {fine > durata ? <span className="text-[11px] text-amber-700 ml-auto">La sequenza arriva a {fine} min: il servizio durerà {fine} minuti.</span> : null}
+        {!seq.some((x) => x.tipo === "operatore") ? <span className="text-[11px] text-stone-500 ml-auto">Nessun operatore: il servizio occupa solo la cabina.</span> : null}
+      </div>
+      <p className="text-[11px] text-stone-400 mt-2">Gli intervalli non coperti restano liberi: durante una posa l'operatore può prendere un altro cliente. Due numeri d'operatore diversi significano due persone diverse.</p>
+    </div>
+  );
+}
+
+function StaffEditor({ st, services, cabine, onEdit, onDelete }) {
   const F = useMods();
   const [picker, setPicker] = useState(false);
   const onPhoto = async (e) => { const file = e.target.files && e.target.files[0]; if (!file) return; try { const url = await fileToResizedDataURL(file, 256); onEdit({ photo: url }); } catch (err) {} };
   const toggleSvc = (id) => onEdit({ serviceIds: st.serviceIds.includes(id) ? st.serviceIds.filter((x) => x !== id) : [...st.serviceIds, id] });
-  const setRanges = (day, ranges) => onEdit({ availability: { ...st.availability, [day]: ranges } });
-  const addRange = (day) => setRanges(day, [...(st.availability[day] || []), [540, 780]]);
-  const editRange = (day, i, idx, val) => { const r = (st.availability[day] || []).map((x) => x.slice()); r[i][idx] = strToMin(val); setRanges(day, r); };
-  const delRange = (day, i) => setRanges(day, (st.availability[day] || []).filter((_, j) => j !== i));
-  const off = st.off || [];
-  const addOff = () => onEdit({ off: [...off, { id: uid(), from: todayStr(), to: todayStr() }] });
-  const editOff = (id, patch) => onEdit({ off: off.map((o) => (o.id === id ? { ...o, ...patch } : o)) });
-  const delOff = (id) => onEdit({ off: off.filter((o) => o.id !== id) });
   return (
     <div className="border border-stone-200 rounded-xl p-4">
       <div className="flex items-center gap-2 mb-3">
@@ -2702,40 +2887,18 @@ function StaffEditor({ st, services, onEdit, onDelete }) {
         <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Servizi eseguiti</div>
         <div className="flex flex-wrap gap-1.5">{services.map((s) => { const on = st.serviceIds.includes(s.id); return <button key={s.id} onClick={() => toggleSvc(s.id)} className={`px-2.5 py-1 rounded-lg text-xs border transition ${on ? "brand-bg border-transparent" : "bg-white border-stone-200 text-stone-500 brand-hover"}`}>{s.name}</button>; })}</div>
       </div>
-      <div>
-        <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Orari di disponibilità</div>
-        <div className="space-y-1.5">{DAYS.map((dd) => { const k = dd.k, l = dd.l; const ranges = st.availability[k] || []; return (
-          <div key={k} className="flex items-start gap-2 text-sm">
-            <span className="w-9 pt-1.5 text-stone-500 font-medium">{l}</span>
-            <div className="flex-1 flex flex-wrap items-center gap-2">
-              {ranges.length === 0 ? <span className="text-xs text-stone-300 pt-1.5">Chiuso</span> : null}
-              {ranges.map((r, i) => (
-                <div key={i} className="flex items-center gap-1 bg-stone-50 rounded-lg px-1.5 py-1">
-                  <input type="time" value={minToStr(r[0])} step={900} onChange={(e) => editRange(k, i, 0, e.target.value)} className="text-xs bg-transparent focus:outline-none" />
-                  <span className="text-stone-300">–</span>
-                  <input type="time" value={minToStr(r[1])} step={900} onChange={(e) => editRange(k, i, 1, e.target.value)} className="text-xs bg-transparent focus:outline-none" />
-                  <button onClick={() => delRange(k, i)} className="text-stone-300 hover:text-red-500"><X size={13} /></button>
-                </div>
-              ))}
-              <button onClick={() => addRange(k)} className="text-xs brand-accent hover:opacity-70 flex items-center gap-0.5 pt-1"><Plus size={13} /> fascia</button>
-            </div>
-          </div>
-        ); })}</div>
-      </div>
-      <div className="mt-3">
-        <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Assenze (malattia / ferie)</div>
-        <div className="space-y-1.5">
-          {off.length === 0 ? <span className="text-xs text-stone-300">Nessuna assenza programmata.</span> : null}
-          {off.map((o) => (
-            <div key={o.id} className="flex flex-wrap items-center gap-1.5 text-sm bg-stone-50 rounded-lg px-2 py-1.5">
-              <span className="text-xs text-stone-400">dal</span><input type="date" value={o.from} onChange={(e) => editOff(o.id, { from: e.target.value })} className="text-xs bg-transparent focus:outline-none" />
-              <span className="text-xs text-stone-400">al</span><input type="date" value={o.to} onChange={(e) => editOff(o.id, { to: e.target.value })} className="text-xs bg-transparent focus:outline-none" />
-              <button onClick={() => delOff(o.id)} className="text-stone-300 hover:text-red-500 ml-auto"><X size={14} /></button>
-            </div>
-          ))}
+      {(cabine || []).length ? (
+        <div className="mb-3">
+          <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Cabina abituale</div>
+          <select value={st.cabinaId || ""} onChange={(e) => onEdit({ cabinaId: e.target.value || null })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm bg-white brand-ring">
+            <option value="">Nessuna</option>
+            {(cabine || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <p className="text-[11px] text-stone-400 mt-1">Usata dai servizi che richiedono una cabina senza indicarne una precisa.</p>
         </div>
-        <button onClick={addOff} className="text-xs brand-accent hover:opacity-70 flex items-center gap-0.5 mt-1.5"><Plus size={13} /> aggiungi assenza</button>
-      </div>
+      ) : null}
+      <OrariSettimana availability={st.availability} onChange={(av) => onEdit({ availability: av })} />
+      <Assenze off={st.off} onChange={(off) => onEdit({ off })} />
     </div>
   );
 }
