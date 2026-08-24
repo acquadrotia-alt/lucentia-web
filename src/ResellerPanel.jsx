@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { ShieldCheck, LogOut, Plus, KeyRound, Ban, BadgeCheck, Trash2, CalendarClock, Store, Mail, Boxes, X, Check, Users, Tag, Building2, Receipt, Filter, Inbox, Phone, Sparkles, Clock } from "lucide-react";
+import { ShieldCheck, LogOut, Plus, KeyRound, Ban, BadgeCheck, Trash2, CalendarClock, Store, Mail, Boxes, X, Check, Users, Tag, Building2, Receipt, Filter, Inbox, Phone, Sparkles, Clock, Eraser, AlertTriangle } from "lucide-react";
 
 const DURATE = [[1, "1 mese"], [3, "3 mesi"], [6, "6 mesi"], [12, "12 mesi"], [24, "24 mesi"], [0, "Illimitata"]];
 const OPT = [["fidelity", "Fidelity"], ["vendite", "Vendite"], ["statistiche", "Statistiche"], ["marketing", "Marketing"], ["allergeni", "Allergeni e patologie"], ["pacchetti", "Pacchetti sedute"]];
@@ -127,6 +127,9 @@ export default function ResellerPanel({ email, master, onLogout, apiGet, apiSend
   };
   const patch = async (id, body, ok) => { const r = await apiSend(`/aziende/${id}`, "PATCH", body); if (r.ok) { flash(ok || "Aggiornato."); loadClients(); } else flash(r.data && r.data.error ? r.data.error : "Errore."); };
   const elimina = async (a) => { if (!confirm(`Eliminare definitivamente "${a.denominazione}" e tutti i suoi dati? L'operazione non è reversibile.`)) return; const r = await apiSend(`/aziende/${a.id}`, "DELETE"); if (r.ok) { flash("Cliente eliminato."); loadClients(); } else flash("Errore nell'eliminazione."); };
+  // Azzera i dati del salone (compresi quelli di esempio) lasciando in piedi
+  // licenza e account: serve a consegnare una licenza pulita a un nuovo cliente.
+  const svuota = async (a) => { const r = await apiSend(`/aziende/${a.id}/svuota`, "POST"); if (r.ok) flash(`Dati di "${a.denominazione}" azzerati.`); else flash(r.data && r.data.error ? r.data.error : "Errore nell'azzeramento."); return r.ok; };
 
   const filterOpts = [["all", "Tutte le licenze"], ["me", "Solo le mie"], ...resellers.map((r) => [r.id, r.ragione_sociale || r.email])];
   const showResellerBadge = master && filtro === "all";
@@ -193,7 +196,7 @@ export default function ResellerPanel({ email, master, onLogout, apiGet, apiSend
                 ) : null}
               </div>
               {loading ? <p className="text-sm text-stone-400">Caricamento…</p> : items.length === 0 ? <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center text-stone-400">Nessuna licenza per questo filtro.</div> : (
-                <div className="space-y-3">{items.map((a) => <ClientRow key={a.id} a={a} onPatch={patch} onDelete={elimina} showReseller={showResellerBadge} master={master} />)}</div>
+                <div className="space-y-3">{items.map((a) => <ClientRow key={a.id} a={a} onPatch={patch} onDelete={elimina} onSvuota={svuota} showReseller={showResellerBadge} master={master} />)}</div>
               )}
             </section>
           </>
@@ -208,7 +211,7 @@ export default function ResellerPanel({ email, master, onLogout, apiGet, apiSend
   );
 }
 
-function ClientRow({ a, onPatch, onDelete, showReseller, master }) {
+function ClientRow({ a, onPatch, onDelete, onSvuota, showReseller, master }) {
   const planOnly = !master;
   const badge = statoBadge(a);
   const [rinnovo, setRinnovo] = useState(12);
@@ -220,6 +223,9 @@ function ClientRow({ a, onPatch, onDelete, showReseller, master }) {
   const [prezzoOpen, setPrezzoOpen] = useState(false);
   const [pImp, setPImp] = useState(a.prezzo_imponibile || "");
   const [pFin, setPFin] = useState(a.prezzo_finale || "");
+  const [svuotaOpen, setSvuotaOpen] = useState(false);
+  const [svuotaChk, setSvuotaChk] = useState(false);
+  const [svuotaBusy, setSvuotaBusy] = useState(false);
 
   return (
     <div className="bg-white rounded-xl border border-stone-200 p-4 shadow-sm">
@@ -243,6 +249,7 @@ function ClientRow({ a, onPatch, onDelete, showReseller, master }) {
         <button onClick={() => setPwOpen((o) => !o)} className="text-sm font-medium border border-stone-300 text-stone-600 px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 hover:bg-stone-50"><KeyRound size={14} /> Password</button>
         <button onClick={() => setModsOpen((o) => !o)} className="text-sm font-medium border border-stone-300 text-stone-600 px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 hover:bg-stone-50"><Boxes size={14} /> Moduli</button>
         {master ? <button onClick={() => setPrezzoOpen((o) => !o)} className="text-sm font-medium border border-stone-300 text-stone-600 px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 hover:bg-stone-50"><Tag size={14} /> Prezzo</button> : null}
+        <button onClick={() => { setSvuotaOpen((o) => !o); setSvuotaChk(false); }} className="text-sm font-medium border border-amber-300 text-amber-700 px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 hover:bg-amber-50"><Eraser size={14} /> Svuota dati</button>
         <button onClick={() => onDelete(a)} className="text-sm font-medium border border-red-300 text-red-600 px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 hover:bg-red-50 ml-auto"><Trash2 size={14} /> Elimina</button>
       </div>
 
@@ -251,6 +258,19 @@ function ClientRow({ a, onPatch, onDelete, showReseller, master }) {
           <input value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="Nuova password (min 6)" className="flex-1 px-3 py-1.5 rounded-lg border border-stone-300 text-sm" />
           <button onClick={() => { if (newPw.length >= 6) { onPatch(a.id, { nuovaPassword: newPw }, "Password aggiornata."); setNewPw(""); setPwOpen(false); } }} className="text-sm font-medium text-white px-3 py-1.5 rounded-lg" style={{ background: "var(--lc-accent)" }}>Salva</button>
           <button onClick={() => { setPwOpen(false); setNewPw(""); }} className="text-stone-400"><X size={16} /></button>
+        </div>
+      ) : null}
+
+      {svuotaOpen ? (
+        <div className="mt-3 border border-amber-300 rounded-xl p-3 bg-amber-50/50">
+          <div className="text-sm font-medium text-amber-800 flex items-center gap-1.5"><AlertTriangle size={14} /> Svuota i dati di "{a.denominazione}"</div>
+          <p className="text-xs text-stone-600 mt-1.5">Elimina servizi, operatori e accessi operatore, clienti, appuntamenti, prenotazioni online, catalogo prodotti, vendite, buoni ed eventi — dati di esempio compresi. Il salone riparte da zero.</p>
+          <p className="text-xs text-stone-500 mt-1">Restano invariati la licenza con la sua scadenza, i moduli attivi, l'account di accesso del salone e lo storico di fatturazione. Se il salone è collegato in questo momento verrà disconnesso.</p>
+          <label className="flex items-start gap-2 text-xs text-stone-600 cursor-pointer mt-2.5"><input type="checkbox" checked={svuotaChk} onChange={(e) => setSvuotaChk(e.target.checked)} className="w-4 h-4 mt-0.5" /> Confermo: l'operazione non è reversibile e i dati eliminati non potranno essere recuperati.</label>
+          <div className="flex items-center gap-2 mt-2.5">
+            <button onClick={async () => { setSvuotaBusy(true); const ok = await onSvuota(a); setSvuotaBusy(false); if (ok) { setSvuotaOpen(false); setSvuotaChk(false); } }} disabled={!svuotaChk || svuotaBusy} className="text-sm font-medium text-white px-3 py-1.5 rounded-lg bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5"><Eraser size={14} /> {svuotaBusy ? "Azzeramento…" : "Svuota ora"}</button>
+            <button onClick={() => { setSvuotaOpen(false); setSvuotaChk(false); }} className="text-sm text-stone-500 px-3 py-1.5">Annulla</button>
+          </div>
         </div>
       ) : null}
 

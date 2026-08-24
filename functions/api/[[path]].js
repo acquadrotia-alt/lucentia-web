@@ -125,6 +125,28 @@ function demoSeed() {
   ];
   return { config, catalog, clients, bookings, vouchers, sales };
 }
+// Contenuto delle collezioni di un salone appena azzerato: nessun servizio,
+// nessun operatore, nessun dato di esempio. Le chiavi di "config" vanno scritte
+// tutte esplicitamente, perché quelle mancanti verrebbero riempite lato app dai
+// valori di esempio di DEFAULT_CONFIG.
+function saloneVuoto(denominazione) {
+  return {
+    config: {
+      services: [],
+      staff: [],
+      branding: { name: String(denominazione || ""), tagline: "Gestionale salone", logo: null, primary: "var(--lc-accent)", phone: "", email: "", address: "" },
+      cancelHours: 6,
+      loyalty: { mode: "flat", fromSales: false, rewards: [] },
+      closures: [],
+    },
+    bookings: [],
+    clients: [],
+    catalog: { categories: [], products: [] },
+    sales: [],
+    vouchers: [],
+    eventi: [],
+  };
+}
 function licStatus(az) {
   if (!az) return "none";
   if (!az.attiva) return "disabled";
@@ -597,6 +619,29 @@ export async function onRequest(context) {
 
     // /api/aziende/:id
     const aid = segs[1];
+
+    // /api/aziende/:id/svuota — riporta il salone a una licenza vuota: niente
+    // servizi, operatori, clienti, appuntamenti, catalogo, vendite, buoni ed
+    // eventi. Licenza, account del salone e storico di fatturazione restano.
+    if (segs[2] === "svuota") {
+      if (method !== "POST") return json({ error: "metodo non consentito" }, 405);
+      const azs = await getAzienda(env, aid);
+      if (!azs) return json({ error: "azienda non trovata" }, 404);
+      if (!isMaster(sess) && azs.reseller_id !== sess.uid) return json({ error: "non autorizzato" }, 403);
+      const vuoto = saloneVuoto(azs.denominazione);
+      for (const coll of COLLEZIONI) {
+        await env.DB.prepare(
+          "INSERT INTO dati_app (id, azienda_id, collezione, dati, aggiornato_il) VALUES (?, ?, ?, ?, datetime('now')) ON CONFLICT(id) DO UPDATE SET dati = excluded.dati, aggiornato_il = datetime('now')"
+        ).bind(`${aid}:${coll}`, aid, coll, JSON.stringify(vuoto[coll])).run();
+      }
+      await env.DB.prepare("DELETE FROM prenotazioni_online WHERE azienda_id = ?").bind(aid).run();
+      await env.DB.prepare("DELETE FROM utenti WHERE azienda_id = ? AND ruolo = 'operatore'").bind(aid).run();
+      // Chiude le sessioni aperte del salone: una scheda rimasta aperta
+      // risalverebbe i dati che aveva in memoria, annullando l'azzeramento.
+      await env.DB.prepare("DELETE FROM sessioni WHERE utente_id IN (SELECT id FROM utenti WHERE azienda_id = ?)").bind(aid).run();
+      return json({ ok: true });
+    }
+
     if (method === "PATCH") {
       const body = await request.json().catch(() => ({}));
       const az = await getAzienda(env, aid);

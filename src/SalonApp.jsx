@@ -2321,7 +2321,14 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
   const updBranding = (patch) => saveConfig({ ...config, branding: { ...branding, ...patch } });
   const addService = () => updServices([...services, { id: uid(), name: "Nuovo servizio", durationMin: 30 }]);
   const editService = (id, patch) => updServices(services.map((s) => (s.id === id ? { ...s, ...patch } : s)));
-  const delService = (id) => { updServices(services.filter((s) => s.id !== id)); updStaff(staff.map((st) => ({ ...st, serviceIds: st.serviceIds.filter((x) => x !== id) }))); };
+  // Un solo saveConfig: due chiamate di fila partirebbero entrambe dallo stesso
+  // config e la seconda rimetterebbe la lista servizi di prima, annullando la
+  // cancellazione.
+  const delService = (id) => saveConfig({
+    ...config,
+    services: services.filter((s) => s.id !== id),
+    staff: staff.map((st) => ({ ...st, serviceIds: (st.serviceIds || []).filter((x) => x !== id) })),
+  });
   const addStaff = () => updStaff([...staff, { id: uid(), name: "Nuovo operatore", role: "", serviceIds: [], availability: {} }]);
   const editStaff = (id, patch) => updStaff(staff.map((st) => (st.id === id ? { ...st, ...patch } : st)));
   const delStaff = (id) => updStaff(staff.filter((st) => st.id !== id));

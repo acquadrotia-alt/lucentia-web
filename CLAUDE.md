@@ -55,6 +55,7 @@ Tenant isolation is enforced **server-side**, never trust the client:
 - Resellers can only touch their own salons (`reseller_id === sess.uid`); `isMaster(sess)` bypasses this. When changing any `/api/aziende`, `/api/rivenditori`, or `/api/fatturazione` handler, preserve these ownership checks.
 - `operatore` users are restricted server-side to GET-only, and `bookings` are filtered to their own `staff_id`.
 - Deleting a salon cascades to its `utenti`, `sessioni`, and `dati_app`; deleting a reseller reassigns its salons to the master (`reseller_id = NULL`).
+- `POST /api/aziende/:id/svuota` ("Svuota dati" in `ResellerPanel.jsx`) resets a salon to an empty licence: it overwrites all seven `dati_app` collections with the blanks from `saloneVuoto()`, drops `prenotazioni_online`, the `operatore` users and every open session for that salon, and leaves the licence, the salon login and `licenze_eventi` untouched. It must **write** empty blobs rather than delete the rows — `SalonApp` re-seeds sample data when `config`/`bookings`/`clients`/`sales` all come back `null`.
 
 ### Salon data storage (the `dati_app` pattern)
 The salon app does **not** have a normalized schema. All salon content is seven JSON blobs ("collezioni") stored as rows in `dati_app`, keyed `${azienda_id}:${collezione}`:
