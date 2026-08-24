@@ -1,6 +1,7 @@
-// Confronto fra il motore condiviso (src/orari.js) e le due modalità storiche
-// dell'API sui servizi semplici. Serve a garantire che passare al modello a
-// risorse non tolga disponibilità a nessuno.
+// Correttezza del calcolo degli orari sui servizi semplici, verificata senza
+// riusare le funzioni del motore: ogni orario proposto viene ricontrollato a
+// mano contro turni e agenda. Serve a garantire che il modello a risorse non
+// dia mai un orario non prenotabile né tolga disponibilità.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { computeStarts } from "../functions/api/[[path]].js";
@@ -42,12 +43,12 @@ function* casi(orari, unSoloOperatore) {
   }
 }
 
-test("il nuovo motore non toglie mai un orario che prima era proposto", () => {
+test("l'API e il motore condiviso danno lo stesso risultato", () => {
+  // computeStarts poggia sul motore: qui si controlla che l'aggancio delle
+  // rotte (preavviso, date passate, operatore richiesto) non alteri nulla.
   let n = 0;
   for (const c of casi([...ALLINEATI, ...SFASATI])) {
-    const orari = c.nuovo.map((s) => s.start);
-    const persi = c.vecchio.filter((t) => !orari.includes(t));
-    assert.deepEqual(persi, [], `${c.nome}: orari spariti`);
+    assert.deepEqual(c.nuovo.map((s) => s.start), c.vecchio, c.nome);
     n++;
   }
   assert.ok(n >= 500, `casi confrontati: ${n}`);
@@ -77,20 +78,18 @@ test("con un solo operatore e turni regolari il risultato è identico a prima", 
   }
 });
 
-// Con più operatori il nuovo motore propone anche orari che prima sfuggivano:
-// il vecchio calcolo generava gli orari di ciascun operatore solo a partire
-// dall'inizio del suo turno, quindi un collega libero in un orario "della
-// griglia di un altro" non veniva mai proposto.
-test("con più operatori recupera orari che prima andavano persi", () => {
+// Un orario libero per un collega va proposto anche se non cade sulla griglia
+// del suo turno: prima si perdeva, perché gli orari di ogni operatore
+// partivano solo dall'inizio del proprio turno.
+test("un orario libero viene proposto anche se non cade sulla griglia di quel turno", () => {
   const config = { services: SERVIZI, cabine: [], closures: [], staff: [
     { id: "a1", serviceIds: IDS, availability: { [WD]: [[h(9), h(18)]] } },
     { id: "a2", serviceIds: IDS, availability: { [WD]: [[h(9, 10), h(12)]] } },
   ] };
   const bookings = [{ id: "b1", staffId: "a1", date: GIORNO, startMin: h(10), endMin: h(11) }];
-  const vecchio = computeStarts(config, bookings, GIORNO, "s30", 0, "griglia").map((s) => s.start);
-  const nuovo = orariPossibili(config, ["s30"], GIORNO, bookings, {});
-  assert.ok(!vecchio.includes(h(10)), "prima le 10:00 non venivano proposte");
-  const alle10 = nuovo.find((s) => s.start === h(10));
-  assert.ok(alle10, "ora vengono proposte");
+  const alle10 = orariPossibili(config, ["s30"], GIORNO, bookings, {}).find((s) => s.start === h(10));
+  assert.ok(alle10, "le 10:00 sono libere per a2 e vanno proposte");
   assert.equal(alle10.staffId, "a2", "le prende il collega che in quel momento è libero");
+  // il turno di a2 comincia alle 9:10: anche quell'orario resta proponibile
+  assert.ok(orariPossibili(config, ["s30"], GIORNO, bookings, {}).some((s) => s.start === h(9, 10)));
 });

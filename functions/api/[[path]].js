@@ -10,6 +10,8 @@
 //   disattivata, l'azienda non può leggere/salvare i dati.
 // ============================================================================
 
+import { orariPossibili, impegniServizio, durataServizio, senzaOperatore, occupazioneDelGiorno, spaziAttorno } from "../../src/orari.js";
+
 const COLLEZIONI = ["config", "bookings", "clients", "catalog", "sales", "vouchers", "eventi"];
 const MODULI = ["fidelity", "vendite", "statistiche", "marketing", "allergeni", "pacchetti", "online", "op3", "opinf"];
 const OLD_MAP = { shop: "vendite", stats: "statistiche" };
@@ -175,103 +177,48 @@ function eventiComeImpegni(eventi, dateStr) {
   return out;
 }
 async function onlineBookingsOf(env, aziendaId, dateStr) {
-  const res = await env.DB.prepare("SELECT id, staff_id, start_min, end_min FROM prenotazioni_online WHERE azienda_id = ? AND data = ? AND stato = 'attiva'").bind(aziendaId, dateStr).all();
-  return (res.results || []).map((r) => ({ id: r.id, staffId: r.staff_id, date: dateStr, startMin: r.start_min, endMin: r.end_min, status: undefined }));
-}
-// Slot "anti-vuoto": per ogni segmento libero offre SOLO il bordo sinistro
-// (orario di apertura, oppure subito dopo un appuntamento esistente). Così le
-// prenotazioni si impacchettano una dopo l'altra senza lasciare buchi: se apri
-// alle 10:00 viene offerto 10:00, mai 10:15.
-function gapFreeStarts(config, bookingsAll, dateStr, serviceId, leadMin, staffFilter) {
-  const closures = (config && config.closures) || [];
-  if (closures.some((r) => inRange(dateStr, r.from, r.to))) return [];
-  const svc = (config.services || []).find((s) => s.id === serviceId);
-  if (!svc) return [];
-  const D = Number(svc.durationMin) || 0; if (D <= 0) return [];
-  const now = new Date();
-  const todayStr = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
-  if (dateStr < todayStr) return [];
-  let earliest = 0;
-  if (dateStr === todayStr) { const nowMin = now.getHours() * 60 + now.getMinutes(); earliest = Math.ceil((nowMin + (leadMin || 0)) / STEP_MIN) * STEP_MIN; }
-  const wd = weekdayOf(dateStr);
-  const byStart = {};
-  (config.staff || []).forEach((st) => {
-    if (staffFilter && st.id !== staffFilter) return;
-    if (!(st.serviceIds || []).includes(serviceId)) return;
-    if (staffOff(st, dateStr)) return;
-    const windows = (st.availability && st.availability[wd]) || [];
-    const stBk = bookingsAll.filter((b) => b && b.staffId === st.id && b.date === dateStr && b.status !== "cancelled" && b.status !== "noshow").slice().sort((a, b) => a.startMin - b.startMin);
-    windows.forEach((win) => {
-      const ws = win[0], we = win[1];
-      let cursor = Math.max(ws, earliest);
-      const inWin = stBk.filter((b) => b.endMin > ws && b.startMin < we);
-      for (const b of inWin) {
-        if (b.startMin > cursor && cursor + D <= b.startMin && byStart[cursor] == null) byStart[cursor] = st.id;
-        cursor = Math.max(cursor, b.endMin);
-      }
-      if (cursor + D <= we && byStart[cursor] == null) byStart[cursor] = st.id;
-    });
+  const res = await env.DB.prepare("SELECT id, staff_id, start_min, end_min, impegni FROM prenotazioni_online WHERE azienda_id = ? AND data = ? AND stato = 'attiva'").bind(aziendaId, dateStr).all();
+  return (res.results || []).map((r) => {
+    let impegni = null;
+    try { const a = JSON.parse(r.impegni || "null"); if (Array.isArray(a) && a.length) impegni = a; } catch (e) {}
+    return { id: r.id, staffId: r.staff_id, date: dateStr, startMin: r.start_min, endMin: r.end_min, status: undefined, ...(impegni ? { impegni } : {}) };
   });
-  return Object.keys(byStart).map(Number).sort((a, b) => a - b).map((start) => ({ start, staffId: byStart[start] }));
 }
-function staffOff(st, date) { return Array.isArray(st && st.off) && st.off.some((r) => inRange(date, r.from, r.to)); }
-// Impegni che occupano davvero un operatore in una data: appuntamenti del
-// gestionale, prenotazioni online attive ed eventi già espansi dal chiamante.
-function impegniDi(bookingsAll, staffId, dateStr) {
-  return bookingsAll.filter((b) => b && b.staffId === staffId && b.date === dateStr && b.status !== "cancelled" && b.status !== "noshow");
-}
-// Primo minuto prenotabile della giornata: -1 (nessun vincolo) se la data non è
-// oggi, altrimenti "adesso + preavviso minimo".
-function primaOraUtile(dateStr, leadMin) {
+// ---- Le tre modalità di disponibilità online -------------------------------
+// Tutte e tre poggiano sul motore condiviso src/orari.js, che conosce le
+// risorse (operatori multipli, cabine, servizi a segmenti) e fa rispettare le
+// regole rigide: chiusure, orari, ferie, servizi dell'operatore, preavviso,
+// sovrapposizioni.
+
+// Primo minuto prenotabile: -1 (nessun vincolo) se la data non è oggi.
+function primaOraUtile(dateStr, leadMin, arrotonda) {
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
   if (dateStr !== todayStr) return -1;
-  return now.getHours() * 60 + now.getMinutes() + (leadMin || 0);
+  const m = now.getHours() * 60 + now.getMinutes() + (leadMin || 0);
+  return arrotonda ? Math.ceil(m / STEP_MIN) * STEP_MIN : m;
 }
-// Tutti gli inizi a passo fisso tecnicamente prenotabili, uno per operatore
-// (quindi con orari ripetuti se più operatori sono liberi). È la base comune
-// della modalità "a griglia" e di quella "ottimizzata": qui vivono TUTTE le
-// regole rigide — chiusure, giorni e orari di lavoro, ferie dell'operatore,
-// servizi che sa fare, preavviso minimo, sovrapposizioni.
-function gridCandidates(config, bookingsAll, dateStr, serviceId, leadMin, staffFilter) {
-  const closures = (config && config.closures) || [];
-  if (closures.some((r) => inRange(dateStr, r.from, r.to))) return [];
-  const svc = (config.services || []).find((s) => s.id === serviceId);
-  if (!svc) return [];
-  const D = Number(svc.durationMin) || 0; if (D <= 0) return [];
+function nelPassato(dateStr) {
   const now = new Date();
-  const todayStr = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
-  if (dateStr < todayStr) return [];
-  const earliest = primaOraUtile(dateStr, leadMin);
-  const wd = weekdayOf(dateStr);
-  const out = [];
-  (config.staff || []).forEach((st) => {
-    if (staffFilter && st.id !== staffFilter) return;
-    if (!(st.serviceIds || []).includes(serviceId)) return;
-    if (staffOff(st, dateStr)) return;
-    const windows = (st.availability && st.availability[wd]) || [];
-    const stBk = impegniDi(bookingsAll, st.id, dateStr);
-    windows.forEach((win) => {
-      const ws = win[0], we = win[1];
-      for (let t = ws; t + D <= we; t += STEP_MIN) {
-        if (t < earliest) continue;
-        if (!stBk.some((b) => t < b.endMin && t + D > b.startMin)) out.push({ start: t, staffId: st.id, winFrom: ws, winTo: we });
-      }
-    });
-  });
-  return out;
+  return dateStr < `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
 }
-// Un orario per volta: a parità di orario vince il primo operatore utile,
-// nell'ordine in cui sono elencati nelle impostazioni.
-function unicoPerOrario(cand) {
-  const byStart = {};
-  for (const c of cand) if (byStart[c.start] == null) byStart[c.start] = c.staffId;
-  return Object.keys(byStart).map(Number).sort((a, b) => a - b).map((start) => ({ start, staffId: byStart[start] }));
+// Riduce l'esito del motore alla forma attesa dalle rotte.
+const soloOrari = (arr) => arr.map((s) => ({ start: s.start, staffId: s.staffId, impegni: s.impegni, durata: s.durata }));
+
+// Modalità "anti-vuoto": orari consecutivi, che partono dall'apertura e si
+// accodano a ciò che finisce. Niente buchi in agenda.
+function gapFreeStarts(config, bookingsAll, dateStr, serviceId, leadMin, staffFilter) {
+  if (nelPassato(dateStr)) return [];
+  return soloOrari(orariPossibili(config, [serviceId], dateStr, bookingsAll, {
+    soloBordi: true, earliest: primaOraUtile(dateStr, leadMin, true), staffFilter,
+  }));
 }
-// Modalità "a griglia": orari liberi a passo fisso (il cliente sceglie l'ora);
-// può lasciare buchi tra le prenotazioni, ma dà più libertà di scelta.
+// Modalità "a griglia": tutti gli orari liberi a passo fisso.
 function gridStarts(config, bookingsAll, dateStr, serviceId, leadMin, staffFilter) {
-  return unicoPerOrario(gridCandidates(config, bookingsAll, dateStr, serviceId, leadMin, staffFilter));
+  if (nelPassato(dateStr)) return [];
+  return soloOrari(orariPossibili(config, [serviceId], dateStr, bookingsAll, {
+    earliest: primaOraUtile(dateStr, leadMin, false), staffFilter,
+  }));
 }
 
 // ---- Modalità "ottimizzata": simula ogni inserimento e scarta i buchi morti ----
@@ -282,7 +229,7 @@ const PUNTI = { PIENO: 200, ATTACCATO: 80, UTILIZZABILE: 60, AMPIO: 40, FRAMMENT
 // Durate dei servizi prenotabili online, crescenti. La soglia di "buco
 // utilizzabile" non è fissa: è la durata del servizio online più corto.
 function durateOnline(services) {
-  return (services || []).map((s) => Number(s && s.durationMin) || 0).filter((d) => d > 0).sort((a, b) => a - b);
+  return (services || []).map((s) => durataServizio(s)).filter((d) => d > 0).sort((a, b) => a - b);
 }
 
 // Uno slot è "pulito" quando non lascia buchi morti e resta attaccato a
@@ -315,57 +262,34 @@ function valutaSlot(gapPrima, gapDopo, durate) {
   return p;
 }
 
-// Spazi liberi di un operatore dentro una finestra di lavoro, già tagliati sul
-// primo orario ancora prenotabile (il passato non è un buco da riempire).
-function segmentiLiberi(bookingsAll, staffId, dateStr, winFrom, winTo, earliest) {
-  const busy = impegniDi(bookingsAll, staffId, dateStr)
-    .filter((b) => b.endMin > winFrom && b.startMin < winTo)
-    .slice().sort((a, b) => a.startMin - b.startMin);
-  const segs = [];
-  let cursor = Math.max(winFrom, earliest);
-  for (const b of busy) {
-    if (b.startMin > cursor) segs.push({ from: cursor, to: b.startMin });
-    cursor = Math.max(cursor, b.endMin);
-  }
-  if (cursor < winTo) segs.push({ from: cursor, to: winTo });
-  return segs;
-}
-
-// Modalità "ottimizzata": parte dagli stessi candidati della griglia, simula
+// Modalità "ottimizzata": parte dagli stessi orari della griglia, simula
 // l'inserimento di ognuno e tiene solo quelli che non spezzettano la giornata.
 // La simulazione è puramente virtuale: nulla viene scritto in agenda.
+// Con più risorse impegnate (due operatori, una cabina) il giudizio è quello
+// della risorsa messa peggio: un buco morto nella cabina pesa quanto uno in agenda.
 function optimizedStarts(config, bookingsAll, dateStr, serviceId, leadMin, staffFilter, opts) {
-  const cand = gridCandidates(config, bookingsAll, dateStr, serviceId, leadMin, staffFilter);
+  if (nelPassato(dateStr)) return [];
+  const earliest = primaOraUtile(dateStr, leadMin, false);
+  const cand = orariPossibili(config, [serviceId], dateStr, bookingsAll, { earliest, staffFilter });
   if (!cand.length) return [];
-  const svc = (config.services || []).find((s) => s.id === serviceId);
-  const D = Number(svc && svc.durationMin) || 0;
   const durate = durateOnline(opts && opts.servizionline);
   // In conferma conta solo se lo slot è davvero libero: filtrare anche lì
   // rifiuterebbe prenotazioni valide diventate "meno ottimali" nel frattempo.
-  if (opts && opts.confirm) return unicoPerOrario(cand);
+  if (opts && opts.confirm) return soloOrari(cand);
   // Senza servizi online noti non c'è metro per giudicare i buchi: nessun filtro.
-  if (!durate.length || D <= 0) return unicoPerOrario(cand);
+  if (!durate.length) return soloOrari(cand);
 
-  const earliest = primaOraUtile(dateStr, leadMin);
-  const cache = new Map();
-  const segsDi = (staffId, winFrom, winTo) => {
-    const k = `${staffId}|${winFrom}|${winTo}`;
-    if (!cache.has(k)) cache.set(k, segmentiLiberi(bookingsAll, staffId, dateStr, winFrom, winTo, earliest));
-    return cache.get(k);
-  };
-
-  const valutati = [];
-  for (const c of cand) {
-    const seg = segsDi(c.staffId, c.winFrom, c.winTo).find((sg) => sg.from <= c.start && c.start + D <= sg.to);
-    if (!seg) continue; // non dovrebbe capitare: i candidati nascono liberi
-    const gapPrima = c.start - seg.from, gapDopo = seg.to - (c.start + D);
-    valutati.push({
-      ...c,
-      punteggio: valutaSlot(gapPrima, gapDopo, durate),
-      pulito: slotPulito(gapPrima, gapDopo, durate),
-      segKey: `${c.staffId}|${seg.from}|${seg.to}`,
-    });
-  }
+  const occ = occupazioneDelGiorno(bookingsAll, dateStr);
+  const valutati = cand.map((c) => {
+    const spazi = spaziAttorno(config, dateStr, c.impegni, occ, earliest);
+    if (!spazi.length) return { c, punteggio: 0, pulito: true, segKey: "-" };
+    let punteggio = Infinity, pulito = true;
+    for (const s of spazi) {
+      punteggio = Math.min(punteggio, valutaSlot(s.gapPrima, s.gapDopo, durate));
+      if (!slotPulito(s.gapPrima, s.gapDopo, durate)) pulito = false;
+    }
+    return { c, punteggio, pulito, segKey: spazi.map((s) => s.segKey).join("+") };
+  });
 
   // Filtro per singolo spazio libero, non per giornata: se dentro uno spazio
   // esiste almeno una collocazione pulita si mostrano solo quelle, altrimenti
@@ -383,11 +307,10 @@ function optimizedStarts(config, bookingsAll, dateStr, serviceId, leadMin, staff
     tenuti.push(...gruppo.filter((v) => v.punteggio === max));
   }
 
-  // A parità di orario tiene l'operatore col punteggio migliore; a parità di
-  // punteggio resta il primo in elenco, come nelle altre due modalità.
+  // A parità di orario tiene l'assegnazione col punteggio migliore.
   const best = new Map();
-  for (const v of tenuti) { const p = best.get(v.start); if (!p || v.punteggio > p.punteggio) best.set(v.start, v); }
-  return [...best.values()].sort((a, b) => a.start - b.start).map((v) => ({ start: v.start, staffId: v.staffId }));
+  for (const v of tenuti) { const p = best.get(v.c.start); if (!p || v.punteggio > p.punteggio) best.set(v.c.start, v); }
+  return soloOrari([...best.values()].sort((a, b) => a.c.start - b.c.start).map((v) => v.c));
 }
 
 // Sceglie l'algoritmo in base alla modalità configurata dal salone.
@@ -397,7 +320,7 @@ function computeStarts(config, bookingsAll, dateStr, serviceId, leadMin, mode, s
   if (mode === "ottimizzata") return optimizedStarts(config, bookingsAll, dateStr, serviceId, leadMin, staffFilter, opts);
   return gapFreeStarts(config, bookingsAll, dateStr, serviceId, leadMin, staffFilter);
 }
-export { computeStarts, valutaSlot, slotPulito, durateOnline, segmentiLiberi, PUNTI };
+export { computeStarts, valutaSlot, slotPulito, durateOnline, PUNTI };
 
 async function getSession(env, request) {
   const sid = getCookie(request, "sid");
@@ -513,7 +436,13 @@ export async function onRequest(context) {
     const leadMin = Math.max(0, Number(booking.leadHours != null ? booking.leadHours * 60 : 120));
     const horizonDays = Math.max(1, Number(booking.horizonDays || 30));
     const mode = booking.mode === "griglia" ? "griglia" : booking.mode === "ottimizzata" ? "ottimizzata" : "antivuoto";
-    const services = (config.services || []).filter((s) => Number(s.durationMin) > 0 && (config.staff || []).some((st) => (st.serviceIds || []).includes(s.id) && (st.availability && Object.keys(st.availability).length)));
+    // Prenotabile online = ha una durata e c'è una risorsa capace di farlo.
+    // Un servizio a sola cabina (la lampada) non richiede nessun operatore.
+    const services = (config.services || []).filter((s) => {
+      if (durataServizio(s) <= 0) return false;
+      if (senzaOperatore(impegniServizio(s))) return ((config.cabine || []).length > 0);
+      return (config.staff || []).some((st) => (st.serviceIds || []).includes(s.id) && st.availability && Object.keys(st.availability).length);
+    });
 
     // info attività + servizi prenotabili + contenuti del mini-sito
     if (segs[2] == null && method === "GET") {
@@ -530,7 +459,7 @@ export async function onRequest(context) {
       return json({
         ok: true,
         salone: { nome: az.denominazione, brandName: b.name || az.denominazione, tagline: b.tagline || "", logo: b.logo || null, primary: b.primary || "#b8893b", phone: b.phone || "", email: b.email || "", address: b.address || "" },
-        services: services.map((s) => ({ id: s.id, name: s.name, durationMin: s.durationMin, price: s.price != null ? s.price : null })),
+        services: services.map((s) => ({ id: s.id, name: s.name, durationMin: durataServizio(s), price: s.price != null ? s.price : null })),
         staff: staffPub,
         horizonDays,
         sito: {
@@ -592,7 +521,7 @@ export async function onRequest(context) {
       const slots = computeStarts(config, [...(Array.isArray(bookings) ? bookings : []), ...online], date, serviceId, leadMin, mode, staffSel || undefined, { servizionline: services, confirm: true });
       const slot = slots.find((s) => s.start === start);
       if (!slot) return json({ error: "Questo orario non è più disponibile. Scegline un altro." }, 409);
-      const end = start + (Number(svc.durationMin) || 0);
+      const end = start + durataServizio(svc);
 
       // associazione cliente: per telefono (normalizzato) sui clienti del salone
       const clients = (await getCollezione(env, aid, "clients")) || [];
@@ -609,8 +538,8 @@ export async function onRequest(context) {
       }
 
       const id = crypto.randomUUID();
-      await env.DB.prepare("INSERT INTO prenotazioni_online (id, azienda_id, data, start_min, end_min, service_id, staff_id, client_code, client_name, client_phone, client_email, note, stato) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'attiva')")
-        .bind(id, aid, date, start, end, serviceId, slot.staffId, clientCode, name, phone, email, note).run();
+      await env.DB.prepare("INSERT INTO prenotazioni_online (id, azienda_id, data, start_min, end_min, service_id, staff_id, client_code, client_name, client_phone, client_email, note, stato, impegni) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'attiva', ?)")
+        .bind(id, aid, date, start, end, serviceId, slot.staffId || null, clientCode, name, phone, email, note, JSON.stringify(slot.impegni || [])).run();
       return json({ ok: true, conferma: { date, start, end, label: `${pad2(Math.floor(start / 60))}:${pad2(start % 60)}`, service: svc.name, salone: az.denominazione } });
     }
 
@@ -643,13 +572,16 @@ export async function onRequest(context) {
       if (!row || row.stato !== "attiva" || normP(row.client_phone) !== phone) return json({ error: "Prenotazione non trovata." }, 404);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(ndate) || !Number.isFinite(nstart)) return json({ error: "Orario non valido." }, 400);
       const svc = (config.services || []).find((s) => s.id === row.service_id);
-      const dur = svc ? (Number(svc.durationMin) || (row.end_min - row.start_min)) : (row.end_min - row.start_min);
+      const dur = svc ? (durataServizio(svc) || (row.end_min - row.start_min)) : (row.end_min - row.start_min);
       const bookings = (await getCollezione(env, aid, "bookings")) || [];
       const online = (await onlineBookingsOf(env, aid, ndate)).filter((b) => b.id !== row.id);
       const impegniEventi = eventiComeImpegni(await getCollezione(env, aid, "eventi"), ndate);
       const slots = computeStarts(config, [...(Array.isArray(bookings) ? bookings : []), ...online, ...impegniEventi], ndate, row.service_id, leadMin, mode, row.staff_id || undefined, { servizionline: services, confirm: true });
-      if (!slots.find((s) => s.start === nstart)) return json({ error: "Questo orario non è più disponibile. Scegline un altro." }, 409);
-      await env.DB.prepare("UPDATE prenotazioni_online SET data = ?, start_min = ?, end_min = ? WHERE id = ?").bind(ndate, nstart, nstart + dur, row.id).run();
+      const nuovo = slots.find((s) => s.start === nstart);
+      if (!nuovo) return json({ error: "Questo orario non è più disponibile. Scegline un altro." }, 409);
+      // Spostando l'appuntamento cambiano anche le risorse impegnate.
+      await env.DB.prepare("UPDATE prenotazioni_online SET data = ?, start_min = ?, end_min = ?, staff_id = ?, impegni = ? WHERE id = ?")
+        .bind(ndate, nstart, nstart + dur, nuovo.staffId || null, JSON.stringify(nuovo.impegni || []), row.id).run();
       return json({ ok: true, conferma: { date: ndate, start: nstart, label: lbl(nstart), service: svcName(row.service_id), salone: az.denominazione } });
     }
 

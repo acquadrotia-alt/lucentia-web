@@ -156,6 +156,51 @@ export function finestreSalone(config, wd) {
   return out;
 }
 
+// Spazi liberi di una risorsa in una giornata, dentro le sue finestre di
+// lavoro e al netto di ciò che ha già in agenda. Serve alla modalità
+// "ottimizzata" per capire che buchi lascerebbe un nuovo appuntamento.
+export function spaziLiberiRisorsa(config, dateStr, risorsaId, occ, earliest) {
+  const wd = weekdayOf(dateStr);
+  const st = ((config && config.staff) || []).find((x) => x.id === risorsaId);
+  const cab = st ? null : ((config && config.cabine) || []).find((c) => c.id === risorsaId);
+  if (!st && !cab) return [];
+  const finestre = finestreDi(st || cab, wd, st ? [] : finestreSalone(config, wd));
+  const busy = (occ.get(risorsaId) || []).slice().sort((a, b) => a.from - b.from);
+  const minimo = earliest == null ? -1 : earliest;
+  const out = [];
+  for (const w of finestre) {
+    let cursor = Math.max(w[0], minimo);
+    for (const b of busy) {
+      if (b.to <= cursor || b.from >= w[1]) continue;
+      if (b.from > cursor) out.push({ from: cursor, to: Math.min(b.from, w[1]) });
+      cursor = Math.max(cursor, b.to);
+    }
+    if (cursor < w[1]) out.push({ from: cursor, to: w[1] });
+  }
+  return out;
+}
+
+// Per ogni risorsa impegnata da un appuntamento: quanto spazio libero
+// resterebbe prima e dopo. Gli intervalli interni al servizio (la posa del
+// colore, per dire) non sono buchi: fanno parte del servizio stesso.
+export function spaziAttorno(config, dateStr, impegniRisolti, occ, earliest) {
+  const perRisorsa = new Map();
+  for (const i of impegniRisolti) {
+    if (!i.risorsaId) continue;
+    const v = perRisorsa.get(i.risorsaId);
+    if (!v) perRisorsa.set(i.risorsaId, { from: i.from, to: i.to });
+    else { v.from = Math.min(v.from, i.from); v.to = Math.max(v.to, i.to); }
+  }
+  const out = [];
+  for (const [risorsaId, span] of perRisorsa) {
+    const seg = spaziLiberiRisorsa(config, dateStr, risorsaId, occ, earliest)
+      .find((sg) => sg.from <= span.from && span.to <= sg.to);
+    if (!seg) continue;
+    out.push({ risorsaId, gapPrima: span.from - seg.from, gapDopo: seg.to - span.to, segKey: `${risorsaId}|${seg.from}|${seg.to}` });
+  }
+  return out;
+}
+
 // ---- Assegnazione delle risorse a un orario --------------------------------
 // Prova a collocare l'appuntamento che inizia a `start`: sceglie un operatore
 // per ogni posto (sempre in automatico, il primo utile nell'ordine delle
