@@ -215,7 +215,10 @@ function qualifiedStaff(staff, ids) { return staff.filter((st) => ids.every((id)
 function inRange(date, from, to) { const lo = from || to, hi = to || from; if (!lo) return false; return date >= lo && date <= hi; }
 function staffOff(st, date) { return Array.isArray(st && st.off) && st.off.some((r) => inRange(date, r.from, r.to)); }
 function salonClosure(config, date) { return ((config && config.closures) || []).find((r) => inRange(date, r.from, r.to)) || null; }
-function computeSlots(dateStr, duration, staffList, bookings, closures) {
+// `sovrapponi` serve solo alla prenotazione fatta in negozio: propone anche gli
+// orari già occupati, così alla reception si possono accavallare due
+// appuntamenti. Le prenotazioni online non passano di qui e restano invariate.
+function computeSlots(dateStr, duration, staffList, bookings, closures, sovrapponi) {
   if (Array.isArray(closures) && closures.some((r) => inRange(dateStr, r.from, r.to))) return {};
   const wd = parseDate(dateStr).getDay();
   const isToday = dateStr === todayStr();
@@ -231,7 +234,7 @@ function computeSlots(dateStr, duration, staffList, bookings, closures) {
       for (let t = ws; t + duration <= we; t += STEP) {
         if (isToday && t < nowMin + 15) continue;
         const clash = stBk.some((b) => t < b.endMin && t + duration > b.startMin);
-        if (!clash) { if (!map[t]) map[t] = []; map[t].push(st.id); }
+        if (!clash || sovrapponi) { if (!map[t]) map[t] = []; map[t].push(st.id); }
       }
     });
   });
@@ -1859,22 +1862,26 @@ function ManualBooking({ config, bookings, setBookings, clients, setClients, can
   const candidates = staffId ? qualified.filter((s) => s.id === staffId) : qualified;
   const closed = salonClosure(config, date);
   const opOff = selStaff ? staffOff(selStaff, date) : false;
-  const slotMap = sel.length && candidates.length ? computeSlots(date, duration, candidates, occupati, config.closures) : {};
+  const [sovrapponi, setSovrapponi] = useState(false);
+  const slotMap = sel.length && candidates.length ? computeSlots(date, duration, candidates, occupati, config.closures, sovrapponi) : {};
   const slotTimes = Object.keys(slotMap).map(Number).sort((a, b) => a - b);
+  // Orari liberi davvero: serve solo a segnalare quali dei proposti si accavallano.
+  const slotLiberi = sovrapponi && sel.length && candidates.length ? computeSlots(date, duration, candidates, occupati, config.closures) : slotMap;
   const maxDate = pd(new Date(Date.now() + ADVANCE_DAYS * 864e5));
   const onCode = (v) => { v = v.replace(/\D/g, "").slice(0, 6); setCode(v); const c = clients.find((x) => x.code === v); if (c) { setName(c.name || ""); setEmail(c.email || ""); setPhone(c.phone || ""); } };
   const toggle = (id) => { if (selStaff && !selStaff.serviceIds.includes(id)) return; setSel((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id])); setSlot(null); };
 
   const save = () => {
     if (canAddBooking === false) { alert("Limite demo raggiunto: massimo 20 appuntamenti. Per usare il programma senza limiti contatta Office Solution."); return; }
-    const map = computeSlots(date, duration, candidates, occupati, config.closures);
+    const map = computeSlots(date, duration, candidates, occupati, config.closures, sovrapponi);
     const avail = map[slot];
     if (!avail || !avail.length) { alert("Orario non disponibile."); setSlot(null); return; }
     const cm = clients.find((c) => c.code === code);
     if (!cm && canAddClient === false) { alert("Limite demo raggiunto: massimo 3 clienti. Per usare il programma senza limiti contatta Office Solution."); return; }
     const assigned = staffId && avail.includes(staffId) ? staffId : avail[0];
     const r = upsertClient({ code: cm ? cm.code : null, name: name.trim(), email: email.trim(), phone: phone.trim() }, clients);
-    const booking = { id: uid(), date, startMin: slot, endMin: slot + duration, serviceIds: sel, staffId: assigned, clientCode: r.code, clientName: name.trim(), clientEmail: email.trim(), createdAt: Date.now() };
+    const accavallato = sovrapponi && !(slotLiberi[slot] || []).includes(assigned);
+    const booking = { id: uid(), date, startMin: slot, endMin: slot + duration, serviceIds: sel, staffId: assigned, clientCode: r.code, clientName: name.trim(), clientEmail: email.trim(), sovrapposto: accavallato || undefined, createdAt: Date.now() };
     setBookings([...bookings, booking]);
     setClients(r.clients);
     onDone();
@@ -1902,8 +1909,19 @@ function ManualBooking({ config, bookings, setBookings, clients, setClients, can
       </div>
       {sel.length > 0 ? (
         <div>
-          <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Orario disponibile</div>
-          {closed ? <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-2.5">Salone chiuso in questa data{closed.label ? ` (${closed.label})` : ""}.</p> : opOff ? <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5">{selStaff.name} è assente in questa data (malattia/ferie).</p> : candidates.length === 0 ? <p className="text-sm text-amber-600">Nessun operatore può fare tutti questi servizi.</p> : slotTimes.length === 0 ? <p className="text-sm text-stone-400">Nessuno slot libero.</p> : <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">{slotTimes.map((t) => <button key={t} onClick={() => setSlot(t)} className={`py-1.5 rounded-lg border text-sm font-medium transition ${slot === t ? "brand-bg border-transparent" : "bg-white border-stone-200 brand-hover"}`}>{minToStr(t)}</button>)}</div>}
+          <div className="flex items-center justify-between gap-2 flex-wrap mb-1.5">
+            <div className="text-xs font-medium text-stone-400 uppercase tracking-wide">Orario disponibile</div>
+            <label className="flex items-center gap-1.5 text-xs text-stone-500 cursor-pointer" title="Mostra anche gli orari già occupati: l'appuntamento si accavallerà a quello esistente.">
+              <input type="checkbox" checked={sovrapponi} onChange={(e) => { setSovrapponi(e.target.checked); setSlot(null); }} style={{ accentColor: "var(--brand)" }} className="w-3.5 h-3.5" />
+              Consenti sovrapposizione
+            </label>
+          </div>
+          {closed ? <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-2.5">Salone chiuso in questa data{closed.label ? ` (${closed.label})` : ""}.</p> : opOff ? <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5">{selStaff.name} è assente in questa data (malattia/ferie).</p> : candidates.length === 0 ? <p className="text-sm text-amber-600">Nessun operatore può fare tutti questi servizi.</p> : slotTimes.length === 0 ? <p className="text-sm text-stone-400">Nessuno slot libero.</p> : <>
+            <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">{slotTimes.map((t) => { const pieno = !(slotLiberi[t] || []).length; return (
+              <button key={t} onClick={() => setSlot(t)} title={pieno ? "Orario già occupato: si sovrapporrà" : undefined} className={`py-1.5 rounded-lg border text-sm font-medium transition ${slot === t ? "brand-bg border-transparent" : pieno ? "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100" : "bg-white border-stone-200 brand-hover"}`}>{minToStr(t)}</button>
+            ); })}</div>
+            {sovrapponi ? <p className="text-[11px] text-amber-700 mt-2 flex items-center gap-1"><AlertTriangle size={12} /> Gli orari in ambra sono già occupati: scegliendoli l'appuntamento si accavalla a quello esistente.</p> : null}
+          </>}
         </div>
       ) : null}
       <div>
