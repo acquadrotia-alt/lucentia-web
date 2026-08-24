@@ -268,8 +268,49 @@ export function assegnaRisorse(config, impegni, serviceIds, dateStr, start, occ,
 }
 
 // ---- Orari candidati -------------------------------------------------------
-// Tutti gli inizi a passo fisso in cui l'appuntamento sta in piedi con tutte le
-// sue risorse. È la base comune di ogni modalità di disponibilità.
+// Risorse che possono entrare in gioco per un servizio: gli operatori che lo
+// sanno fare e le cabine. Servono a sapere dove "appoggiare" gli orari.
+function risorseCoinvolte(config, serviceIds, dateStr, wd) {
+  const out = [];
+  for (const st of (config && config.staff) || []) {
+    if (!(serviceIds || []).every((id) => (st.serviceIds || []).includes(id))) continue;
+    if (risorsaAssente(st, dateStr)) continue;
+    out.push({ id: st.id, finestre: (st.availability && st.availability[wd]) || [] });
+  }
+  const apertura = finestreSalone(config, wd);
+  for (const c of (config && config.cabine) || []) {
+    if (risorsaAssente(c, dateStr)) continue;
+    out.push({ id: c.id, finestre: (c.availability && c.availability[wd]) || apertura });
+  }
+  return out;
+}
+
+// Orari da valutare. Non è una griglia globale: come nel gestionale di sempre,
+// ogni finestra di lavoro genera i suoi orari partendo dal proprio inizio, così
+// un turno che apre alle 9:10 propone 9:10 e non 9:15.
+function orariCandidati(risorse, durata, earliest, soloBordi, occ) {
+  const set = new Set();
+  for (const r of risorse) {
+    for (const w of r.finestre) {
+      const ws = w[0], we = w[1];
+      if (soloBordi) {
+        // Anti-vuoto: si parte dall'apertura e ci si accoda a ciò che finisce.
+        const primo = Math.max(ws, earliest);
+        if (primo + durata <= we) set.add(primo);
+        for (const b of occ.get(r.id) || []) {
+          if (b.to >= ws && b.to + durata <= we && b.to >= earliest) set.add(b.to);
+        }
+      } else {
+        for (let t = ws; t + durata <= we; t += PASSO_MIN) if (t >= earliest) set.add(t);
+      }
+    }
+  }
+  return [...set].sort((a, b) => a - b);
+}
+
+// Tutti gli inizi in cui l'appuntamento sta in piedi con tutte le sue risorse.
+// È la base comune di ogni modalità di disponibilità.
+// opts.soloBordi limita gli orari ai punti "attaccati" (modalità anti-vuoto).
 export function orariPossibili(config, serviceIds, dateStr, bookings, opts) {
   const o = opts || {};
   if (salonechiuso(config, dateStr)) return [];
@@ -277,19 +318,12 @@ export function orariPossibili(config, serviceIds, dateStr, bookings, opts) {
   if (!impegni.length || durata <= 0) return [];
   const occ = occupazioneDelGiorno(bookings, dateStr, o.escludiId);
   const wd = weekdayOf(dateStr);
-  // Estremi entro cui ha senso cercare: apertura del salone e finestre cabine.
-  const finestre = finestreSalone(config, wd).slice();
-  for (const c of (config && config.cabine) || []) {
-    for (const w of (c.availability && c.availability[wd]) || []) finestre.push([w[0], w[1]]);
-  }
-  if (!finestre.length) return [];
-  const primo = Math.min(...finestre.map((w) => w[0]));
-  const ultimo = Math.max(...finestre.map((w) => w[1]));
-  const minimo = o.earliest == null ? -1 : o.earliest;
+  const risorse = risorseCoinvolte(config, serviceIds, dateStr, wd);
+  if (!risorse.length) return [];
+  const earliest = o.earliest == null ? -1 : o.earliest;
 
   const out = [];
-  for (let t = Math.ceil(primo / PASSO_MIN) * PASSO_MIN; t + durata <= ultimo; t += PASSO_MIN) {
-    if (t < minimo) continue;
+  for (const t of orariCandidati(risorse, durata, earliest, !!o.soloBordi, occ)) {
     const a = assegnaRisorse(config, impegni, serviceIds, dateStr, t, occ, o);
     if (a) out.push({ start: t, durata, ...a });
   }
