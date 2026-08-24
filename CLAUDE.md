@@ -31,7 +31,20 @@ There are no tests, linter, or type checker configured. `npm run dev` serves onl
 - `operatore` → `OperatorApp.jsx` (read-only, single-staff agenda view)
 - `azienda` → `SalonApp.jsx` (the full salon app)
 
-Unauthenticated users see `Landing.jsx` (public marketing cover with demo-request + contact forms) unless `#login` is in the URL. License/demo status gates access: expired/suspended salons get a `Blocked` screen, expired demos get a `DemoExpired` contact screen — both still authenticate but can't reach the app.
+Unauthenticated users see the public site (`src/site/`) unless `#login` is in the URL. License/demo status gates access: expired/suspended salons get a `Blocked` screen, expired demos get a `DemoExpired` contact screen — both still authenticate but can't reach the app.
+
+### Public site (`src/site/`)
+The marketing site is three real pages, not one long scroll:
+
+- `/` → `HomePage.jsx` — hero, cos'è, one app preview, a taste of features, why-Lucentia, plan summary, and the `#contatti` section (contacts live only here; the nav links to `/#contatti`).
+- `/funzionalita` → `FunzionalitaPage.jsx` — the full feature list, the app previews and the deep-dive rows. **This page must never mention prices, canoni or the € figures** — it links to `/piani` instead.
+- `/piani` → `PianiPage.jsx` — plan cards, the Basic/Smart/Pro comparison table, every module explained, the operator tiers, the prenotazioni-online add-on and the pricing FAQ.
+
+Supporting files: `Site.jsx` (shell + History-API router + `<head>` updates), `ui.jsx` (shared `SiteCtx`, `Reveal`, `SiteLink`, header, footer, contacts, lead modal), `dati.js` (all copy: features, deep dives, plans, modules, comparison rows, FAQ) and `rotte.js` (the route table with per-page title/description/OG — the single source of truth shared with the build).
+
+Plan and module content in `dati.js` must stay in sync with the reseller presets in `ResellerPanel.jsx` (`PRESETS`, `OPT`) and the module keys in the API (`MODULI`).
+
+`npm run build` runs `scripts/prerender.mjs`, which renders each route in `rotte.js` to its own static file (`dist/index.html`, `dist/funzionalita/index.html`, `dist/piani/index.html`) with its own title, description, canonical and Open Graph tags, so crawlers and link previews see real per-page content. Because of that, `vite.config.js` uses `base: "/"` (absolute asset URLs) — do not switch it back to `"./"`, it would break the pages served from a subdirectory. New public pages need an entry in `rotte.js`, a component in `PAGINE` (`Site.jsx`) and a `<url>` in `public/sitemap.xml`.
 
 ### Auth & session model
 Email + password login. Passwords are hashed with PBKDF2 (SHA-256, 100k iterations) via WebCrypto — see `hashPassword`/`verifyPassword`. Sessions are random tokens stored in the `sessioni` table and carried in an HttpOnly `sid` cookie (30-day expiry). Every API call past the public routes (`health`, `setup`, `login`, `logout`, `richiesta`, `demo`) requires a valid session resolved by `getSession`.

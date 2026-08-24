@@ -3,7 +3,7 @@ import { Lock, Mail, LogOut, AlertTriangle, ShieldCheck, Phone, MessageCircle, G
 import SalonApp from "./SalonApp.jsx";
 import ResellerPanel from "./ResellerPanel.jsx";
 import OperatorApp from "./OperatorApp.jsx";
-import Landing from "./Landing.jsx";
+import Site from "./site/Site.jsx";
 import BookingPage from "./BookingPage.jsx";
 import EventoPage from "./EventoPage.jsx";
 import { CONTACTS } from "./contatti.js";
@@ -142,7 +142,7 @@ export default function App() {
   );
   if (stato === "login" || !me) {
     if (showLogin) return <Login onLogged={refresh} onBack={closeLogin} />;
-    return <Landing onLogin={openLogin} />;
+    return <Site onLogin={openLogin} />;
   }
 
   if (me.user.ruolo === "reseller") {
