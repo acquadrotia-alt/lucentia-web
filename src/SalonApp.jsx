@@ -2789,6 +2789,11 @@ function ImpegniEditor({ svc, cabine, onChange }) {
   const set = (i, patch) => onChange({ impegni: seq.map((x, j) => (j === i ? { ...x, ...patch } : x)) });
   const del = (i) => onChange({ impegni: seq.filter((_, j) => j !== i) });
   const fine = seq ? seq.reduce((m, x) => Math.max(m, (Number(x.da) || 0) + (Number(x.durata) || 0)), 0) : durata;
+  // Le lettere distinguono persone diverse. Con un solo posto non servono:
+  // scriverlo "Operatore A" farebbe solo pensare a una persona precisa.
+  const posti = seq ? [...new Set(seq.filter((x) => x.tipo !== "cabina").map((x) => Number(x.posto) || 1))] : [];
+  const lettera = (n) => String.fromCharCode(64 + (Number(n) || 1));
+  const nomePosto = (n) => (posti.length > 1 ? `Operatore ${lettera(n)}` : "Operatore");
   // Un impegno aggiunto parte dove finisce l'ultimo, così non si accavalla da
   // solo; una cabina invece copre di norma tutto il servizio.
   const add = (tipo) => onChange({ impegni: [...seq, tipo === "cabina"
@@ -2812,7 +2817,7 @@ function ImpegniEditor({ svc, cabine, onChange }) {
       <div className="space-y-1 mb-2.5">
         {[...new Set(seq.map((x) => (x.tipo === "cabina" ? `cabina:${x.cabinaId || ""}` : `operatore:${x.posto || 1}`)))].map((chiave) => {
           const [tipo, val] = chiave.split(":");
-          const nome = tipo === "cabina" ? ((cabine.find((c) => c.id === val) || {}).name || "Cabina") : `Operatore ${val}`;
+          const nome = tipo === "cabina" ? ((cabine.find((c) => c.id === val) || {}).name || "Cabina") : nomePosto(val);
           const parti = seq.filter((x) => (x.tipo === "cabina" ? `cabina:${x.cabinaId || ""}` : `operatore:${x.posto || 1}`) === chiave);
           return (
             <div key={chiave} className="flex items-center gap-2">
@@ -2840,7 +2845,7 @@ function ImpegniEditor({ svc, cabine, onChange }) {
               </select>
             ) : (
               <select value={x.posto || 1} onChange={(e) => set(i, { posto: Number(e.target.value) })} className="text-xs px-1.5 py-1 rounded border border-stone-200 bg-white">
-                {[1, 2, 3].map((n) => <option key={n} value={n}>n° {n}</option>)}
+                {[1, 2, 3].map((n) => <option key={n} value={n}>persona {lettera(n)}</option>)}
               </select>
             )}
             <span className="text-xs text-stone-400">dal minuto</span>
@@ -2858,7 +2863,8 @@ function ImpegniEditor({ svc, cabine, onChange }) {
         {fine > durata ? <span className="text-[11px] text-amber-700 ml-auto">La sequenza arriva a {fine} min: il servizio durerà {fine} minuti.</span> : null}
         {!seq.some((x) => x.tipo === "operatore") ? <span className="text-[11px] text-stone-500 ml-auto">Nessun operatore: il servizio occupa solo la cabina.</span> : null}
       </div>
-      <p className="text-[11px] text-stone-400 mt-2">Gli intervalli non coperti restano liberi: durante una posa l'operatore può prendere un altro cliente. Due numeri d'operatore diversi significano due persone diverse.</p>
+      {posti.length ? <p className="text-[11px] text-stone-400 mt-2">Gli intervalli non coperti restano liberi: durante una posa l'operatore può prendere un altro cliente.</p> : null}
+      {posti.length > 1 ? <p className="text-[11px] text-stone-400 mt-1">Le lettere non indicano una persona precisa: dicono solo se una parte la fa la stessa persona (stessa lettera) o un'altra (lettera diversa). Chi la farà viene scelto al momento della prenotazione fra chi è libero e sa fare il servizio, e lo leggi sull'appuntamento in agenda.</p> : null}
     </div>
   );
 }
