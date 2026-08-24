@@ -15,9 +15,10 @@ npm install        # install deps
 npm run dev        # Vite dev server (frontend only — see note below)
 npm run build      # production build to dist/
 npm run preview    # preview the production build
+npm test           # Node test runner over test/*.test.mjs
 ```
 
-There are no tests, linter, or type checker configured. `npm run dev` serves only the React frontend; the `/api/*` routes are Cloudflare Pages Functions and do **not** run under plain Vite. To exercise the API + D1 locally you need the Cloudflare adapter (e.g. `wrangler pages dev`) with a D1 binding named `DB`; otherwise develop the frontend against the deployed API.
+There is no linter or type checker configured. `npm test` runs Node's built-in runner over `test/*.test.mjs` (no dependencies); it currently covers the online-availability algorithms only. `npm run dev` serves only the React frontend; the `/api/*` routes are Cloudflare Pages Functions and do **not** run under plain Vite. To exercise the API + D1 locally you need the Cloudflare adapter (e.g. `wrangler pages dev`) with a D1 binding named `DB`; otherwise develop the frontend against the deployed API.
 
 ## Architecture
 
@@ -63,6 +64,14 @@ The salon app does **not** have a normalized schema. All salon content is seven 
 `config`, `bookings`, `clients`, `catalog`, `sales`, `vouchers`, `eventi` (see `COLLEZIONI` in the API).
 
 `eventi` are salon events (courses, open days…) that occupy one or more operators (their time slots become unavailable, both in-app and for online booking). Each event has a public shareable page at `/?evento=<azienda_id>:<evento_id>` (`EventoPage.jsx`, public API `/api/evento/:aid/:eid`). The booking link `/?prenota=<azienda_id>` is a mini-site (`BookingPage.jsx`) with booking, upcoming events and custom content configured in `config.sito` (Impostazioni → "Il tuo mini-sito").
+
+#### Online availability (three modes)
+`config.onlineBooking.mode` picks how free slots are offered, and only affects online booking — manual bookings from the salon app are never filtered. All three live in `functions/api/[[path]].js` behind `computeStarts(config, bookingsAll, date, serviceId, leadMin, mode, staffFilter, opts)`:
+- `antivuoto` (default) → `gapFreeStarts`: only the left edge of each free segment.
+- `griglia` → `gridStarts`: every free 15-minute start.
+- `ottimizzata` → `optimizedStarts`: takes the same candidates as `griglia` (via `gridCandidates`, where all the hard rules live — closures, working hours, staff holidays, lead time, overlaps), simulates each insertion and keeps only "clean" placements (`slotPulito`: flush against something on at least one side and leaving no gap shorter than the shortest online-bookable service). `valutaSlot` scores slots to rank fallbacks and to pick the best operator on a tied time. If a free segment has no clean placement its best-scoring ones are kept anyway, so no bookable space ever disappears.
+
+`opts` is only read by `ottimizzata`; `opts.servizionline` carries the online-bookable services and `opts.confirm` skips the quality filter. **The two write paths (create + move) must pass `confirm: true`**: the final check exists to prevent double-booking, and filtering there would reject bookings that are genuinely free.
 
 `SalonApp.jsx` holds each as React state, loads them via `GET /api/data/:coll` on mount, and persists changes with a debounced `PUT /api/data/:coll` (`apiSaveDebounced`, 800ms). The server rejects writes when the license is inactive. **Demo tenants are read-only**: saving is skipped client-side (`demoRef`) and the demo is seeded server-side by `demoSeed()`.
 

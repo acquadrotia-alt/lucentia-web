@@ -2199,8 +2199,8 @@ function BookingLinkCard({ aziendaId, config, saveConfig }) {
       </div>
       <div className="mt-4">
         <span className="text-xs font-medium text-stone-400 uppercase tracking-wide block mb-1.5">Come proporre gli orari</span>
-        <div className="grid sm:grid-cols-2 gap-2">
-          {[["antivuoto", "Anti-vuoto", "Orari consecutivi: partono dall'apertura e si incastrano dopo gli appuntamenti. Niente buchi in agenda."], ["griglia", "A griglia", "Orari liberi a intervalli fissi: il cliente sceglie l'ora che preferisce. Più libertà, può lasciare qualche buco."]].map(([val, title, desc]) => { const on = (ob.mode || "antivuoto") === val; return (
+        <div className="grid sm:grid-cols-3 gap-2">
+          {[["antivuoto", "Anti-vuoto", "Orari consecutivi: partono dall'apertura e si incastrano dopo gli appuntamenti. Niente buchi in agenda."], ["griglia", "A griglia", "Orari liberi a intervalli fissi: il cliente sceglie l'ora che preferisce. Più libertà, può lasciare qualche buco."], ["ottimizzata", "Disponibilità ottimizzata", "Evita i buchi inutilizzabili: propone gli orari che tengono la giornata compatta, misurati sulle durate dei servizi prenotabili online."]].map(([val, title, desc]) => { const on = (ob.mode || "antivuoto") === val; return (
             <button key={val} type="button" onClick={() => save({ mode: val })} className="text-left rounded-xl border p-3 transition" style={on ? { borderColor: "var(--brand)", background: "var(--brand-soft)" } : { borderColor: "#e7e5e4" }}>
               <div className="text-sm font-medium text-stone-900 flex items-center gap-1.5">{on ? <Check size={14} className="brand-accent" /> : null} {title}</div>
               <div className="text-[11px] text-stone-500 mt-1 leading-relaxed">{desc}</div>
