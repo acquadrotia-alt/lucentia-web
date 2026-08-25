@@ -2340,6 +2340,27 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
   const services = config.services, staff = config.staff, branding = config.branding;
   const isReseller = session && session.role === "reseller";
   const [seqAperta, setSeqAperta] = useState(null);
+  // Le voci del menù laterale. Quelle legate a un modulo compaiono solo se
+  // il modulo è attivo, così non si aprono sezioni vuote.
+  const SEZIONI = [
+    { id: "attivita", label: "Attività", icon: Store },
+    { id: "servizi", label: "Servizi", icon: Sparkles },
+    { id: "risorse", label: "Operatori e cabine", icon: Users },
+    ...(online && aziendaId ? [{ id: "online", label: "Prenotazioni online", icon: CalendarPlus }] : []),
+    { id: "dati", label: "Dati e backup", icon: Download },
+    { id: "licenza", label: "Licenza", icon: BadgeCheck },
+  ];
+  const [sezione, setSezione] = useState("attivita");
+  const menuRef = useRef(null);
+  // Cambiando sezione si resterebbe a metà pagina, con davanti uno spazio
+  // vuoto: la vista torna in cima al menù. Sul desktop la colonna è fissa e
+  // non serve, quindi si muove solo quando il menù è sopra il contenuto.
+  const vaiA = (id) => {
+    setSezione(id);
+    if (typeof window === "undefined" || window.innerWidth >= 1024) return;
+    const el = menuRef.current;
+    if (el && el.getBoundingClientRect().top < 0) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
   const updServices = (next) => saveConfig({ ...config, services: next });
   const updStaff = (next) => saveConfig({ ...config, staff: next });
   const updBranding = (patch) => saveConfig({ ...config, branding: { ...branding, ...patch } });
@@ -2394,167 +2415,199 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
   const delClosure = (id) => saveConfig({ ...config, closures: closures.filter((c) => c.id !== id) });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="flex items-center justify-between gap-3 flex-wrap"><h2 className="text-xl font-semibold tracking-tight text-stone-900">Impostazioni</h2>{isReseller ? <div className="flex items-center gap-2"><button onClick={reset} className="flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-700"><RefreshCw size={14} /> Ripristina demo</button><button onClick={azzeraTutto} className="flex items-center gap-1.5 text-sm text-red-600 border border-red-300 px-2.5 py-1.5 rounded-lg hover:bg-red-50"><AlertTriangle size={14} /> Azzera tutto</button></div> : null}</div>
 
-      {online && aziendaId ? <BookingLinkCard aziendaId={aziendaId} config={config} saveConfig={saveConfig} /> : null}
-
-      {online && aziendaId ? <SitoWebCard config={config} saveConfig={saveConfig} /> : null}
-
-      {isReseller ? <LicensePanel license={license} onSave={onSaveLicense} /> : null}
-
-      <section className="lc-card p-5">
-        <h3 className="font-semibold flex items-center gap-2 mb-3"><BadgeCheck size={16} className="brand-accent" /> La tua licenza</h3>
-        <div className="grid grid-cols-3 gap-3 text-center">
-          <div className="bg-stone-50 rounded-xl p-3"><div className="text-[11px] text-stone-400 uppercase tracking-wide">Piano</div><div className="font-semibold mt-0.5">{(licenza && licenza.plan) || "—"}</div></div>
-          <div className="bg-stone-50 rounded-xl p-3"><div className="text-[11px] text-stone-400 uppercase tracking-wide">Canone</div><div className="font-semibold mt-0.5">{licenza && licenza.prezzo_finale ? `€ ${licenza.prezzo_finale}/mese` : "—"}</div></div>
-          <div className="bg-stone-50 rounded-xl p-3"><div className="text-[11px] text-stone-400 uppercase tracking-wide">Scadenza</div><div className="font-semibold mt-0.5">{licenza && licenza.scadenza ? String(licenza.scadenza).split("-").reverse().join("/") : "Illimitata"}</div></div>
-        </div>
-        <p className="text-[11px] text-stone-400 mt-3">Per cambiare piano o rinnovare la licenza contatta il tuo fornitore.</p>
-      </section>
-
-{F.vendite && (
-      <section className="lc-card p-5">
-        <h3 className="font-semibold flex items-center gap-2 mb-3"><Boxes size={16} className="brand-accent" /> Magazzino</h3>
-        <p className="text-sm text-stone-500 mb-3">Azzera la giacenza di tutti i prodotti (prodotti, formati e prezzi restano invariati). Utile prima di un nuovo inventario da ricaricare con la scheda Carico.</p>
-        <button onClick={azzeraGiacenze} className="text-sm border border-red-300 text-red-600 px-3 py-2 rounded-lg inline-flex items-center gap-2 hover:bg-red-50"><AlertCircle size={15} /> Azzera giacenze</button>
-      </section>
-      )}
-
-      <section className="lc-card p-5">
-        <h3 className="font-semibold flex items-center gap-2 mb-3"><Download size={16} className="brand-accent" /> Backup dei dati</h3>
-        <p className="text-sm text-stone-500 mb-3">I dati sono salvati su questo PC. Esporta regolarmente un backup per sicurezza. (La licenza non è inclusa nel backup.)</p>
-        <div className="flex flex-wrap gap-2">
-          <button onClick={() => exportBackup(config, bookings, clients, catalog, sales, eventi)} className="text-sm brand-bg px-3 py-2 rounded-lg inline-flex items-center gap-2"><Download size={15} /> Esporta backup</button>
-          <label className="text-sm border border-stone-300 text-stone-700 px-3 py-2 rounded-lg inline-flex items-center gap-2 cursor-pointer hover:bg-stone-50"><Upload size={15} /> Importa backup<input type="file" accept="application/json" onChange={importBackup} className="hidden" /></label>
-        </div>
-      </section>
-
-      <section className="lc-card p-5">
-        <h3 className="font-semibold flex items-center gap-2 mb-3"><RefreshCw size={16} className="brand-accent" /> Backup automatico</h3>
-        <label className="flex items-center gap-2 text-sm cursor-pointer mb-3"><input type="checkbox" checked={!!(config.backup && config.backup.enabled)} onChange={(e) => saveConfig({ ...config, backup: { time: (config.backup && config.backup.time) || "20:00", enabled: e.target.checked } })} className="w-4 h-4" /> Salva automaticamente un backup ogni giorno</label>
-        <div className="flex flex-wrap items-end gap-3 mb-3">
-          <div><div className="text-[11px] text-stone-400 mb-1">Orario</div><input type="time" value={(config.backup && config.backup.time) || "20:00"} onChange={(e) => saveConfig({ ...config, backup: { enabled: !!(config.backup && config.backup.enabled), time: e.target.value } })} className="px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></div>
-          <div className="flex-1 min-w-[180px]"><div className="text-[11px] text-stone-400 mb-1">Cartella di destinazione</div><div className="flex items-center gap-2"><button onClick={onPickBackupDir} className="text-sm brand-bg px-3 py-2 rounded-lg inline-flex items-center gap-1.5"><FolderOpen size={15} /> Scegli cartella</button>{backupDirName ? <span className="text-sm text-stone-600 truncate">{backupDirName}</span> : <span className="text-sm text-stone-400">nessuna</span>}{backupDirName ? <button onClick={onClearBackupDir} className="text-stone-400 hover:text-red-500" title="Rimuovi"><X size={16} /></button> : null}</div></div>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <button onClick={onBackupNow} className="text-sm border border-stone-300 text-stone-700 px-3 py-2 rounded-lg inline-flex items-center gap-1.5 hover:bg-stone-50"><Download size={15} /> Backup ora</button>
-          {lastBackup ? <span className="text-xs text-stone-400">Ultimo backup: {fmtFullDate(lastBackup.at)}</span> : <span className="text-xs text-stone-400">Nessun backup ancora.</span>}
-        </div>
-        <p className="text-xs text-stone-400 mt-3">Scegli una volta la cartella sul PC: l'app vi salverà il file <code className="bg-stone-100 px-1 rounded">lucentia-backup-AAAA-MM-GG.json</code> all'orario impostato (occorre che l'app sia aperta a quell'ora). Funziona su Windows; su Android usa "Esporta backup".</p>
-      </section>
-
-      <section className="lc-card p-5">
-        <div className="flex items-center justify-between mb-4"><h3 className="font-semibold flex items-center gap-2"><Store size={16} className="brand-accent" /> Attività e aspetto</h3><button onClick={() => setEditAspect((e) => !e)} className="text-sm brand-accent border border-stone-200 px-3 py-1.5 rounded-lg hover:bg-stone-50">{editAspect ? "Chiudi" : "Modifica"}</button></div>
-        {!editAspect ? (
-          <div className="flex items-center gap-3 text-sm text-stone-500">{branding.logo ? <img src={branding.logo} alt="logo" className="w-10 h-10 rounded-xl object-cover border border-stone-200" /> : <div className="w-10 h-10 rounded-xl bg-stone-100 flex items-center justify-center text-stone-300"><ImageIcon size={18} /></div>}<span className="font-medium text-stone-700">{branding.name || "—"}</span>{branding.tagline ? <span className="text-stone-400">· {branding.tagline}</span> : null}</div>
-        ) : (
-        <>
-        <div className="flex items-start gap-4 mb-5">
-          <div className="shrink-0">{branding.logo ? <img src={branding.logo} alt="logo" className="w-20 h-20 rounded-2xl object-cover border border-stone-200" /> : <div className="w-20 h-20 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-300"><ImageIcon size={26} /></div>}</div>
-          <div className="flex-1">
-            <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Logo</div>
-            <div className="flex gap-2"><label className="cursor-pointer text-sm brand-bg px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5"><ImageIcon size={15} /> Carica<input type="file" accept="image/*" onChange={onLogo} className="hidden" /></label>{branding.logo ? <button onClick={() => updBranding({ logo: null })} className="text-sm text-stone-500 hover:text-red-500 px-3 py-1.5 rounded-lg border border-stone-200">Rimuovi</button> : null}</div>
+      {/* Menù di sezione: colonna a sinistra da tablet in su, striscia
+          scorrevole sul telefono, dove una colonna mangerebbe mezzo schermo. */}
+      <div className="lg:grid lg:grid-cols-[13.5rem_1fr] lg:gap-6 lg:items-start">
+        <nav ref={menuRef} aria-label="Sezioni delle impostazioni" className="lg:sticky lg:top-4 mb-4 lg:mb-0 scroll-mt-4">
+          <div className="flex lg:flex-col gap-1.5 overflow-x-auto no-scrollbar -mx-1 px-1 lg:mx-0 lg:px-0">
+            {SEZIONI.map((s) => {
+              const on = s.id === sezione;
+              return (
+                <button key={s.id} onClick={() => vaiA(s.id)} aria-current={on ? "page" : undefined}
+                  className={`shrink-0 lg:w-full flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg whitespace-nowrap transition text-left ${on ? "lc-navpill-active" : "text-stone-500 hover:bg-stone-100 hover:text-stone-800"}`}>
+                  <s.icon size={16} className="shrink-0" /> {s.label}
+                </button>
+              );
+            })}
           </div>
-        </div>
-        <div className="grid sm:grid-cols-2 gap-3 mb-5">
-          <Field label="Nome attività"><input value={branding.name} onChange={(e) => updBranding({ name: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
-          <Field label="Sottotitolo"><input value={branding.tagline} onChange={(e) => updBranding({ tagline: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
-          <Field label="Telefono"><input value={branding.phone} onChange={(e) => updBranding({ phone: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
-          <Field label="Email"><input value={branding.email} onChange={(e) => updBranding({ email: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
-          <Field label="Indirizzo"><input value={branding.address} onChange={(e) => updBranding({ address: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
-        </div>
-        <div>
-          <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-2 flex items-center gap-1.5"><Palette size={13} /> Colore principale</div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {PRESETS.map((c) => <button key={c} onClick={() => updBranding({ primary: c })} className={`w-9 h-9 rounded-full transition ${branding.primary.toLowerCase() === c ? "ring-2 ring-offset-2 ring-stone-400" : ""}`} style={{ background: c }} aria-label={c} />)}
-            <label className="w-9 h-9 rounded-full border-2 border-dashed border-stone-300 flex items-center justify-center cursor-pointer overflow-hidden relative" title="Colore personalizzato"><Plus size={16} className="text-stone-400" /><input type="color" value={branding.primary} onChange={(e) => updBranding({ primary: e.target.value })} className="absolute inset-0 opacity-0 cursor-pointer" /></label>
-          </div>
-        </div>
-        </>
-        )}
-      </section>
+        </nav>
 
-      <section className="lc-card p-5">
-        <h3 className="font-semibold flex items-center gap-2 mb-3"><CalendarRange size={16} className="brand-accent" /> Chiusure salone (ferie / festività)</h3>
-        {closures.length > 0 ? (
-          <div className="space-y-2 mb-4">{closures.slice().sort((a, b) => (a.from > b.from ? 1 : -1)).map((c) => (
-            <div key={c.id} className="flex items-center justify-between gap-2 border border-stone-200 rounded-xl p-3">
-              <div className="min-w-0"><div className="font-medium text-sm truncate">{c.label || "Chiusura"}</div><div className="text-xs text-stone-400">{c.from === c.to ? fmtDate(c.from) : `${fmtDate(c.from)} → ${fmtDate(c.to)}`}</div></div>
-              <button onClick={() => delClosure(c.id)} className="p-2 text-stone-400 hover:text-red-500 shrink-0"><Trash2 size={16} /></button>
-            </div>
-          ))}</div>
-        ) : <p className="text-sm text-stone-400 mb-4">Nessuna chiusura programmata.</p>}
-        <div className="border-t border-stone-100 pt-3">
-          <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-2">Aggiungi chiusura</div>
-          <div className="flex flex-wrap items-end gap-2">
-            <div><div className="text-[11px] text-stone-400 mb-1">Dal</div><input type="date" value={clFrom} onChange={(e) => setClFrom(e.target.value)} className="px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></div>
-            <div><div className="text-[11px] text-stone-400 mb-1">Al (facoltativo)</div><input type="date" value={clTo} onChange={(e) => setClTo(e.target.value)} className="px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></div>
-            <input value={clLabel} onChange={(e) => setClLabel(e.target.value)} placeholder="Motivo (es. Ferie estive)" className="flex-1 min-w-[140px] px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
-            <button onClick={addClosure} disabled={!clFrom} className="brand-bg text-sm font-medium px-3 py-2 rounded-lg disabled:opacity-40">Aggiungi</button>
-          </div>
-          <p className="text-xs text-stone-400 mt-2">Nei giorni di chiusura non sarà possibile prendere appuntamenti.</p>
-        </div>
-      </section>
-
-{F.fidelity && (
-      <section className="lc-card p-5">
-        <h3 className="font-semibold flex items-center gap-2 mb-4"><Star size={16} className="brand-accent" /> Programma fedeltà</h3>
-        <div className="space-y-4">
-          <div>
-            <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Come si guadagnano i punti</div>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <button onClick={() => updLoyalty({ mode: "flat" })} className={`flex-1 text-left text-sm border rounded-lg px-3 py-2 transition ${loyalty.mode !== "perService" ? "brand-soft brand-border" : "bg-white border-stone-200"}`}><div className="font-medium">1 punto per servizio</div><div className="text-xs text-stone-400">Ogni servizio completato vale 1 punto.</div></button>
-              <button onClick={() => updLoyalty({ mode: "perService" })} className={`flex-1 text-left text-sm border rounded-lg px-3 py-2 transition ${loyalty.mode === "perService" ? "brand-soft brand-border" : "bg-white border-stone-200"}`}><div className="font-medium">Punti per servizio</div><div className="text-xs text-stone-400">Imposti i punti di ogni servizio qui sotto.</div></button>
+        <div className="space-y-6 min-w-0">
+          {sezione === "attivita" ? <>
+        <section className="lc-card p-5">
+          <div className="flex items-center justify-between mb-4"><h3 className="font-semibold flex items-center gap-2"><Store size={16} className="brand-accent" /> Attività e aspetto</h3><button onClick={() => setEditAspect((e) => !e)} className="text-sm brand-accent border border-stone-200 px-3 py-1.5 rounded-lg hover:bg-stone-50">{editAspect ? "Chiudi" : "Modifica"}</button></div>
+          {!editAspect ? (
+            <div className="flex items-center gap-3 text-sm text-stone-500">{branding.logo ? <img src={branding.logo} alt="logo" className="w-10 h-10 rounded-xl object-cover border border-stone-200" /> : <div className="w-10 h-10 rounded-xl bg-stone-100 flex items-center justify-center text-stone-300"><ImageIcon size={18} /></div>}<span className="font-medium text-stone-700">{branding.name || "—"}</span>{branding.tagline ? <span className="text-stone-400">· {branding.tagline}</span> : null}</div>
+          ) : (
+          <>
+          <div className="flex items-start gap-4 mb-5">
+            <div className="shrink-0">{branding.logo ? <img src={branding.logo} alt="logo" className="w-20 h-20 rounded-2xl object-cover border border-stone-200" /> : <div className="w-20 h-20 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-300"><ImageIcon size={26} /></div>}</div>
+            <div className="flex-1">
+              <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Logo</div>
+              <div className="flex gap-2"><label className="cursor-pointer text-sm brand-bg px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5"><ImageIcon size={15} /> Carica<input type="file" accept="image/*" onChange={onLogo} className="hidden" /></label>{branding.logo ? <button onClick={() => updBranding({ logo: null })} className="text-sm text-stone-500 hover:text-red-500 px-3 py-1.5 rounded-lg border border-stone-200">Rimuovi</button> : null}</div>
             </div>
           </div>
-          <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={loyalty.fromSales} onChange={(e) => updLoyalty({ fromSales: e.target.checked })} className="w-4 h-4" /> Genera punti anche dalle vendite <span className="text-stone-400">(imposti i punti per prodotto nel Catalogo)</span></label>
+          <div className="grid sm:grid-cols-2 gap-3 mb-5">
+            <Field label="Nome attività"><input value={branding.name} onChange={(e) => updBranding({ name: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
+            <Field label="Sottotitolo"><input value={branding.tagline} onChange={(e) => updBranding({ tagline: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
+            <Field label="Telefono"><input value={branding.phone} onChange={(e) => updBranding({ phone: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
+            <Field label="Email"><input value={branding.email} onChange={(e) => updBranding({ email: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
+            <Field label="Indirizzo"><input value={branding.address} onChange={(e) => updBranding({ address: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
+          </div>
           <div>
-            <div className="flex items-center justify-between mb-2"><div className="text-xs font-medium text-stone-400 uppercase tracking-wide">Premi a punti</div><button onClick={addReward} className="text-sm brand-accent flex items-center gap-1"><Plus size={14} /> Aggiungi premio</button></div>
-            <div className="space-y-2">{loyalty.rewards.length === 0 ? <p className="text-sm text-stone-400">Nessun premio. Aggiungine uno (es. 5 punti → omaggio, 10 punti → sconto 10%).</p> : loyalty.rewards.map((r) => (
-              <div key={r.id} className="flex items-center gap-2">
-                <div className="flex items-center gap-1"><input type="number" min={1} step={1} value={r.points} onChange={(e) => editReward(r.id, { points: Math.max(1, Math.round(Number(e.target.value) || 1)) })} className="w-20 px-2 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring" /><span className="text-xs text-stone-400">pt</span></div>
-                <input value={r.label} onChange={(e) => editReward(r.id, { label: e.target.value })} placeholder="Descrizione premio" className="flex-1 px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
-                <button onClick={() => delReward(r.id)} className="p-2 text-stone-400 hover:text-red-500"><Trash2 size={16} /></button>
+            <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-2 flex items-center gap-1.5"><Palette size={13} /> Colore principale</div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {PRESETS.map((c) => <button key={c} onClick={() => updBranding({ primary: c })} className={`w-9 h-9 rounded-full transition ${branding.primary.toLowerCase() === c ? "ring-2 ring-offset-2 ring-stone-400" : ""}`} style={{ background: c }} aria-label={c} />)}
+              <label className="w-9 h-9 rounded-full border-2 border-dashed border-stone-300 flex items-center justify-center cursor-pointer overflow-hidden relative" title="Colore personalizzato"><Plus size={16} className="text-stone-400" /><input type="color" value={branding.primary} onChange={(e) => updBranding({ primary: e.target.value })} className="absolute inset-0 opacity-0 cursor-pointer" /></label>
+            </div>
+          </div>
+          </>
+          )}
+        </section>
+
+        <section className="lc-card p-5">
+          <h3 className="font-semibold flex items-center gap-2 mb-3"><CalendarRange size={16} className="brand-accent" /> Chiusure salone (ferie / festività)</h3>
+          {closures.length > 0 ? (
+            <div className="space-y-2 mb-4">{closures.slice().sort((a, b) => (a.from > b.from ? 1 : -1)).map((c) => (
+              <div key={c.id} className="flex items-center justify-between gap-2 border border-stone-200 rounded-xl p-3">
+                <div className="min-w-0"><div className="font-medium text-sm truncate">{c.label || "Chiusura"}</div><div className="text-xs text-stone-400">{c.from === c.to ? fmtDate(c.from) : `${fmtDate(c.from)} → ${fmtDate(c.to)}`}</div></div>
+                <button onClick={() => delClosure(c.id)} className="p-2 text-stone-400 hover:text-red-500 shrink-0"><Trash2 size={16} /></button>
               </div>
             ))}</div>
+          ) : <p className="text-sm text-stone-400 mb-4">Nessuna chiusura programmata.</p>}
+          <div className="border-t border-stone-100 pt-3">
+            <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-2">Aggiungi chiusura</div>
+            <div className="flex flex-wrap items-end gap-2">
+              <div><div className="text-[11px] text-stone-400 mb-1">Dal</div><input type="date" value={clFrom} onChange={(e) => setClFrom(e.target.value)} className="px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></div>
+              <div><div className="text-[11px] text-stone-400 mb-1">Al (facoltativo)</div><input type="date" value={clTo} onChange={(e) => setClTo(e.target.value)} className="px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></div>
+              <input value={clLabel} onChange={(e) => setClLabel(e.target.value)} placeholder="Motivo (es. Ferie estive)" className="flex-1 min-w-[140px] px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+              <button onClick={addClosure} disabled={!clFrom} className="brand-bg text-sm font-medium px-3 py-2 rounded-lg disabled:opacity-40">Aggiungi</button>
+            </div>
+            <p className="text-xs text-stone-400 mt-2">Nei giorni di chiusura non sarà possibile prendere appuntamenti.</p>
           </div>
-          <p className="text-xs text-stone-400">I clienti accumulano punti senza limiti. Dalla scheda di ogni cliente puoi riscattare un premio: i punti usati vengono scalati automaticamente.</p>
+        </section>
+          </> : null}
+
+          {sezione === "servizi" ? <>
+        <section className="lc-card p-5">
+          <div className="flex items-center justify-between mb-4 gap-2 flex-wrap"><h3 className="font-semibold flex items-center gap-2"><Sparkles size={16} className="brand-accent" /> Servizi, durate e prezzi</h3><div className="flex items-center gap-2"><button onClick={() => printPriceList(config)} className="flex items-center gap-1 text-sm border border-stone-300 text-stone-700 px-3 py-1.5 rounded-lg hover:bg-stone-50"><Printer size={15} /> Listino PDF</button><button onClick={addService} className="flex items-center gap-1 text-sm brand-bg px-3 py-1.5 rounded-lg"><Plus size={15} /> Aggiungi</button></div></div>
+          <div className="space-y-2">{services.map((s) => (
+            <div key={s.id} className="flex flex-wrap items-center gap-2">
+              <input value={s.name} onChange={(e) => editService(s.id, { name: e.target.value })} className="flex-1 min-w-[140px] px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+              <div className="flex items-center gap-1"><input type="number" min={5} step={5} value={s.durationMin} onChange={(e) => editService(s.id, { durationMin: Math.max(5, Number(e.target.value) || 5) })} className="w-16 px-2 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring" title="Durata" /><span className="text-xs text-stone-400">min</span></div>
+              <div className="flex items-center gap-1"><input type="number" min={0} step={0.5} value={s.price != null ? s.price : ""} onChange={(e) => editService(s.id, { price: e.target.value === "" ? null : Math.max(0, Number(e.target.value) || 0) })} placeholder="—" className="w-20 px-2 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring" title="Prezzo" /><span className="text-xs text-stone-400">€</span></div>
+              {F.fidelity && loyalty.mode === "perService" ? <div className="flex items-center gap-1"><input type="number" min={0} step={1} value={s.points != null ? s.points : 1} onChange={(e) => editService(s.id, { points: Math.max(0, Math.round(Number(e.target.value) || 0)) })} className="w-14 px-2 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring" title="Punti fedeltà" /><span className="text-xs text-stone-400">pt</span></div> : null}
+              <button onClick={() => setSeqAperta((v) => (v === s.id ? null : s.id))} title="Sequenza degli impegni" className={`p-2 rounded-lg transition ${seqAperta === s.id || Array.isArray(s.impegni) ? "brand-soft brand-accent" : "text-stone-400 hover:text-stone-600"}`}><Layers size={16} /></button>
+              <button onClick={() => delService(s.id)} className="p-2 text-stone-400 hover:text-red-500"><Trash2 size={16} /></button>
+              {seqAperta === s.id ? <div className="w-full"><ImpegniEditor svc={s} cabine={cabine} onChange={(patch) => editService(s.id, patch)} /></div> : null}
+            </div>
+          ))}</div>
+          <p className="text-xs text-stone-400 mt-3">Con <Layers size={12} className="inline align--1" /> imposti come il servizio occupa le risorse: una posa che libera l'operatore, due operatori diversi, o una cabina senza nessun operatore.</p>
+        </section>
+
+  {F.fidelity && (
+        <section className="lc-card p-5">
+          <h3 className="font-semibold flex items-center gap-2 mb-4"><Star size={16} className="brand-accent" /> Programma fedeltà</h3>
+          <div className="space-y-4">
+            <div>
+              <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Come si guadagnano i punti</div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button onClick={() => updLoyalty({ mode: "flat" })} className={`flex-1 text-left text-sm border rounded-lg px-3 py-2 transition ${loyalty.mode !== "perService" ? "brand-soft brand-border" : "bg-white border-stone-200"}`}><div className="font-medium">1 punto per servizio</div><div className="text-xs text-stone-400">Ogni servizio completato vale 1 punto.</div></button>
+                <button onClick={() => updLoyalty({ mode: "perService" })} className={`flex-1 text-left text-sm border rounded-lg px-3 py-2 transition ${loyalty.mode === "perService" ? "brand-soft brand-border" : "bg-white border-stone-200"}`}><div className="font-medium">Punti per servizio</div><div className="text-xs text-stone-400">Imposti i punti di ogni servizio qui sotto.</div></button>
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={loyalty.fromSales} onChange={(e) => updLoyalty({ fromSales: e.target.checked })} className="w-4 h-4" /> Genera punti anche dalle vendite <span className="text-stone-400">(imposti i punti per prodotto nel Catalogo)</span></label>
+            <div>
+              <div className="flex items-center justify-between mb-2"><div className="text-xs font-medium text-stone-400 uppercase tracking-wide">Premi a punti</div><button onClick={addReward} className="text-sm brand-accent flex items-center gap-1"><Plus size={14} /> Aggiungi premio</button></div>
+              <div className="space-y-2">{loyalty.rewards.length === 0 ? <p className="text-sm text-stone-400">Nessun premio. Aggiungine uno (es. 5 punti → omaggio, 10 punti → sconto 10%).</p> : loyalty.rewards.map((r) => (
+                <div key={r.id} className="flex items-center gap-2">
+                  <div className="flex items-center gap-1"><input type="number" min={1} step={1} value={r.points} onChange={(e) => editReward(r.id, { points: Math.max(1, Math.round(Number(e.target.value) || 1)) })} className="w-20 px-2 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring" /><span className="text-xs text-stone-400">pt</span></div>
+                  <input value={r.label} onChange={(e) => editReward(r.id, { label: e.target.value })} placeholder="Descrizione premio" className="flex-1 px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+                  <button onClick={() => delReward(r.id)} className="p-2 text-stone-400 hover:text-red-500"><Trash2 size={16} /></button>
+                </div>
+              ))}</div>
+            </div>
+            <p className="text-xs text-stone-400">I clienti accumulano punti senza limiti. Dalla scheda di ogni cliente puoi riscattare un premio: i punti usati vengono scalati automaticamente.</p>
+          </div>
+        </section>
+        )}
+          </> : null}
+
+          {sezione === "risorse" ? <>
+        <section className="lc-card p-5">
+          <div className="flex items-center justify-between mb-4"><h3 className="font-semibold flex items-center gap-2"><Users size={16} className="brand-accent" /> Operatori {F.maxOperatori !== Infinity ? <span className="text-xs font-normal text-stone-400">· max {F.maxOperatori}</span> : null}</h3><button onClick={addStaff} disabled={staff.length >= F.maxOperatori} title={staff.length >= F.maxOperatori ? "Limite operatori raggiunto per questo piano" : ""} className="flex items-center gap-1 text-sm brand-bg px-3 py-1.5 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"><Plus size={15} /> Aggiungi</button></div>
+          <div className="space-y-4">{staff.map((st) => <StaffEditor key={st.id} st={st} services={services} cabine={cabine} onEdit={(patch) => editStaff(st.id, patch)} onDelete={() => delStaff(st.id)} />)}</div>
+        </section>
+
+        <section className="lc-card p-5">
+          <div className="flex items-center justify-between mb-4"><h3 className="font-semibold flex items-center gap-2"><DoorOpen size={16} className="brand-accent" /> Cabine</h3><button onClick={addCabina} className="flex items-center gap-1 text-sm brand-bg px-3 py-1.5 rounded-lg"><Plus size={15} /> Aggiungi</button></div>
+          {cabine.length === 0
+            ? <p className="text-sm text-stone-400">Nessuna cabina. Servono ai servizi che occupano uno spazio del salone — la lampada, la sala spa — anche quando non impegnano nessun operatore.</p>
+            : <div className="space-y-3">{cabine.map((c) => <CabinaEditor key={c.id} c={c} onEdit={(patch) => editCabina(c.id, patch)} onDelete={() => { if (confirm(`Eliminare la cabina "${c.name}"? I servizi e gli operatori collegati resteranno senza cabina.`)) delCabina(c.id); }} />)}</div>}
+        </section>
+
+        {F.maxOperatori > 1 ? <OperatorAccounts staff={staff} /> : null}
+          </> : null}
+
+          {sezione === "online" ? <>
+        {online && aziendaId ? <BookingLinkCard aziendaId={aziendaId} config={config} saveConfig={saveConfig} /> : null}
+
+        {online && aziendaId ? <SitoWebCard config={config} saveConfig={saveConfig} /> : null}
+          </> : null}
+
+          {sezione === "dati" ? <>
+        <section className="lc-card p-5">
+          <h3 className="font-semibold flex items-center gap-2 mb-3"><Download size={16} className="brand-accent" /> Backup dei dati</h3>
+          <p className="text-sm text-stone-500 mb-3">I dati sono salvati su questo PC. Esporta regolarmente un backup per sicurezza. (La licenza non è inclusa nel backup.)</p>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => exportBackup(config, bookings, clients, catalog, sales, eventi)} className="text-sm brand-bg px-3 py-2 rounded-lg inline-flex items-center gap-2"><Download size={15} /> Esporta backup</button>
+            <label className="text-sm border border-stone-300 text-stone-700 px-3 py-2 rounded-lg inline-flex items-center gap-2 cursor-pointer hover:bg-stone-50"><Upload size={15} /> Importa backup<input type="file" accept="application/json" onChange={importBackup} className="hidden" /></label>
+          </div>
+        </section>
+
+        <section className="lc-card p-5">
+          <h3 className="font-semibold flex items-center gap-2 mb-3"><RefreshCw size={16} className="brand-accent" /> Backup automatico</h3>
+          <label className="flex items-center gap-2 text-sm cursor-pointer mb-3"><input type="checkbox" checked={!!(config.backup && config.backup.enabled)} onChange={(e) => saveConfig({ ...config, backup: { time: (config.backup && config.backup.time) || "20:00", enabled: e.target.checked } })} className="w-4 h-4" /> Salva automaticamente un backup ogni giorno</label>
+          <div className="flex flex-wrap items-end gap-3 mb-3">
+            <div><div className="text-[11px] text-stone-400 mb-1">Orario</div><input type="time" value={(config.backup && config.backup.time) || "20:00"} onChange={(e) => saveConfig({ ...config, backup: { enabled: !!(config.backup && config.backup.enabled), time: e.target.value } })} className="px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></div>
+            <div className="flex-1 min-w-[180px]"><div className="text-[11px] text-stone-400 mb-1">Cartella di destinazione</div><div className="flex items-center gap-2"><button onClick={onPickBackupDir} className="text-sm brand-bg px-3 py-2 rounded-lg inline-flex items-center gap-1.5"><FolderOpen size={15} /> Scegli cartella</button>{backupDirName ? <span className="text-sm text-stone-600 truncate">{backupDirName}</span> : <span className="text-sm text-stone-400">nessuna</span>}{backupDirName ? <button onClick={onClearBackupDir} className="text-stone-400 hover:text-red-500" title="Rimuovi"><X size={16} /></button> : null}</div></div>
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <button onClick={onBackupNow} className="text-sm border border-stone-300 text-stone-700 px-3 py-2 rounded-lg inline-flex items-center gap-1.5 hover:bg-stone-50"><Download size={15} /> Backup ora</button>
+            {lastBackup ? <span className="text-xs text-stone-400">Ultimo backup: {fmtFullDate(lastBackup.at)}</span> : <span className="text-xs text-stone-400">Nessun backup ancora.</span>}
+          </div>
+          <p className="text-xs text-stone-400 mt-3">Scegli una volta la cartella sul PC: l'app vi salverà il file <code className="bg-stone-100 px-1 rounded">lucentia-backup-AAAA-MM-GG.json</code> all'orario impostato (occorre che l'app sia aperta a quell'ora). Funziona su Windows; su Android usa "Esporta backup".</p>
+        </section>
+
+  {F.vendite && (
+        <section className="lc-card p-5">
+          <h3 className="font-semibold flex items-center gap-2 mb-3"><Boxes size={16} className="brand-accent" /> Magazzino</h3>
+          <p className="text-sm text-stone-500 mb-3">Azzera la giacenza di tutti i prodotti (prodotti, formati e prezzi restano invariati). Utile prima di un nuovo inventario da ricaricare con la scheda Carico.</p>
+          <button onClick={azzeraGiacenze} className="text-sm border border-red-300 text-red-600 px-3 py-2 rounded-lg inline-flex items-center gap-2 hover:bg-red-50"><AlertCircle size={15} /> Azzera giacenze</button>
+        </section>
+        )}
+
+        <ResetZone clients={clients} setClients={setClients} bookings={bookings} setBookings={setBookings} sales={sales} setSales={setSales} config={config} saveConfig={saveConfig} catalog={catalog} setCatalog={setCatalog} />
+          </> : null}
+
+          {sezione === "licenza" ? <>
+        <section className="lc-card p-5">
+          <h3 className="font-semibold flex items-center gap-2 mb-3"><BadgeCheck size={16} className="brand-accent" /> La tua licenza</h3>
+          <div className="grid grid-cols-3 gap-3 text-center">
+            <div className="bg-stone-50 rounded-xl p-3"><div className="text-[11px] text-stone-400 uppercase tracking-wide">Piano</div><div className="font-semibold mt-0.5">{(licenza && licenza.plan) || "—"}</div></div>
+            <div className="bg-stone-50 rounded-xl p-3"><div className="text-[11px] text-stone-400 uppercase tracking-wide">Canone</div><div className="font-semibold mt-0.5">{licenza && licenza.prezzo_finale ? `€ ${licenza.prezzo_finale}/mese` : "—"}</div></div>
+            <div className="bg-stone-50 rounded-xl p-3"><div className="text-[11px] text-stone-400 uppercase tracking-wide">Scadenza</div><div className="font-semibold mt-0.5">{licenza && licenza.scadenza ? String(licenza.scadenza).split("-").reverse().join("/") : "Illimitata"}</div></div>
+          </div>
+          <p className="text-[11px] text-stone-400 mt-3">Per cambiare piano o rinnovare la licenza contatta il tuo fornitore.</p>
+        </section>
+
+        {isReseller ? <LicensePanel license={license} onSave={onSaveLicense} /> : null}
+          </> : null}
         </div>
-      </section>
-      )}
-
-      <section className="lc-card p-5">
-        <div className="flex items-center justify-between mb-4 gap-2 flex-wrap"><h3 className="font-semibold flex items-center gap-2"><Sparkles size={16} className="brand-accent" /> Servizi, durate e prezzi</h3><div className="flex items-center gap-2"><button onClick={() => printPriceList(config)} className="flex items-center gap-1 text-sm border border-stone-300 text-stone-700 px-3 py-1.5 rounded-lg hover:bg-stone-50"><Printer size={15} /> Listino PDF</button><button onClick={addService} className="flex items-center gap-1 text-sm brand-bg px-3 py-1.5 rounded-lg"><Plus size={15} /> Aggiungi</button></div></div>
-        <div className="space-y-2">{services.map((s) => (
-          <div key={s.id} className="flex flex-wrap items-center gap-2">
-            <input value={s.name} onChange={(e) => editService(s.id, { name: e.target.value })} className="flex-1 min-w-[140px] px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
-            <div className="flex items-center gap-1"><input type="number" min={5} step={5} value={s.durationMin} onChange={(e) => editService(s.id, { durationMin: Math.max(5, Number(e.target.value) || 5) })} className="w-16 px-2 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring" title="Durata" /><span className="text-xs text-stone-400">min</span></div>
-            <div className="flex items-center gap-1"><input type="number" min={0} step={0.5} value={s.price != null ? s.price : ""} onChange={(e) => editService(s.id, { price: e.target.value === "" ? null : Math.max(0, Number(e.target.value) || 0) })} placeholder="—" className="w-20 px-2 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring" title="Prezzo" /><span className="text-xs text-stone-400">€</span></div>
-            {F.fidelity && loyalty.mode === "perService" ? <div className="flex items-center gap-1"><input type="number" min={0} step={1} value={s.points != null ? s.points : 1} onChange={(e) => editService(s.id, { points: Math.max(0, Math.round(Number(e.target.value) || 0)) })} className="w-14 px-2 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring" title="Punti fedeltà" /><span className="text-xs text-stone-400">pt</span></div> : null}
-            <button onClick={() => setSeqAperta((v) => (v === s.id ? null : s.id))} title="Sequenza degli impegni" className={`p-2 rounded-lg transition ${seqAperta === s.id || Array.isArray(s.impegni) ? "brand-soft brand-accent" : "text-stone-400 hover:text-stone-600"}`}><Layers size={16} /></button>
-            <button onClick={() => delService(s.id)} className="p-2 text-stone-400 hover:text-red-500"><Trash2 size={16} /></button>
-            {seqAperta === s.id ? <div className="w-full"><ImpegniEditor svc={s} cabine={cabine} onChange={(patch) => editService(s.id, patch)} /></div> : null}
-          </div>
-        ))}</div>
-        <p className="text-xs text-stone-400 mt-3">Con <Layers size={12} className="inline align--1" /> imposti come il servizio occupa le risorse: una posa che libera l'operatore, due operatori diversi, o una cabina senza nessun operatore.</p>
-      </section>
-
-      <section className="lc-card p-5">
-        <div className="flex items-center justify-between mb-4"><h3 className="font-semibold flex items-center gap-2"><Users size={16} className="brand-accent" /> Operatori {F.maxOperatori !== Infinity ? <span className="text-xs font-normal text-stone-400">· max {F.maxOperatori}</span> : null}</h3><button onClick={addStaff} disabled={staff.length >= F.maxOperatori} title={staff.length >= F.maxOperatori ? "Limite operatori raggiunto per questo piano" : ""} className="flex items-center gap-1 text-sm brand-bg px-3 py-1.5 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"><Plus size={15} /> Aggiungi</button></div>
-        <div className="space-y-4">{staff.map((st) => <StaffEditor key={st.id} st={st} services={services} cabine={cabine} onEdit={(patch) => editStaff(st.id, patch)} onDelete={() => delStaff(st.id)} />)}</div>
-      </section>
-
-      <section className="lc-card p-5">
-        <div className="flex items-center justify-between mb-4"><h3 className="font-semibold flex items-center gap-2"><DoorOpen size={16} className="brand-accent" /> Cabine</h3><button onClick={addCabina} className="flex items-center gap-1 text-sm brand-bg px-3 py-1.5 rounded-lg"><Plus size={15} /> Aggiungi</button></div>
-        {cabine.length === 0
-          ? <p className="text-sm text-stone-400">Nessuna cabina. Servono ai servizi che occupano uno spazio del salone — la lampada, la sala spa — anche quando non impegnano nessun operatore.</p>
-          : <div className="space-y-3">{cabine.map((c) => <CabinaEditor key={c.id} c={c} onEdit={(patch) => editCabina(c.id, patch)} onDelete={() => { if (confirm(`Eliminare la cabina "${c.name}"? I servizi e gli operatori collegati resteranno senza cabina.`)) delCabina(c.id); }} />)}</div>}
-      </section>
-
-      {F.maxOperatori > 1 ? <OperatorAccounts staff={staff} /> : null}
-
-      <ResetZone clients={clients} setClients={setClients} bookings={bookings} setBookings={setBookings} sales={sales} setSales={setSales} config={config} saveConfig={saveConfig} catalog={catalog} setCatalog={setCatalog} />
+      </div>
 
       <div className="text-center py-4 space-y-2">
         <img src={LUCENTIA_LOGO} alt="Lucentia" className="h-6 w-auto mx-auto opacity-70" />
@@ -2563,7 +2616,6 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
     </div>
   );
 }
-
 function ResetZone({ clients, setClients, bookings, setBookings, sales, setSales, config, saveConfig, catalog, setCatalog }) {
   const [sel, setSel] = useState(null);
   const [pw, setPw] = useState("");
