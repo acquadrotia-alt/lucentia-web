@@ -45,7 +45,7 @@ export function impegniServizio(svc) {
   const durata = Math.max(0, Number(svc.durationMin) || 0);
   const grezzi = Array.isArray(svc.impegni) ? svc.impegni : null;
   if (!grezzi || !grezzi.length) {
-    const base = durata > 0 ? [{ tipo: "operatore", posto: 1, da: 0, durata }] : [];
+    const base = durata > 0 ? [{ tipo: "operatore", posto: 1, da: 0, durata, operatori: null }] : [];
     // Una cabina indicata sul servizio (senza sequenza dettagliata) resta
     // occupata per tutto il servizio.
     if (svc.cabinaId && durata > 0) base.push({ tipo: "cabina", cabinaId: svc.cabinaId, da: 0, durata });
@@ -56,6 +56,8 @@ export function impegniServizio(svc) {
       tipo: s.tipo === "cabina" ? "cabina" : "operatore",
       posto: s.tipo === "cabina" ? null : Math.max(1, Number(s.posto) || 1),
       cabinaId: s.tipo === "cabina" ? (s.cabinaId || svc.cabinaId || null) : null,
+      // Chi può fare QUESTA fase. Vuoto = vale la lista del servizio.
+      operatori: s.tipo === "cabina" ? null : (Array.isArray(s.operatori) && s.operatori.length ? s.operatori.slice() : null),
       da: Math.max(0, Number(s.da) || 0),
       durata: Math.max(0, Number(s.durata) || 0),
     }))
@@ -83,6 +85,27 @@ export function impegniServizi(serviceIds, services) {
     offset += durataServizio(svc);
   }
   return { impegni: out, durata: offset };
+}
+
+// Chi può eseguire una fase. L'abilitazione vive sul servizio, non
+// sull'operatore: l'operatore porta soltanto la propria fascia oraria.
+// Ordine: la lista della fase, poi quella del servizio, e in mancanza di
+// entrambe il vecchio legame `staff.serviceIds`, così i saloni già configurati
+// continuano a funzionare senza toccare nulla.
+export function operatoriAbilitati(segmento, services, staff) {
+  if (segmento && Array.isArray(segmento.operatori) && segmento.operatori.length) return segmento.operatori.slice();
+  const svc = (services || []).find((x) => x.id === (segmento && segmento.servizioId));
+  if (svc && Array.isArray(svc.operatori) && svc.operatori.length) return svc.operatori.slice();
+  return (staff || []).filter((st) => (st.serviceIds || []).includes(svc ? svc.id : null)).map((st) => st.id);
+}
+
+// Chi può eseguire un servizio nel suo complesso: l'unione delle liste delle
+// sue fasi. Serve alle schermate che devono dire "questo servizio lo sanno
+// fare Luca e Anna" senza entrare nel dettaglio delle fasi.
+export function operatoriDelServizio(svc, services, staff) {
+  const fasi = impegniServizio(svc).filter((x) => x.tipo === "operatore").map((x) => ({ ...x, servizioId: svc && svc.id }));
+  if (!fasi.length) return [];
+  return [...new Set(fasi.flatMap((f) => operatoriAbilitati(f, services, staff)))];
 }
 
 // Quanti operatori distinti servono (posti) e quali sono.
@@ -226,12 +249,21 @@ export function assegnaRisorse(config, impegni, serviceIds, dateStr, start, occ,
   }
 
   // Candidati per ciascun posto, nell'ordine in cui gli operatori sono elencati.
+  // L'abilitazione la dà il servizio, fase per fase: se un posto raccoglie più
+  // fasi, può prenderlo solo chi è abilitato a tutte.
+  const services = (config && config.services) || [];
   const candidati = new Map();
   for (const p of posti) {
     const iv = intervalliPosto.get(p);
+    const fasi = impegni.filter((x) => x.tipo === "operatore" && x.posto === p);
+    let abilitati = null;
+    for (const f of fasi) {
+      const lista = operatoriAbilitati(f, services, staff);
+      abilitati = abilitati === null ? lista : abilitati.filter((id) => lista.includes(id));
+    }
     const ok = staff.filter((st) => {
       if (p === 1 && o.staffFilter && st.id !== o.staffFilter) return false;
-      if (!(serviceIds || []).every((id) => (st.serviceIds || []).includes(id))) return false;
+      if (!(abilitati || []).includes(st.id)) return false;
       if (risorsaAssente(st, dateStr)) return false;
       if (!dentroLeFinestre(finestreDi(st, wd, []), iv)) return false;
       if (!o.sovrapponi && !risorsaLibera(occ, st.id, iv)) return false;
@@ -265,6 +297,9 @@ export function assegnaRisorse(config, impegni, serviceIds, dateStr, start, occ,
   // Operatori distinti per posti distinti: pochi posti e pochi operatori,
   // basta provare le combinazioni in ordine.
   const scelta = new Map();
+  // Posti diversi sono persone diverse: è il modo in cui il salone dice "questa
+  // parte la fa un'altra". Se invece va bene la stessa persona, le fasi vanno
+  // messe sullo stesso posto.
   const risolvi = (i) => {
     if (i >= posti.length) return verificaCabine();
     const p = posti[i];
@@ -315,10 +350,15 @@ export function assegnaRisorse(config, impegni, serviceIds, dateStr, start, occ,
 // ---- Orari candidati -------------------------------------------------------
 // Risorse che possono entrare in gioco per un servizio: gli operatori che lo
 // sanno fare e le cabine. Servono a sapere dove "appoggiare" gli orari.
-function risorseCoinvolte(config, serviceIds, dateStr, wd) {
+function risorseCoinvolte(config, serviceIds, dateStr, wd, impegni) {
   const out = [];
-  for (const st of (config && config.staff) || []) {
-    if (!(serviceIds || []).every((id) => (st.serviceIds || []).includes(id))) continue;
+  const services = (config && config.services) || [];
+  const staff = (config && config.staff) || [];
+  // Chi può entrare in gioco: l'unione degli abilitati di tutte le fasi.
+  const abilitati = new Set((impegni || []).filter((x) => x.tipo === "operatore")
+    .flatMap((f) => operatoriAbilitati(f, services, staff)));
+  for (const st of staff) {
+    if (!abilitati.has(st.id)) continue;
     if (risorsaAssente(st, dateStr)) continue;
     out.push({ id: st.id, finestre: (st.availability && st.availability[wd]) || [] });
   }
@@ -390,7 +430,7 @@ export function orariPossibili(config, serviceIds, dateStr, bookings, opts) {
   if (!impegni.length || durata <= 0) return [];
   const occ = occupazioneDelGiorno(bookings, dateStr, o.escludiId);
   const wd = weekdayOf(dateStr);
-  const risorse = risorseCoinvolte(config, serviceIds, dateStr, wd);
+  const risorse = risorseCoinvolte(config, serviceIds, dateStr, wd, impegni);
   if (!risorse.length) return [];
   const earliest = o.earliest == null ? -1 : o.earliest;
 

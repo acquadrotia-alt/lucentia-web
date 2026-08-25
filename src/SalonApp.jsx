@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback, createContext, useContext } from "react";
 import { Sparkles, Calendar, Clock, User, Mail, Lock, Settings, LayoutDashboard, Plus, Trash2, Check, ChevronLeft, ChevronRight, X, Users, CalendarPlus, Phone, MapPin, Image as ImageIcon, Palette, Store, Sunrise, Sun, Moon, History, Search, Gift, Star, Hash, LogOut, Ban, UserX, Undo2, Timer, CalendarClock, Wallet, RefreshCw, Printer, Download, Upload, KeyRound, ShieldCheck, CalendarX2, AlertTriangle, BadgeCheck, ShoppingCart, ShoppingBag, Package, Tag, Minus, Boxes, Receipt, Layers, AlertCircle, CalendarRange, CalendarDays, PackagePlus, BarChart3, TrendingUp, MessageCircle, FolderOpen, PartyPopper, Share2, Pencil, Globe, Instagram, Facebook, DoorOpen } from "lucide-react";
-import { orariPossibili, durataServizio, impegniServizio, senzaOperatore, impegniBooking } from "./orari.js";
+import { orariPossibili, durataServizio, impegniServizio, senzaOperatore, impegniBooking, operatoriDelServizio } from "./orari.js";
 import { AvatarSvg, AVATAR_IDS, avatarIdFor } from "./avatars.jsx";
 import { setBrandTab } from "./favicon.js";
 
@@ -212,7 +212,12 @@ function eventiImpegni(eventi) {
   return out;
 }
 
-function qualifiedStaff(staff, ids) { return staff.filter((st) => ids.every((id) => st.serviceIds.includes(id))); }
+// Chi può eseguire tutti i servizi indicati. L'abilitazione la dichiara il
+// servizio; per i saloni non ancora aggiornati vale il vecchio staff.serviceIds.
+function qualifiedStaff(staff, ids, services) {
+  const el = (id) => { const sv = (services || []).find((x) => x.id === id); return sv ? operatoriDelServizio(sv, services, staff) : []; };
+  return staff.filter((st) => (ids || []).every((id) => el(id).includes(st.id)));
+}
 function inRange(date, from, to) { const lo = from || to, hi = to || from; if (!lo) return false; return date >= lo && date <= hi; }
 function staffOff(st, date) { return Array.isArray(st && st.off) && st.off.some((r) => inRange(date, r.from, r.to)); }
 function salonClosure(config, date) { return ((config && config.closures) || []).find((r) => inRange(date, r.from, r.to)) || null; }
@@ -265,7 +270,7 @@ function buildDemoData() {
     const visits = 2 + (i % 3);
     for (let v = 0; v < visits; v++) {
       const svc = allSvc[(i + v) % allSvc.length];
-      const st = qualifiedStaff(config.staff, [svc.id])[0] || config.staff[0];
+      const st = qualifiedStaff(config.staff, [svc.id], config.services)[0] || config.staff[0];
       const daysAgo = (v + 1) * 12 + i * 3;
       bookings.push({ id: uid(), date: addDays(todayStr(), -daysAgo), startMin: 600 + v * 30, endMin: 600 + v * 30 + svc.durationMin, serviceIds: [svc.id], staffId: st ? st.id : "", clientCode: code, clientName: name, status: "done", createdAt: Date.now() });
     }
@@ -294,7 +299,7 @@ function buildSampleData() {
     const visits = 2 + (i % 3);
     for (let v = 0; v < visits; v++) {
       const svc = pick(services, i + v * 2);
-      const stf = qualifiedStaff(staff, [svc.id])[0] || staff[0];
+      const stf = qualifiedStaff(staff, [svc.id], services)[0] || staff[0];
       const start = 540 + ((i + v) % 6) * 60;
       bookings.push({ id: uid(), date: addDays(todayStr(), -((v + 1) * 11 + i * 4)), startMin: start, endMin: start + svc.durationMin, serviceIds: [svc.id], staffId: stf ? stf.id : "", clientCode: c.code, clientName: c.name, status: "done", createdAt: Date.now() });
     }
@@ -302,7 +307,7 @@ function buildSampleData() {
   for (let k = 0; k < 5; k++) {
     const c = clients[k];
     const svc = pick(services, k * 3 + 1);
-    const stf = qualifiedStaff(staff, [svc.id])[0] || staff[0];
+    const stf = qualifiedStaff(staff, [svc.id], services)[0] || staff[0];
     const start = 600 + (k % 5) * 45;
     bookings.push({ id: uid(), date: addDays(todayStr(), k + 1), startMin: start, endMin: start + svc.durationMin, serviceIds: [svc.id], staffId: stf ? stf.id : "", clientCode: c.code, clientName: c.name, createdAt: Date.now() });
   }
@@ -1858,7 +1863,7 @@ function ManualBooking({ config, bookings, setBookings, clients, setClients, can
 
   const selStaff = staffId ? staff.find((s) => s.id === staffId) : null;
   const duration = sel.reduce((a, id) => { const s = services.find((x) => x.id === id); return a + (s ? durataServizio(s) : 0); }, 0);
-  const qualified = qualifiedStaff(staff, sel);
+  const qualified = qualifiedStaff(staff, sel, services);
   const candidates = staffId ? qualified.filter((s) => s.id === staffId) : qualified;
   const closed = salonClosure(config, date);
   const opOff = selStaff ? staffOff(selStaff, date) : false;
@@ -1876,7 +1881,8 @@ function ManualBooking({ config, bookings, setBookings, clients, setClients, can
   const liberi = new Set((sovrapponi ? cerca(false) : proposti).map((x) => x.start));
   const maxDate = pd(new Date(Date.now() + ADVANCE_DAYS * 864e5));
   const onCode = (v) => { v = v.replace(/\D/g, "").slice(0, 6); setCode(v); const c = clients.find((x) => x.code === v); if (c) { setName(c.name || ""); setEmail(c.email || ""); setPhone(c.phone || ""); } };
-  const toggle = (id) => { if (selStaff && !selStaff.serviceIds.includes(id)) return; setSel((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id])); setSlot(null); };
+  const abilitato = (staffId, svcId) => { const sv = services.find((x) => x.id === svcId); return sv ? operatoriDelServizio(sv, services, staff).includes(staffId) : false; };
+  const toggle = (id) => { if (selStaff && !abilitato(selStaff.id, id)) return; setSel((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id])); setSlot(null); };
 
   const save = () => {
     if (canAddBooking === false) { alert("Limite demo raggiunto: massimo 20 appuntamenti. Per usare il programma senza limiti contatta Office Solution."); return; }
@@ -1897,12 +1903,12 @@ function ManualBooking({ config, bookings, setBookings, clients, setClients, can
       <h3 className="font-semibold flex items-center gap-2"><CalendarPlus size={16} className="brand-accent" /> Nuovo appuntamento</h3>
       <div>
         <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Servizi {selStaff ? <span className="normal-case text-stone-400">· solo quelli di {selStaff.name}</span> : <span className="normal-case text-stone-300">· puoi sceglierne più di uno</span>}</div>
-        <div className="flex flex-wrap gap-1.5">{services.map((s) => { const on = sel.includes(s.id); const off = selStaff && !selStaff.serviceIds.includes(s.id); return <button key={s.id} disabled={off} onClick={() => toggle(s.id)} className={`px-2.5 py-1 rounded-lg text-xs border transition ${off ? "bg-stone-50 border-stone-100 text-stone-300 cursor-not-allowed" : on ? "brand-bg border-transparent" : "bg-white border-stone-200 text-stone-600 brand-hover"}`}>{s.name} · {s.durationMin}′</button>; })}</div>
+        <div className="flex flex-wrap gap-1.5">{services.map((s) => { const on = sel.includes(s.id); const off = selStaff && !abilitato(selStaff.id, s.id); return <button key={s.id} disabled={off} onClick={() => toggle(s.id)} className={`px-2.5 py-1 rounded-lg text-xs border transition ${off ? "bg-stone-50 border-stone-100 text-stone-300 cursor-not-allowed" : on ? "brand-bg border-transparent" : "bg-white border-stone-200 text-stone-600 brand-hover"}`}>{s.name} · {s.durationMin}′</button>; })}</div>
       </div>
       <div className="grid sm:grid-cols-2 gap-3">
         <div>
           <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Operatore</div>
-          <select value={staffId} onChange={(e) => { const id = e.target.value; const ns = id ? staff.find((s) => s.id === id) : null; setStaffId(id); if (ns) setSel((p) => p.filter((x) => ns.serviceIds.includes(x))); setSlot(null); }} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm bg-white brand-ring">
+          <select value={staffId} onChange={(e) => { const id = e.target.value; const ns = id ? staff.find((s) => s.id === id) : null; setStaffId(id); if (ns) setSel((p) => p.filter((x) => abilitato(ns.id, x))); setSlot(null); }} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm bg-white brand-ring">
             <option value="">Primo disponibile</option>
             {staff.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.role})</option>)}
           </select>
@@ -2372,7 +2378,8 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
   const delService = (id) => saveConfig({
     ...config,
     services: services.filter((s) => s.id !== id),
-    staff: staff.map((st) => ({ ...st, serviceIds: (st.serviceIds || []).filter((x) => x !== id) })),
+    // il vecchio legame va comunque ripulito, per i saloni non ancora aggiornati
+    staff: staff.map((st) => (Array.isArray(st.serviceIds) ? { ...st, serviceIds: st.serviceIds.filter((x) => x !== id) } : st)),
   });
   const cabine = config.cabine || [];
   const updCabine = (next) => saveConfig({ ...config, cabine: next });
@@ -2389,9 +2396,19 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
       return { ...sv, cabinaId: sv.cabinaId === id ? null : sv.cabinaId, ...(imp ? { impegni: imp } : {}) };
     }),
   });
-  const addStaff = () => updStaff([...staff, { id: uid(), name: "Nuovo operatore", role: "", serviceIds: [], availability: {} }]);
+  const addStaff = () => updStaff([...staff, { id: uid(), name: "Nuovo operatore", role: "", availability: {} }]);
   const editStaff = (id, patch) => updStaff(staff.map((st) => (st.id === id ? { ...st, ...patch } : st)));
-  const delStaff = (id) => updStaff(staff.filter((st) => st.id !== id));
+  // Togliendo un operatore va tolto anche dalle liste dei servizi e delle fasi,
+  // altrimenti resterebbero abilitazioni verso una persona che non c'è più.
+  const delStaff = (id) => saveConfig({
+    ...config,
+    staff: staff.filter((st) => st.id !== id),
+    services: services.map((sv) => {
+      const senza = (l) => (Array.isArray(l) ? l.filter((x) => x !== id) : l);
+      const imp = Array.isArray(sv.impegni) ? sv.impegni.map((x) => ({ ...x, ...(Array.isArray(x.operatori) ? { operatori: senza(x.operatori) } : {}) })) : sv.impegni;
+      return { ...sv, ...(Array.isArray(sv.operatori) ? { operatori: senza(sv.operatori) } : {}), ...(imp ? { impegni: imp } : {}) };
+    }),
+  });
   const onLogo = async (e) => { const file = e.target.files && e.target.files[0]; if (!file) return; try { const url = await fileToResizedDataURL(file, 256); updBranding({ logo: url }); } catch (err) { alert("Impossibile caricare l'immagine."); } e.target.value = ""; };
   const reset = () => { if (confirm("Caricare i dati di esempio (clienti, appuntamenti e vendite di prova)? I dati attuali verranno sostituiti. La licenza non viene toccata.")) { const s = buildSampleData(); saveConfig(DEFAULT_CONFIG); setClients(s.clients); setBookings(s.bookings); setSales(s.sales); setCatalog(DEFAULT_CATALOG); alert("Dati di esempio caricati."); } };
   const azzeraGiacenze = () => { if (confirm("Azzerare TUTTE le giacenze a 0? Prodotti, formati e prezzi restano invariati: solo le quantità in magazzino verranno messe a zero. L'operazione non è reversibile.")) { setCatalog({ ...catalog, products: catalog.products.map((p) => ({ ...p, formats: p.formats.map((f) => ({ ...f, stock: 0 })) })) }); alert("Giacenze azzerate."); } };
@@ -2502,7 +2519,7 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
               {F.fidelity && loyalty.mode === "perService" ? <div className="flex items-center gap-1"><input type="number" min={0} step={1} value={s.points != null ? s.points : 1} onChange={(e) => editService(s.id, { points: Math.max(0, Math.round(Number(e.target.value) || 0)) })} className="w-14 px-2 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring" title="Punti fedeltà" /><span className="text-xs text-stone-400">pt</span></div> : null}
               <button onClick={() => setSeqAperta((v) => (v === s.id ? null : s.id))} title="Sequenza degli impegni" className={`p-2 rounded-lg transition ${seqAperta === s.id || Array.isArray(s.impegni) ? "brand-soft brand-accent" : "text-stone-400 hover:text-stone-600"}`}><Layers size={16} /></button>
               <button onClick={() => delService(s.id)} className="p-2 text-stone-400 hover:text-red-500"><Trash2 size={16} /></button>
-              {seqAperta === s.id ? <div className="w-full"><ImpegniEditor svc={s} cabine={cabine} onChange={(patch) => editService(s.id, patch)} /></div> : null}
+              {seqAperta === s.id ? <div className="w-full"><ImpegniEditor svc={s} cabine={cabine} staff={staff} operatoriServizio={operatoriDelServizio(s, services, staff)} onChange={(patch) => editService(s.id, patch)} /></div> : null}
             </div>
           ))}</div>
           <p className="text-xs text-stone-400 mt-3">Con <Layers size={12} className="inline align--1" /> imposti come il servizio occupa le risorse: una posa che libera l'operatore, due operatori diversi, o una cabina senza nessun operatore.</p>
@@ -2539,7 +2556,7 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
           {sezione === "risorse" ? <>
         <section className="lc-card p-5">
           <div className="flex items-center justify-between mb-4"><h3 className="font-semibold flex items-center gap-2"><Users size={16} className="brand-accent" /> Operatori {F.maxOperatori !== Infinity ? <span className="text-xs font-normal text-stone-400">· max {F.maxOperatori}</span> : null}</h3><button onClick={addStaff} disabled={staff.length >= F.maxOperatori} title={staff.length >= F.maxOperatori ? "Limite operatori raggiunto per questo piano" : ""} className="flex items-center gap-1 text-sm brand-bg px-3 py-1.5 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"><Plus size={15} /> Aggiungi</button></div>
-          <div className="space-y-4">{staff.map((st) => <StaffEditor key={st.id} st={st} services={services} cabine={cabine} onEdit={(patch) => editStaff(st.id, patch)} onDelete={() => delStaff(st.id)} />)}</div>
+          <div className="space-y-4">{staff.map((st) => <StaffEditor key={st.id} st={st} services={services} cabine={cabine} tuttoStaff={staff} onEdit={(patch) => editStaff(st.id, patch)} onDelete={() => delStaff(st.id)} />)}</div>
         </section>
 
         <section className="lc-card p-5">
@@ -2833,7 +2850,31 @@ function CabinaEditor({ c, onEdit, onDelete }) {
 // Sequenza di impegni di un servizio: chi e cosa occupa, e in quali minuti.
 // Senza sequenza il servizio occupa un operatore per tutta la durata, com'è
 // sempre stato.
-function ImpegniEditor({ svc, cabine, onChange }) {
+// Elenco di operatori selezionabili a pastiglie. Vuoto = "quelli del servizio".
+function ScegliOperatori({ staff, valore, onChange, ereditati, etichetta }) {
+  const sel = Array.isArray(valore) ? valore : [];
+  const attivo = sel.length > 0;
+  const toggle = (id) => {
+    const base = attivo ? sel : (ereditati || []);
+    const next = base.includes(id) ? base.filter((x) => x !== id) : [...base, id];
+    onChange(next);
+  };
+  return (
+    <div>
+      <div className="text-[11px] font-medium text-stone-400 uppercase tracking-wide mb-1.5">{etichetta}</div>
+      <div className="flex flex-wrap gap-1.5">
+        {(staff || []).length === 0 ? <span className="text-xs text-stone-400">Nessun operatore configurato.</span> : null}
+        {(staff || []).map((st) => {
+          const on = attivo ? sel.includes(st.id) : (ereditati || []).includes(st.id);
+          return <button key={st.id} type="button" onClick={() => toggle(st.id)} className={`px-2.5 py-1 rounded-lg text-xs border transition ${on ? "brand-bg border-transparent" : "bg-white border-stone-200 text-stone-500 brand-hover"}`}>{st.name}</button>;
+        })}
+        {attivo && ereditati ? <button type="button" onClick={() => onChange(null)} className="px-2 py-1 rounded-lg text-xs text-stone-400 hover:text-stone-600">↺ come il servizio</button> : null}
+      </div>
+    </div>
+  );
+}
+
+function ImpegniEditor({ svc, cabine, staff, operatoriServizio, onChange }) {
   const durata = Math.max(0, Number(svc.durationMin) || 0);
   const seq = Array.isArray(svc.impegni) ? svc.impegni : null;
   const attiva = () => onChange({ impegni: [{ tipo: "operatore", posto: 1, da: 0, durata }] });
@@ -2853,13 +2894,26 @@ function ImpegniEditor({ svc, cabine, onChange }) {
     : { tipo: "operatore", posto: 1, da: fine, durata: 15 }] });
   const scala = Math.max(durata, fine, 1);
 
+  const chiLoFa = (
+    <div className="mt-2 border border-stone-200 rounded-xl p-3 bg-stone-50/60">
+      <ScegliOperatori staff={staff} valore={svc.operatori} ereditati={operatoriServizio}
+        onChange={(v) => onChange({ operatori: v })} etichetta="Operatori abilitati a questo servizio" />
+      <p className="text-[11px] text-stone-400 mt-2">Chi non è selezionato non potrà eseguirlo, né in negozio né online.</p>
+    </div>
+  );
+
   if (!seq) return (
-    <div className="mt-2 text-xs text-stone-500 flex items-center gap-2 flex-wrap">
-      <span>Occupa un operatore per tutti i {durata} minuti.</span>
-      <button onClick={attiva} className="brand-accent hover:opacity-70 font-medium">Personalizza la sequenza →</button>
+    <div>
+      {chiLoFa}
+      <div className="mt-2 text-xs text-stone-500 flex items-center gap-2 flex-wrap">
+        <span>Occupa un operatore per tutti i {durata} minuti.</span>
+        <button onClick={attiva} className="brand-accent hover:opacity-70 font-medium">Personalizza la sequenza →</button>
+      </div>
     </div>
   );
   return (
+    <div>
+      {chiLoFa}
     <div className="mt-2 border border-stone-200 rounded-xl p-3 bg-stone-50/60">
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="text-xs font-medium text-stone-500">Sequenza degli impegni</div>
@@ -2906,6 +2960,12 @@ function ImpegniEditor({ svc, cabine, onChange }) {
             <input type="number" min={5} step={5} value={Number(x.durata) || 0} onChange={(e) => set(i, { durata: Math.max(0, Number(e.target.value) || 0) })} className="w-16 text-xs px-1.5 py-1 rounded border border-stone-200 text-right" />
             <span className="text-xs text-stone-400">min</span>
             <button onClick={() => del(i)} className="text-stone-300 hover:text-red-500 ml-auto"><X size={14} /></button>
+            {x.tipo !== "cabina" ? (
+              <div className="w-full pt-1.5 border-t border-stone-100">
+                <ScegliOperatori staff={staff} valore={x.operatori} ereditati={operatoriServizio}
+                  onChange={(v) => set(i, { operatori: v })} etichetta="Chi può fare questa fase" />
+              </div>
+            ) : null}
           </div>
         ))}
       </div>
@@ -2916,16 +2976,19 @@ function ImpegniEditor({ svc, cabine, onChange }) {
         {!seq.some((x) => x.tipo === "operatore") ? <span className="text-[11px] text-stone-500 ml-auto">Nessun operatore: il servizio occupa solo la cabina.</span> : null}
       </div>
       {posti.length ? <p className="text-[11px] text-stone-400 mt-2">Gli intervalli non coperti restano liberi: durante una posa l'operatore può prendere un altro cliente.</p> : null}
-      {posti.length > 1 ? <p className="text-[11px] text-stone-400 mt-1">Le lettere non indicano una persona precisa: dicono solo se una parte la fa la stessa persona (stessa lettera) o un'altra (lettera diversa). Chi la farà viene scelto al momento della prenotazione fra chi è libero e sa fare il servizio, e lo leggi sull'appuntamento in agenda.</p> : null}
+      {posti.length > 1 ? <p className="text-[11px] text-stone-400 mt-1">Le lettere non indicano una persona precisa: dicono solo se una parte la fa la stessa persona (stessa lettera) o un'altra (lettera diversa). Chi la farà viene scelto al momento della prenotazione fra chi è abilitato e libero, e lo leggi sull'appuntamento in agenda.</p> : null}
+    </div>
     </div>
   );
 }
 
-function StaffEditor({ st, services, cabine, onEdit, onDelete }) {
+function StaffEditor({ st, services, cabine, tuttoStaff, onEdit, onDelete }) {
   const F = useMods();
   const [picker, setPicker] = useState(false);
   const onPhoto = async (e) => { const file = e.target.files && e.target.files[0]; if (!file) return; try { const url = await fileToResizedDataURL(file, 256); onEdit({ photo: url }); } catch (err) {} };
-  const toggleSvc = (id) => onEdit({ serviceIds: st.serviceIds.includes(id) ? st.serviceIds.filter((x) => x !== id) : [...st.serviceIds, id] });
+  // Quali servizi sa fare: non è più un dato dell'operatore, si ricava da ciò
+  // che i servizi dichiarano. Qui viene solo mostrato, per orientarsi.
+  const sa = (services || []).filter((sv) => operatoriDelServizio(sv, services, tuttoStaff).includes(st.id)).map((sv) => sv.name);
   return (
     <div className="border border-stone-200 rounded-xl p-4">
       <div className="flex items-center gap-2 mb-3">
@@ -2946,10 +3009,13 @@ function StaffEditor({ st, services, cabine, onEdit, onDelete }) {
           ); })}</div>
         </div>
       ) : null}
-      <div className="mb-3">
-        <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Servizi eseguiti</div>
-        <div className="flex flex-wrap gap-1.5">{services.map((s) => { const on = st.serviceIds.includes(s.id); return <button key={s.id} onClick={() => toggleSvc(s.id)} className={`px-2.5 py-1 rounded-lg text-xs border transition ${on ? "brand-bg border-transparent" : "bg-white border-stone-200 text-stone-500 brand-hover"}`}>{s.name}</button>; })}</div>
-      </div>
+      {(sa || []).length ? (
+        <div className="mb-3">
+          <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Servizi che può eseguire</div>
+          <div className="flex flex-wrap gap-1.5">{sa.map((n) => <span key={n} className="px-2.5 py-1 rounded-lg text-xs bg-stone-100 text-stone-600">{n}</span>)}</div>
+          <p className="text-[11px] text-stone-400 mt-1.5">Si imposta sul servizio, non qui: nella sezione Servizi ogni voce dice chi la può fare.</p>
+        </div>
+      ) : <p className="text-[11px] text-stone-400 mb-3">Nessun servizio ancora abilitato. Si imposta nella sezione Servizi, su ciascuna voce.</p>}
       {(cabine || []).length ? (
         <div className="mb-3">
           <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1.5">Cabina abituale</div>

@@ -34,7 +34,7 @@ const orari = (cfg, ids, bk, opts) => orariPossibili(cfg, ids, GIORNO, bk, opts)
 
 // ---- Compatibilità: chi non usa le novità non deve accorgersi di nulla -----
 test("un servizio senza sequenza resta un blocco unico su un operatore", () => {
-  assert.deepEqual(impegniServizio(TAGLIO), [{ tipo: "operatore", posto: 1, da: 0, durata: 45 }]);
+  assert.deepEqual(impegniServizio(TAGLIO), [{ tipo: "operatore", posto: 1, da: 0, durata: 45, operatori: null }]);
   assert.equal(durataServizio(TAGLIO), 45);
   assert.deepEqual(postiDi(impegniServizio(TAGLIO)), [1]);
 });
