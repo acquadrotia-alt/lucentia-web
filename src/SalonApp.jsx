@@ -1308,7 +1308,7 @@ function AgendaView({ config, bookings, setBookings, clients, setClients, sales,
           <div className="flex gap-1 bg-stone-100/80 rounded-xl p-1">
             {[["elenco", "Elenco", CalendarDays], ["studio", "Studio", Boxes]].map(([k, l, Icon]) => (
               <button key={k} onClick={() => { setVista(k); if (k === "studio") setMode("day"); }} aria-current={vista === k ? "true" : undefined}
-                title={k === "studio" ? "La giornata su una linea del tempo: si vede chi è in salone nello stesso momento" : "Elenco degli appuntamenti"}
+                title={k === "studio" ? "La giornata a griglia: in colonna operatori e cabine, in riga le ore" : "Elenco degli appuntamenti"}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition ${vista === k ? "bg-white shadow-[var(--lc-shadow-xs)] text-stone-900" : "text-stone-500 hover:text-stone-700"}`}><Icon size={15} /><span className="hidden sm:inline">{l}</span></button>
             ))}
           </div>
@@ -1373,7 +1373,7 @@ function OnlineApptModal({ booking, config, canManage, onImport, onCancel, onClo
   const wa = b.clientPhone ? ("39" + String(b.clientPhone).replace(/\D/g, "")) : "";
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 lc-fade-in" onClick={onClose}>
-      <div className="lc-card lc-scale-in w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
+      <div className="lc-card lc-scale-in w-full max-w-sm p-5 overflow-auto" style={{ maxHeight: "90vh" }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-2 mb-3">
           <div>
             <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full brand-soft brand-text inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--brand)" }} /> Prenotazione online</span>
@@ -1388,6 +1388,7 @@ function OnlineApptModal({ booking, config, canManage, onImport, onCancel, onClo
           {b.clientPhone ? <div className="flex items-center gap-2"><Phone size={15} className="text-stone-400 shrink-0" /><a href={`tel:${b.clientPhone}`} className="brand-accent font-medium">{b.clientPhone}</a>{wa ? <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="text-xs text-green-600 ml-1">WhatsApp</a> : null}</div> : null}
           {b.note ? <div className="flex items-start gap-2 text-stone-600"><AlertCircle size={15} className="text-stone-400 shrink-0 mt-0.5" /><span>{b.note}</span></div> : null}
         </div>
+        <div className="mt-3"><DettaglioAppuntamento b={b} config={config} /></div>
         {canManage ? (
           <div className="mt-5 space-y-2">
             <button onClick={() => onImport(b)} className="w-full brand-bg font-medium py-2.5 rounded-xl flex items-center justify-center gap-1.5"><Check size={16} /> Aggiungi all'agenda</button>
@@ -1411,18 +1412,71 @@ function risorseDi(b, staff, cabine) {
   return { persone, stanze, etichetta: [persone.join(", "), stanze.join(", ")].filter(Boolean).join(" · ") || "—" };
 }
 
-// ---- Vista studio: la giornata su una linea del tempo ----------------------
-// Un elenco non fa vedere quante persone sono in salone nello stesso momento:
-// con i servizi a fasi possono esserci sei clienti con tre operatori, perché
-// qualcuno è in posa e qualcun altro è in cabina da solo. Qui ogni riga è un
-// cliente e i blocchi dicono quale risorsa lo sta seguendo in quel momento.
+// ---- Vista studio: colonne le risorse, righe le ore -----------------------
+// Un elenco non fa vedere chi sta facendo cosa: con i servizi a fasi possono
+// esserci sei clienti con tre operatori, perché qualcuno è in posa e qualcun
+// altro è in cabina da solo. Qui ogni colonna è una risorsa — un operatore o
+// una cabina — e la giornata scorre dall'alto verso il basso.
+const TIPI_STUDIO = [["operatori", "Operatori", Users], ["cabine", "Cabine", DoorOpen], ["entrambi", "Entrambi", Boxes]];
+
+// Incolonna i blocchi che si sovrappongono su corsie affiancate. Per una
+// cabina le corsie sono le sue postazioni; per un operatore sono gli
+// appuntamenti sovrapposti volutamente dal banco.
+function corsieDi(segmenti) {
+  const corsie = [];
+  for (const s of [...segmenti].sort((a, b) => a.from - b.from || a.to - b.to)) {
+    let i = corsie.findIndex((c) => c[c.length - 1].to <= s.from);
+    if (i < 0) { corsie.push([s]); i = corsie.length - 1; } else corsie[i].push(s);
+    s._corsia = i;
+  }
+  return { segmenti, corsie: Math.max(1, corsie.length) };
+}
+
 function VistaStudio({ giorno, items, staff, cabine, filtro, onApri }) {
-  const SCALA = 2; // pixel per minuto
+  const [tipo, setTipo] = useState("entrambi");
+  const SCALA = 1.5; // pixel per minuto
+  const GUTTER = 48;  // colonna delle ore
+  const CIMA = 10;    // aria sopra la prima ora, per non tagliarne l'etichetta
+
   const fasiDi = (b) => (b._evento
     ? (b.staffIds || []).map((id) => ({ tipo: "operatore", risorsaId: id, from: b.startMin, to: b.endMin }))
     : impegniBooking(b));
   const conFasi = items.map((b) => ({ b, fasi: fasiDi(b) }));
-  const tutti = conFasi.flatMap((x) => x.fasi);
+
+  const nome = (id) => {
+    const st = (staff || []).find((x) => x.id === id);
+    if (st) return st.name;
+    const c = (cabine || []).find((x) => x.id === id);
+    return c ? c.name : "—";
+  };
+
+  // Le colonne: gli operatori (uno solo se il menù ne ha scelto uno) e le
+  // cabine, secondo l'opzione attiva.
+  const colonne = useMemo(() => {
+    const out = [];
+    if (tipo !== "cabine") for (const s of (staff || [])) {
+      if (filtro !== "all" && s.id !== filtro) continue;
+      out.push({ id: s.id, name: s.name, cabina: false, capacita: 1, staff: s });
+    }
+    if (tipo !== "operatori") for (const c of (cabine || [])) {
+      out.push({ id: c.id, name: c.name, cabina: true, capacita: Math.max(1, Number(c.quantita) || 1) });
+    }
+    return out;
+  }, [staff, cabine, tipo, filtro]);
+
+  // A ogni colonna i suoi segmenti, già divisi in corsie.
+  const perColonna = useMemo(() => colonne.map((col) => {
+    const segmenti = [];
+    for (const { b, fasi } of conFasi) for (const f of fasi) {
+      if (f.risorsaId !== col.id) continue;
+      segmenti.push({ b, from: f.from, to: f.to });
+    }
+    return { col, ...corsieDi(segmenti) };
+  }), [colonne, items]);
+
+  const collocati = new Set(perColonna.flatMap((c) => c.segmenti.map((s) => s.b.id)));
+  const fuori = items.filter((b) => !collocati.has(b.id));
+
   if (!items.length) return (
     <div className="lc-fade-up flex flex-col items-center justify-center text-center py-14 rounded-2xl border border-dashed border-stone-200 bg-white/40">
       <div className="w-12 h-12 rounded-full brand-soft flex items-center justify-center mb-3"><CalendarDays size={22} className="brand-accent" /></div>
@@ -1430,88 +1484,114 @@ function VistaStudio({ giorno, items, staff, cabine, filtro, onApri }) {
       <p className="text-xs text-stone-400 mt-1">Tocca «Appuntamento» in alto per aggiungerne uno.</p>
     </div>
   );
+
+  // La giornata mostrata: dal primo impegno all'ultimo, arrotondata all'ora.
+  const tutti = conFasi.flatMap((x) => x.fasi);
   const inizi = [...tutti.map((f) => f.from), ...items.map((b) => b.startMin)];
   const fini = [...tutti.map((f) => f.to), ...items.map((b) => b.endMin)];
   const t0 = Math.floor(Math.min(...inizi) / 60) * 60;
   const t1 = Math.ceil(Math.max(...fini) / 60) * 60;
-  const larghezza = Math.max((t1 - t0) * SCALA, 320);
+  const y = (t) => (t - t0) * SCALA + CIMA;
+  const altezza = (t1 - t0) * SCALA + CIMA * 2;
   const ore = [];
-  for (let t = t0; t <= t1; t += 60) ore.push(t);
-  const nome = (id) => {
-    const st = (staff || []).find((x) => x.id === id);
-    if (st) return st.name;
-    const c = (cabine || []).find((x) => x.id === id);
-    return c ? c.name : "—";
-  };
-  const isCabina = (id) => (cabine || []).some((c) => c.id === id);
+  for (let t = t0; t <= t1; t += 30) ore.push(t);
   const adesso = giorno === todayStr() ? new Date().getHours() * 60 + new Date().getMinutes() : null;
+  const largCol = (c) => Math.max(124, 78 * c.corsie);
+  const larghezza = perColonna.reduce((a, c) => a + largCol(c), 0);
 
-  // Quanti clienti sono in salone contemporaneamente, momento per momento.
-  const picco = (() => {
-    const eventi = [];
-    for (const b of items) { eventi.push([b.startMin, 1]); eventi.push([b.endMin, -1]); }
-    eventi.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-    let n = 0, max = 0;
-    for (const [, d] of eventi) { n += d; max = Math.max(max, n); }
-    return max;
-  })();
+  const selettore = (
+    <div className="flex gap-1 bg-stone-100/80 rounded-xl p-1 self-start">
+      {TIPI_STUDIO.map(([k, l, Icon]) => (
+        <button key={k} onClick={() => setTipo(k)} aria-current={tipo === k ? "true" : undefined}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition ${tipo === k ? "bg-white shadow-[var(--lc-shadow-xs)] text-stone-900" : "text-stone-500 hover:text-stone-700"}`}><Icon size={14} /> {l}</button>
+      ))}
+    </div>
+  );
+
+  if (!colonne.length) return (
+    <div className="space-y-2">
+      {selettore}
+      <div className="flex flex-col items-center justify-center text-center py-12 rounded-2xl border border-dashed border-stone-200 bg-white/40">
+        <div className="w-12 h-12 rounded-full brand-soft flex items-center justify-center mb-3"><DoorOpen size={22} className="brand-accent" /></div>
+        <p className="text-sm font-medium text-stone-600">{tipo === "cabine" ? "Nessuna cabina configurata" : "Nessun operatore"}</p>
+        <p className="text-xs text-stone-400 mt-1">Le aggiungi in Impostazioni → Operatori e cabine.</p>
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-stone-500">
-        <span>{filtro === "all" ? "Tutto lo studio" : `Giornata di ${nome(filtro)}`}</span>
-        {filtro === "all"
-          ? <span>Fino a <b className="text-stone-700">{picco}</b> {picco === 1 ? "cliente" : "clienti"} in contemporanea · {(staff || []).length} operator{(staff || []).length === 1 ? "e" : "i"}</span>
-          : <span>Fino a <b className="text-stone-700">{picco}</b> {picco === 1 ? "suo cliente" : "suoi clienti"} in salone insieme</span>}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        {selettore}
+        <span className="text-xs text-stone-500">{colonne.length} colonn{colonne.length === 1 ? "a" : "e"} · {items.length} in agenda</span>
       </div>
-      <div className="overflow-x-auto -mx-1 px-1 pb-1">
-        <div style={{ width: larghezza + 148 }}>
-          {/* righello delle ore */}
-          <div className="flex sticky top-0 z-10 bg-white/90 backdrop-blur">
-            <div className="w-36 shrink-0" />
-            <div className="relative h-6" style={{ width: larghezza }}>
-              {ore.map((t) => (
-                <div key={t} className="absolute top-0 bottom-0 border-l border-stone-200" style={{ left: (t - t0) * SCALA }}>
-                  <span className="pl-1 text-[10px] text-stone-400 tabular-nums">{minToStr(t)}</span>
+
+      <div className="overflow-auto -mx-1 px-1 pb-1 border border-stone-200/70 rounded-xl bg-white" style={{ maxHeight: "72vh" }}>
+        <div style={{ width: larghezza + GUTTER, minWidth: "100%" }}>
+          {/* intestazione delle colonne */}
+          <div className="flex sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-stone-200">
+            <div className="shrink-0 sticky left-0 z-10 bg-white/95" style={{ width: GUTTER }} />
+            {perColonna.map(({ col, corsie }) => (
+              <div key={col.id} className="shrink-0 grow px-2 py-2 border-l border-stone-100 min-w-0" style={{ flexBasis: largCol({ corsie }) }}>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  {col.cabina
+                    ? <span className="w-6 h-6 rounded-md bg-stone-100 text-stone-500 flex items-center justify-center shrink-0"><DoorOpen size={13} /></span>
+                    : <span className="w-6 h-6 rounded-full brand-soft brand-text text-[9px] font-semibold flex items-center justify-center shrink-0">{initials(col.name)}</span>}
+                  <span className="text-[12px] font-medium truncate text-stone-800">{col.name}</span>
+                  {col.capacita > 1 ? <span className="text-[10px] text-stone-400 shrink-0">×{col.capacita}</span> : null}
                 </div>
+              </div>
+            ))}
+          </div>
+
+          {/* griglia */}
+          <div className="relative flex" style={{ height: altezza }}>
+            {/* righe delle ore */}
+            {ore.map((t) => (
+              <div key={t} className={`absolute left-0 right-0 ${t % 60 === 0 ? "border-t border-stone-200" : "border-t border-stone-100"}`} style={{ top: y(t) }} />
+            ))}
+            {/* colonna delle ore */}
+            <div className="shrink-0 sticky left-0 z-10 bg-white/95 backdrop-blur relative" style={{ width: GUTTER }}>
+              {ore.filter((t) => t % 60 === 0).map((t) => (
+                <span key={t} className="absolute right-1.5 -translate-y-1/2 text-[10px] text-stone-400 tabular-nums" style={{ top: y(t) }}>{minToStr(t)}</span>
               ))}
             </div>
-          </div>
-          <div className="space-y-1.5 relative">
-            {adesso != null && adesso >= t0 && adesso <= t1 ? (
-              <div className="absolute top-0 bottom-0 w-px bg-red-400/70 pointer-events-none z-10" style={{ left: 144 + (adesso - t0) * SCALA }}>
-                <span className="absolute -top-1 -left-1 w-2 h-2 rounded-full bg-red-400" />
-              </div>
-            ) : null}
-            {conFasi.map(({ b, fasi }) => (
-              <button key={b.id} onClick={() => onApri(b)} className="flex w-full text-left group">
-                <div className="w-36 shrink-0 pr-2 min-w-0">
-                  <div className="text-[13px] font-medium truncate text-stone-800 group-hover:text-stone-900">{b._evento ? b.titolo : b.clientName}</div>
-                  <div className="text-[11px] text-stone-400 truncate">{minToStr(b.startMin)}–{minToStr(b.endMin)}</div>
-                </div>
-                <div className="relative h-9 rounded-lg bg-stone-100/70" style={{ width: larghezza }}>
-                  {/* durata complessiva: il chiaro fra i blocchi è l'attesa del cliente */}
-                  <div className="absolute top-0 bottom-0 rounded-lg border border-dashed border-stone-300/80"
-                    style={{ left: (b.startMin - t0) * SCALA, width: Math.max((b.endMin - b.startMin) * SCALA, 2) }} />
-                  {fasi.map((f, i) => {
-                    const suo = filtro === "all" || f.risorsaId === filtro;
+            {perColonna.map(({ col, segmenti, corsie }) => {
+              const w = largCol({ corsie });
+              return (
+                <div key={col.id} className="shrink-0 grow relative border-l border-stone-100" style={{ flexBasis: w }}>
+                  {segmenti.map((s, i) => {
+                    const b = s.b;
+                    const alt = Math.max((s.to - s.from) * SCALA, 16);
+                    const larg = 100 / corsie;
+                    const nomeCliente = b._evento ? b.titolo : b.clientName;
+                    const annullato = b.status === "cancelled" || b.status === "noshow";
                     return (
-                      <div key={i} title={`${nome(f.risorsaId)} · ${minToStr(f.from)}–${minToStr(f.to)}`}
-                        className={`absolute top-1 bottom-1 rounded-md px-1.5 flex items-center overflow-hidden ${suo ? "" : "opacity-40"}`}
-                        style={{ left: (f.from - t0) * SCALA, width: Math.max((f.to - f.from) * SCALA, 6),
-                          background: isCabina(f.risorsaId) ? "#e7e5e4" : "var(--brand)",
-                          color: isCabina(f.risorsaId) ? "#57534e" : "#fff" }}>
-                        <span className="text-[10px] font-medium truncate">{nome(f.risorsaId)}</span>
-                      </div>
+                      <button key={`${b.id}-${i}`} onClick={() => onApri(b)}
+                        title={`${nomeCliente} · ${minToStr(s.from)}–${minToStr(s.to)} · ${col.name}`}
+                        className={`absolute rounded-md px-1.5 py-0.5 text-left overflow-hidden transition hover:brightness-95 hover:shadow-[var(--lc-shadow-xs)] ${annullato ? "opacity-45 line-through" : ""}`}
+                        style={{ top: y(s.from), height: alt, left: `calc(${s._corsia * larg}% + 2px)`, width: `calc(${larg}% - 4px)`,
+                          background: col.cabina ? "#e7e5e4" : "var(--brand)", color: col.cabina ? "#44403c" : "#fff" }}>
+                        <div className="text-[11px] font-medium leading-tight truncate">{nomeCliente}</div>
+                        {alt >= 30 ? <div className={`text-[10px] leading-tight truncate ${col.cabina ? "text-stone-500" : "opacity-80"}`}>{minToStr(s.from)}–{minToStr(s.to)}</div> : null}
+                      </button>
                     );
                   })}
                 </div>
-              </button>
-            ))}
+              );
+            })}
+            {/* l'ora corrente */}
+            {adesso != null && adesso >= t0 && adesso <= t1 ? (
+              <div className="absolute left-0 right-0 h-px bg-red-400/80 pointer-events-none z-10" style={{ top: y(adesso) }}>
+                <span className="absolute -top-1 left-0 w-2 h-2 rounded-full bg-red-400" />
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
-      <p className="text-[11px] text-stone-400">Ogni riga è un cliente. I blocchi pieni sono gli operatori, quelli grigi le cabine; il tratteggio senza blocchi è tempo in cui il cliente è in salone ma non occupa nessuno — per esempio una posa.</p>
+
+      <p className="text-[11px] text-stone-400">Le colonne sono le risorse, le righe le ore. Un appuntamento compare in ogni colonna che occupa: il colore pieno è un operatore, il grigio una cabina. Lo spazio vuoto fra due blocchi dello stesso cliente è tempo in cui non impegna nessuno — per esempio una posa. Tocca un blocco per aprirlo.</p>
+      {fuori.length ? <p className="text-[11px] text-stone-400">{fuori.length} appuntament{fuori.length === 1 ? "o" : "i"} non compare{fuori.length === 1 ? "" : "no"} qui: non impegna{fuori.length === 1 ? "" : "no"} {tipo === "cabine" ? "nessuna cabina" : tipo === "operatori" ? "nessun operatore" : "nessuna delle risorse mostrate"}.</p> : null}
     </div>
   );
 }
@@ -1560,6 +1640,110 @@ function ApptCard({ b, staff, services, cabine, onClick, big, index = 0 }) {
   );
 }
 
+// ---- Dettaglio di un appuntamento: la sua linea del tempo e i servizi -----
+// Con i servizi a fasi "dalle 9 alle 10:30 con Sara" non racconta più niente:
+// serve vedere quando ciascuna risorsa è impegnata davvero, dov'è la posa e
+// che cosa prevede ogni servizio.
+function DettaglioAppuntamento({ b, config }) {
+  const staff = (config && config.staff) || [], cabine = (config && config.cabine) || [], services = (config && config.services) || [];
+  const nome = (id) => {
+    const st = staff.find((x) => x.id === id);
+    if (st) return st.name;
+    const c = cabine.find((x) => x.id === id);
+    return c ? c.name : "—";
+  };
+  const eCabina = (id) => cabine.some((c) => c.id === id);
+  const fasi = impegniBooking(b).slice().sort((a, b2) => a.from - b2.from);
+  const t0 = Math.min(b.startMin, ...fasi.map((f) => f.from));
+  const t1 = Math.max(b.endMin, ...fasi.map((f) => f.to));
+  const span = Math.max(1, t1 - t0);
+  const pos = (v) => `${((v - t0) / span) * 100}%`;
+  const risorse = [...new Set(fasi.map((f) => f.risorsaId).filter(Boolean))];
+
+  // I minuti in cui il cliente è qui ma non occupa nessuno: la posa, l'attesa.
+  const liberi = (() => {
+    const out = [];
+    let cursore = t0;
+    for (const f of fasi) {
+      if (f.from > cursore) out.push({ from: cursore, to: f.from });
+      cursore = Math.max(cursore, f.to);
+    }
+    if (cursore < t1) out.push({ from: cursore, to: t1 });
+    return out.filter((x) => x.to - x.from >= 5);
+  })();
+
+  // Le fasi previste da ogni servizio, con l'orario che hanno in questo
+  // appuntamento. Il nome di chi le fa lo dice l'assegnazione già salvata.
+  const usate = new Set();
+  const dettaglio = [];
+  let offset = 0;
+  for (const id of (b.serviceIds || [])) {
+    const svc = services.find((s) => s.id === id);
+    if (!svc) continue;
+    const righe = impegniServizio(svc).map((s) => {
+      const from = b.startMin + offset + s.da, to = from + s.durata;
+      const cand = fasi.findIndex((f, i) => !usate.has(i) && f.from === from && f.to === to
+        && (s.tipo === "cabina" ? eCabina(f.risorsaId) : !eCabina(f.risorsaId))
+        && (!s.cabinaId || f.risorsaId === s.cabinaId));
+      if (cand >= 0) usate.add(cand);
+      const risorsaId = cand >= 0 ? fasi[cand].risorsaId : (s.cabinaId || null);
+      return { ...s, from, to, risorsaId, etichetta: risorsaId ? nome(risorsaId) : (s.tipo === "cabina" ? "Cabina da assegnare" : `Operatore ${s.posto}`) };
+    });
+    dettaglio.push({ svc, righe, da: b.startMin + offset, a: b.startMin + offset + durataServizio(svc) });
+    offset += durataServizio(svc);
+  }
+
+  return (
+    <div className="border border-stone-200 rounded-xl p-3 mb-4">
+      <div className="text-sm font-medium flex items-center gap-1.5 mb-2"><Clock size={15} className="brand-accent" /> Come si svolge</div>
+      <div className="space-y-1.5">
+        {risorse.map((rid) => (
+          <div key={rid} className="flex items-center gap-2">
+            <span className="w-20 shrink-0 text-[11px] text-stone-500 truncate flex items-center gap-1">
+              {eCabina(rid) ? <DoorOpen size={11} className="text-stone-400 shrink-0" /> : <User size={11} className="text-stone-400 shrink-0" />}{nome(rid)}
+            </span>
+            <div className="relative flex-1 h-5 rounded-md bg-stone-100">
+              {fasi.filter((f) => f.risorsaId === rid).map((f, i) => (
+                <div key={i} title={`${minToStr(f.from)}–${minToStr(f.to)}`} className="absolute top-0 bottom-0 rounded-md"
+                  style={{ left: pos(f.from), width: `calc(${((f.to - f.from) / span) * 100}% + 1px)`, minWidth: 3,
+                    background: eCabina(rid) ? "#a8a29e" : "var(--brand)" }} />
+              ))}
+            </div>
+          </div>
+        ))}
+        {!risorse.length ? <p className="text-xs text-stone-400">Nessuna risorsa impegnata.</p> : null}
+      </div>
+      <div className="flex justify-between text-[10px] text-stone-400 tabular-nums mt-1 pl-[88px]"><span>{minToStr(t0)}</span><span>{minToStr(t1)}</span></div>
+      {liberi.length ? (
+        <p className="text-[11px] text-stone-500 mt-1.5">In posa o in attesa: {liberi.map((x) => `${minToStr(x.from)}–${minToStr(x.to)}`).join(", ")} — in quei minuti il cliente è in salone senza occupare nessuno.</p>
+      ) : null}
+
+      <div className="text-sm font-medium flex items-center gap-1.5 mt-4 mb-2"><Sparkles size={15} className="brand-accent" /> Il servizio nel dettaglio</div>
+      <div className="space-y-2.5">
+        {dettaglio.length === 0 ? <p className="text-xs text-stone-400">Servizio non più in catalogo.</p> : dettaglio.map(({ svc, righe, da, a }) => (
+          <div key={svc.id}>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[13px] font-medium text-stone-800 truncate">{svc.name}</span>
+              <span className="text-[11px] text-stone-400 tabular-nums shrink-0">{minToStr(da)}–{minToStr(a)} · {durataServizio(svc)}′{svc.price ? ` · ${eur(svc.price)}` : ""}</span>
+            </div>
+            <ul className="mt-1 space-y-0.5">
+              {righe.map((r, i) => (
+                <li key={i} className="flex items-center gap-2 text-[12px] text-stone-600">
+                  <span className="tabular-nums text-stone-400 w-24 shrink-0">{minToStr(r.from)}–{minToStr(r.to)}</span>
+                  {r.tipo === "cabina" ? <DoorOpen size={12} className="text-stone-400 shrink-0" /> : <User size={12} className="text-stone-400 shrink-0" />}
+                  <span className="truncate">{r.etichetta}</span>
+                  <span className="text-stone-400 shrink-0 tabular-nums">{r.to - r.from}′</span>
+                </li>
+              ))}
+            </ul>
+            {senzaOperatore(impegniServizio(svc)) ? <p className="text-[11px] text-stone-400 mt-0.5">Non richiede operatori: occupa solo la cabina.</p> : null}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ApptActions({ booking, config, clients, setClients, bookings, sales, catalog, hidePartial, onStatus, onResch, onClose }) {
   const F = useMods();
   const b = booking;
@@ -1604,6 +1788,7 @@ function ApptActions({ booking, config, clients, setClients, bookings, sales, ca
           {b.clientEmail ? <div className="flex items-center gap-2"><Mail size={14} className="text-stone-400" /> {b.clientEmail}</div> : null}
           {meta ? <div className="flex items-center gap-2"><meta.Icon size={14} className="text-stone-400" /> {meta.label}</div> : null}
         </div>
+        <DettaglioAppuntamento b={b} config={config} />
         {F.allergeni && hasHealth ? (
           <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4">
             <div className="flex items-center gap-1.5 text-sm font-medium text-red-800 mb-1"><AlertTriangle size={15} /> Note cliente</div>
