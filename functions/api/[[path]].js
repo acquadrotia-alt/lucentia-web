@@ -176,8 +176,24 @@ function eventiComeImpegni(eventi, dateStr) {
   }
   return out;
 }
+// Scrittura che nomina `impegni`: se il database non ha ancora la colonna si
+// ripiega sulla forma di prima. L'appuntamento resta prenotabile — occuperà
+// l'operatore principale per tutta la durata invece che fase per fase, finché
+// la migrazione non viene eseguita.
+async function senzaColonnaImpegni(conColonna, ripiego) {
+  try { return await conColonna(); }
+  catch (e) {
+    if (!/impegni/i.test(String((e && e.message) || e))) throw e;
+    console.warn("prenotazioni_online.impegni assente: esegui migrazione-risorse.sql");
+    return await ripiego();
+  }
+}
+
+// La colonna `impegni` arriva con migrazione-risorse.sql: su un database che
+// non l'ha ancora nominarla farebbe fallire la query (e con essa tutta la
+// disponibilità online). Si legge con SELECT *, che non la pretende.
 async function onlineBookingsOf(env, aziendaId, dateStr) {
-  const res = await env.DB.prepare("SELECT id, staff_id, start_min, end_min, impegni FROM prenotazioni_online WHERE azienda_id = ? AND data = ? AND stato = 'attiva'").bind(aziendaId, dateStr).all();
+  const res = await env.DB.prepare("SELECT * FROM prenotazioni_online WHERE azienda_id = ? AND data = ? AND stato = 'attiva'").bind(aziendaId, dateStr).all();
   return (res.results || []).map((r) => {
     let impegni = null;
     try { const a = JSON.parse(r.impegni || "null"); if (Array.isArray(a) && a.length) impegni = a; } catch (e) {}
@@ -342,7 +358,19 @@ function sessionCookie(token) {
 }
 const CLEAR_COOKIE = "sid=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0";
 
+// Un errore imprevisto (una colonna che manca, una query storta) non deve
+// arrivare al browser come crash del worker: la pagina pubblica lo leggerebbe
+// come "nessuna disponibilità" senza dire perché. Meglio un JSON con il
+// dettaglio, che finisce anche nei log di Cloudflare.
 export async function onRequest(context) {
+  try { return await gestisci(context); }
+  catch (e) {
+    console.error("api", String((e && e.stack) || e));
+    return json({ error: "Errore interno del server.", dettaglio: String((e && e.message) || e) }, 500);
+  }
+}
+
+async function gestisci(context) {
   const { request, env, params } = context;
   const segs = params.path || [];
   const method = request.method;
@@ -546,8 +574,11 @@ export async function onRequest(context) {
       }
 
       const id = crypto.randomUUID();
-      await env.DB.prepare("INSERT INTO prenotazioni_online (id, azienda_id, data, start_min, end_min, service_id, staff_id, client_code, client_name, client_phone, client_email, note, stato, impegni) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'attiva', ?)")
-        .bind(id, aid, date, start, end, serviceId, slot.staffId || null, clientCode, name, phone, email, note, JSON.stringify(slot.impegni || [])).run();
+      await senzaColonnaImpegni(
+        () => env.DB.prepare("INSERT INTO prenotazioni_online (id, azienda_id, data, start_min, end_min, service_id, staff_id, client_code, client_name, client_phone, client_email, note, stato, impegni) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'attiva', ?)")
+          .bind(id, aid, date, start, end, serviceId, slot.staffId || null, clientCode, name, phone, email, note, JSON.stringify(slot.impegni || [])).run(),
+        () => env.DB.prepare("INSERT INTO prenotazioni_online (id, azienda_id, data, start_min, end_min, service_id, staff_id, client_code, client_name, client_phone, client_email, note, stato) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'attiva')")
+          .bind(id, aid, date, start, end, serviceId, slot.staffId || null, clientCode, name, phone, email, note).run());
       return json({ ok: true, conferma: { date, start, end, label: `${pad2(Math.floor(start / 60))}:${pad2(start % 60)}`, service: svc.name, salone: az.denominazione } });
     }
 
@@ -588,8 +619,11 @@ export async function onRequest(context) {
       const nuovo = slots.find((s) => s.start === nstart);
       if (!nuovo) return json({ error: "Questo orario non è più disponibile. Scegline un altro." }, 409);
       // Spostando l'appuntamento cambiano anche le risorse impegnate.
-      await env.DB.prepare("UPDATE prenotazioni_online SET data = ?, start_min = ?, end_min = ?, staff_id = ?, impegni = ? WHERE id = ?")
-        .bind(ndate, nstart, nstart + dur, nuovo.staffId || null, JSON.stringify(nuovo.impegni || []), row.id).run();
+      await senzaColonnaImpegni(
+        () => env.DB.prepare("UPDATE prenotazioni_online SET data = ?, start_min = ?, end_min = ?, staff_id = ?, impegni = ? WHERE id = ?")
+          .bind(ndate, nstart, nstart + dur, nuovo.staffId || null, JSON.stringify(nuovo.impegni || []), row.id).run(),
+        () => env.DB.prepare("UPDATE prenotazioni_online SET data = ?, start_min = ?, end_min = ?, staff_id = ? WHERE id = ?")
+          .bind(ndate, nstart, nstart + dur, nuovo.staffId || null, row.id).run());
       return json({ ok: true, conferma: { date: ndate, start: nstart, label: lbl(nstart), service: svcName(row.service_id), salone: az.denominazione } });
     }
 

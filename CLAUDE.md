@@ -103,7 +103,7 @@ License create/renew events are logged to `licenze_eventi` (`logEvento`). `/api/
 
 ## Database & deployment
 
-- `schema.sql` is the full, idempotent (`CREATE TABLE IF NOT EXISTS`) schema — safe to re-run. The `migrazione-*.sql` files are incremental `ALTER TABLE` migrations added over time; re-running them throws harmless "duplicate column" errors. `LEGGIMI.md` (Italian) is the operator runbook for updating the live site and running these.
+- `schema.sql` is the full, idempotent (`CREATE TABLE IF NOT EXISTS`) schema — safe to re-run, and it must stay a superset of every `migrazione-*.sql` so a fresh database needs nothing else. Never name a migration-added column in a query without a fallback: a live database that skipped the migration then fails the whole request (this is what silently killed online availability — `prenotazioni_online.impegni` in `onlineBookingsOf`), so reads use `SELECT *` and writes go through `senzaColonnaImpegni`. The `migrazione-*.sql` files are incremental `ALTER TABLE` migrations added over time; re-running them throws harmless "duplicate column" errors. `LEGGIMI.md` (Italian) is the operator runbook for updating the live site and running these.
 - Deployment is via Cloudflare Pages auto-building from GitHub. To redeploy, push a real commit — do **not** use "Retry deployment" (it replays the old commit). Required env var: `SETUP_TOKEN` (Production).
 - `public/setup.html` is a one-time bootstrap page to create the first (master) reseller, gated by `SETUP_TOKEN`. It refuses to run once a reseller exists; the runbook says to delete it after first use.
 

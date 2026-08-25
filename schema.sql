@@ -12,5 +12,5 @@ CREATE TABLE IF NOT EXISTS richieste (id TEXT PRIMARY KEY, tipo TEXT, ragione_so
 CREATE INDEX IF NOT EXISTS idx_richieste_creato ON richieste(creato_il);
 -- Prenotazioni online dei clienti (modulo aggiuntivo "online"): tabella separata
 -- così le scritture del salone (blob dati_app) non possono sovrascriverle.
-CREATE TABLE IF NOT EXISTS prenotazioni_online (id TEXT PRIMARY KEY, azienda_id TEXT NOT NULL, data TEXT NOT NULL, start_min INTEGER NOT NULL, end_min INTEGER NOT NULL, service_id TEXT, staff_id TEXT, client_code TEXT, client_name TEXT, client_phone TEXT, client_email TEXT, note TEXT, stato TEXT DEFAULT 'attiva', creato_il TEXT DEFAULT (datetime('now')));
+CREATE TABLE IF NOT EXISTS prenotazioni_online (id TEXT PRIMARY KEY, azienda_id TEXT NOT NULL, data TEXT NOT NULL, start_min INTEGER NOT NULL, end_min INTEGER NOT NULL, service_id TEXT, staff_id TEXT, client_code TEXT, client_name TEXT, client_phone TEXT, client_email TEXT, note TEXT, stato TEXT DEFAULT 'attiva', impegni TEXT, creato_il TEXT DEFAULT (datetime('now')));
 CREATE INDEX IF NOT EXISTS idx_prenotazioni_azienda ON prenotazioni_online(azienda_id, data);

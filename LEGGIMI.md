@@ -19,10 +19,15 @@ e le loro licenze da un pannello dedicato. Ogni salone vede solo i propri dati.
 2. D1: apri la Console del database ed esegui di nuovo schema.sql
    (crea le nuove tabelle; quelle esistenti restano, è sicuro rieseguirlo).
    Poi esegui migrazione-moduli.sql, migrazione-prezzi.sql, migrazione-operatori.sql,
-   migrazione-rivenditori.sql e migrazione-prenotazioni.sql. Se danno errore
-   "duplicate column name" / "table already exists" c'erano già: ignoralo (è normale).
+   migrazione-rivenditori.sql, migrazione-prenotazioni.sql e migrazione-risorse.sql.
+   Se danno errore "duplicate column name" / "table already exists" c'erano già:
+   ignoralo (è normale).
    NB: migrazione-prenotazioni.sql crea la tabella delle prenotazioni online ed è
    obbligatoria se usi quel modulo, altrimenti il link di prenotazione dà errore.
+   NB: migrazione-risorse.sql aggiunge la colonna "impegni" alle prenotazioni
+   online. Senza, il programma continua a funzionare, ma una prenotazione presa
+   online occupa l'operatore per tutta la durata del servizio invece che fase per
+   fase: durante una posa il suo tempo libero non viene rivenduto.
 3. Cloudflare → Settings → Environment variables → Production → Add:
    SETUP_TOKEN = una stringa lunga e segreta a tua scelta.
 4. Fai ripartire una pubblicazione con un piccolo commit su GitHub
