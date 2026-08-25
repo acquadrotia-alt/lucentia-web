@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback, createContext, useContext } from "react";
-import { Sparkles, Calendar, Clock, User, Mail, Lock, Settings, LayoutDashboard, Plus, Trash2, Check, ChevronLeft, ChevronRight, X, Users, CalendarPlus, Phone, MapPin, Image as ImageIcon, Palette, Store, Sunrise, Sun, Moon, History, Search, Gift, Star, Hash, LogOut, Ban, UserX, Undo2, Timer, CalendarClock, Wallet, RefreshCw, Printer, Download, Upload, KeyRound, ShieldCheck, CalendarX2, AlertTriangle, BadgeCheck, ShoppingCart, ShoppingBag, Package, Tag, Minus, Boxes, Receipt, Layers, AlertCircle, CalendarRange, CalendarDays, PackagePlus, BarChart3, TrendingUp, MessageCircle, FolderOpen, PartyPopper, Share2, Pencil, Globe, Instagram, Facebook, DoorOpen } from "lucide-react";
+import { Sparkles, Calendar, Clock, User, Mail, Lock, Settings, LayoutDashboard, Plus, Trash2, Check, ChevronLeft, ChevronRight, X, Users, CalendarPlus, Phone, MapPin, Image as ImageIcon, Palette, Store, Sunrise, Sun, Moon, History, Search, Gift, Star, Hash, LogOut, Ban, UserX, Undo2, Timer, CalendarClock, Wallet, RefreshCw, Printer, Download, Upload, KeyRound, ShieldCheck, CalendarX2, AlertTriangle, BadgeCheck, ShoppingCart, ShoppingBag, Package, Tag, Minus, Boxes, Receipt, Layers, AlertCircle, CalendarRange, CalendarDays, PackagePlus, ChevronUp, ChevronDown, BarChart3, TrendingUp, MessageCircle, FolderOpen, PartyPopper, Share2, Pencil, Globe, Instagram, Facebook, DoorOpen } from "lucide-react";
 import { orariPossibili, durataServizio, impegniServizio, senzaOperatore, impegniBooking, operatoriDelServizio } from "./orari.js";
 import { AvatarSvg, AVATAR_IDS, avatarIdFor } from "./avatars.jsx";
 import { setBrandTab } from "./favicon.js";
@@ -3222,17 +3222,57 @@ function ImpegniEditor({ svc, cabine, staff, operatoriServizio, onChange }) {
     if (nomi.length && nomi.length < (operatoriServizio || []).length) return nomi.slice(0, 3).join(", ") + (nomi.length > 3 ? "…" : "");
     return posti.length > 1 ? `Operatore ${lettera(n)}` : "Operatore";
   };
+  // La cabina in cui lavorano gli operatori scelti, quando è la stessa per
+  // tutti: è la stanza dove stanno di casa, tanto vale occuparla da subito.
+  const cabinaAbituale = (ids) => {
+    const lista = (Array.isArray(ids) && ids.length ? ids : (operatoriServizio || []));
+    if (!lista.length) return null;
+    const cabs = lista.map((id) => (((staff || []).find((x) => x.id === id) || {}).cabinaId) || null);
+    return cabs.every((c) => c && c === cabs[0]) && cabine.some((c) => c.id === cabs[0]) ? cabs[0] : null;
+  };
+  const nomeCabina = (id) => ((cabine || []).find((c) => c.id === id) || {}).name || "Cabina";
+  // Selezionando un operatore che ha una cabina abituale la cabina entra già
+  // nella sequenza, purché non ce ne sia già una: resta togliibile con la ✕.
+  const conCabinaAbituale = (impegni, ids) => {
+    if (impegni.some((x) => x.tipo === "cabina")) return null;
+    const cid = cabinaAbituale(ids);
+    if (!cid) return null;
+    const lungo = impegni.reduce((m, x) => Math.max(m, (Number(x.da) || 0) + (Number(x.durata) || 0)), durata);
+    return [...impegni, { tipo: "cabina", cabinaId: cid, da: 0, durata: Math.max(lungo, 5) }];
+  };
+  const [avviso, setAvviso] = useState(null);
+  const applica = (impegni, ids) => {
+    const conCab = conCabinaAbituale(impegni, ids);
+    if (conCab) setAvviso(nomeCabina(cabinaAbituale(ids)));
+    else setAvviso(null);
+    return conCab || impegni;
+  };
+  // Riordino: l'ordine non cambia gli orari, ma è quello in cui si legge la
+  // sequenza — meglio poterla mettere nell'ordine in cui si svolge.
+  const sposta = (i, dir) => {
+    const j = i + dir;
+    if (j < 0 || j >= seq.length) return;
+    const next = seq.slice();
+    [next[i], next[j]] = [next[j], next[i]];
+    onChange({ impegni: next });
+  };
+  // Una cabina che copre tutto il servizio sta sullo sfondo: nell'ordine di
+  // lettura resta in fondo, non conta come "fuori sequenza".
+  const sfondo = (x) => x.tipo === "cabina" && (Number(x.da) || 0) === 0 && (Number(x.durata) || 0) >= fine;
+  const inFila = seq ? seq.filter((x) => !sfondo(x)) : [];
+  const perOrario = () => onChange({ impegni: [...inFila.slice().sort((a, b) => (Number(a.da) || 0) - (Number(b.da) || 0) || (Number(a.durata) || 0) - (Number(b.durata) || 0)), ...seq.filter(sfondo)] });
+  const inOrdine = inFila.every((x, i) => i === 0 || (Number(inFila[i - 1].da) || 0) <= (Number(x.da) || 0));
   // Un impegno aggiunto parte dove finisce l'ultimo, così non si accavalla da
   // solo; una cabina invece copre di norma tutto il servizio.
   const add = (tipo) => onChange({ impegni: [...seq, tipo === "cabina"
-    ? { tipo: "cabina", cabinaId: (cabine[0] && cabine[0].id) || null, da: 0, durata: Math.max(durata, fine) }
+    ? { tipo: "cabina", cabinaId: cabinaAbituale(svc.operatori) || (cabine[0] && cabine[0].id) || null, da: 0, durata: Math.max(durata, fine) }
     : { tipo: "operatore", posto: 1, da: fine, durata: 15 }] });
   const scala = Math.max(durata, fine, 1);
 
   const chiLoFa = (
     <div className="mt-2 border border-stone-200 rounded-xl p-3 bg-stone-50/60">
       <ScegliOperatori staff={staff} valore={svc.operatori} ereditati={operatoriServizio}
-        onChange={(v) => onChange({ operatori: v })} etichetta="Operatori abilitati a questo servizio" />
+        onChange={(v) => onChange(seq ? { operatori: v, impegni: applica(seq, v) } : { operatori: v })} etichetta="Operatori abilitati a questo servizio" />
       <p className="text-[11px] text-stone-400 mt-2">Chi non è selezionato non potrà eseguirlo, né in negozio né online.</p>
     </div>
   );
@@ -3244,6 +3284,13 @@ function ImpegniEditor({ svc, cabine, staff, operatoriServizio, onChange }) {
         <span>Occupa un operatore per tutti i {durata} minuti.</span>
         <button onClick={attiva} className="brand-accent hover:opacity-70 font-medium">Personalizza la sequenza →</button>
       </div>
+      {cabinaAbituale(svc.operatori) ? (
+        <p className="text-[11px] text-stone-500 mt-1.5 flex items-center gap-1.5 flex-wrap">
+          <DoorOpen size={12} className="text-stone-400" />
+          Chi lo esegue lavora in {nomeCabina(cabinaAbituale(svc.operatori))}.
+          <button onClick={() => onChange({ impegni: [{ tipo: "operatore", posto: 1, da: 0, durata }, { tipo: "cabina", cabinaId: cabinaAbituale(svc.operatori), da: 0, durata }] })} className="brand-accent hover:opacity-70 font-medium">Occupala anche per questo servizio</button>
+        </p>
+      ) : null}
     </div>
   );
   return (
@@ -3262,19 +3309,32 @@ function ImpegniEditor({ svc, cabine, staff, operatoriServizio, onChange }) {
           const parti = seq.filter((x) => (x.tipo === "cabina" ? `cabina:${x.cabinaId || ""}` : `operatore:${x.posto || 1}`) === chiave);
           return (
             <div key={chiave} className="flex items-center gap-2">
-              <span className="text-[11px] text-stone-500 w-24 shrink-0 truncate">{nome}</span>
+              <span className="text-[11px] text-stone-500 w-24 shrink-0 truncate flex items-center gap-1">
+                {tipo === "cabina" ? <DoorOpen size={11} className="text-stone-400 shrink-0" /> : <User size={11} className="text-stone-400 shrink-0" />}{nome}
+              </span>
               <div className="relative flex-1 h-3 rounded bg-stone-200/70 overflow-hidden">
                 {parti.map((x, i) => (
-                  <div key={i} className="absolute top-0 bottom-0 brand-bg rounded-sm" style={{ left: `${((Number(x.da) || 0) / scala) * 100}%`, width: `${((Number(x.durata) || 0) / scala) * 100}%` }} />
+                  <div key={i} className="absolute top-0 bottom-0 rounded-sm" title={`${Number(x.da) || 0}–${(Number(x.da) || 0) + (Number(x.durata) || 0)} min`}
+                    style={{ left: `${((Number(x.da) || 0) / scala) * 100}%`, width: `${((Number(x.durata) || 0) / scala) * 100}%`,
+                      background: tipo === "cabina" ? "#a8a29e" : "var(--brand)" }} />
                 ))}
               </div>
             </div>
           );
         })}
       </div>
+      <div className="flex items-center gap-3 text-[10px] text-stone-400 mb-2">
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: "var(--brand)" }} /> operatore</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: "#a8a29e" }} /> cabina</span>
+        {!inOrdine ? <button onClick={perOrario} className="ml-auto brand-accent hover:opacity-70 font-medium">Ordina per orario</button> : null}
+      </div>
       <div className="space-y-1.5">
         {seq.map((x, i) => (
-          <div key={i} className="flex flex-wrap items-center gap-1.5 text-sm bg-white rounded-lg px-2 py-1.5 border border-stone-200">
+          <div key={i} className={`flex flex-wrap items-center gap-1.5 text-sm bg-white rounded-lg px-2 py-1.5 border ${x.tipo === "cabina" ? "border-stone-300 border-l-4 border-l-stone-400" : "border-stone-200 border-l-4"}`} style={x.tipo === "cabina" ? undefined : { borderLeftColor: "var(--brand)" }}>
+            <div className="flex flex-col -my-1 mr-0.5 shrink-0">
+              <button onClick={() => sposta(i, -1)} disabled={i === 0} title="Sposta su" className="text-stone-400 hover:text-stone-700 disabled:opacity-25 disabled:hover:text-stone-400 leading-none"><ChevronUp size={13} /></button>
+              <button onClick={() => sposta(i, 1)} disabled={i === seq.length - 1} title="Sposta giù" className="text-stone-400 hover:text-stone-700 disabled:opacity-25 disabled:hover:text-stone-400 leading-none"><ChevronDown size={13} /></button>
+            </div>
             <select value={x.tipo === "cabina" ? "cabina" : "operatore"} onChange={(e) => set(i, e.target.value === "cabina" ? { tipo: "cabina", posto: null, cabinaId: (cabine[0] && cabine[0].id) || null } : { tipo: "operatore", posto: 1, cabinaId: null })} className="text-xs px-1.5 py-1 rounded border border-stone-200 bg-white">
               <option value="operatore">Operatore</option>
               <option value="cabina">Cabina</option>
@@ -3298,7 +3358,7 @@ function ImpegniEditor({ svc, cabine, staff, operatoriServizio, onChange }) {
             {x.tipo !== "cabina" ? (
               <div className="w-full pt-1.5 border-t border-stone-100">
                 <ScegliOperatori staff={staff} valore={x.operatori} ereditati={operatoriServizio}
-                  onChange={(v) => set(i, { operatori: v })}
+                  onChange={(v) => onChange({ impegni: applica(seq.map((y, j) => (j === i ? { ...y, operatori: v } : y)), v) })}
                   etichetta={`Chi può fare questa fase${Array.isArray(x.operatori) && x.operatori.length ? "" : " · ora tutti quelli del servizio"}`} />
               </div>
             ) : null}
@@ -3311,6 +3371,7 @@ function ImpegniEditor({ svc, cabine, staff, operatoriServizio, onChange }) {
         {fine > durata ? <span className="text-[11px] text-amber-700 ml-auto">La sequenza arriva a {fine} min: il servizio durerà {fine} minuti.</span> : null}
         {!seq.some((x) => x.tipo === "operatore") ? <span className="text-[11px] text-stone-500 ml-auto">Nessun operatore: il servizio occupa solo la cabina.</span> : null}
       </div>
+      {avviso ? <p className="text-[11px] text-stone-500 mt-2 flex items-center gap-1.5"><DoorOpen size={12} className="text-stone-400 shrink-0" /> Aggiunta {avviso}, la cabina in cui lavora chi hai scelto. Se non serve, toglila con la ✕.</p> : null}
       {posti.length ? <p className="text-[11px] text-stone-400 mt-2">Gli intervalli non coperti restano liberi: durante una posa l'operatore può prendere un altro cliente.</p> : null}
       {posti.length > 1 ? <p className="text-[11px] text-stone-400 mt-1">Le lettere non indicano una persona precisa: dicono solo se una parte la fa la stessa persona (stessa lettera) o un'altra (lettera diversa). Chi la farà viene scelto al momento della prenotazione fra chi è abilitato e libero, e lo leggi sull'appuntamento in agenda.</p> : null}
     </div>
