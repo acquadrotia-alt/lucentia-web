@@ -147,10 +147,33 @@ export function occupazioneDelGiorno(bookings, dateStr, escludiId) {
   return mappa;
 }
 
-const risorsaLibera = (occ, risorsaId, intervalli) => {
+// Quante cabine dello stesso tipo esistono. Di un operatore ce n'è sempre una.
+export function capacitaRisorsa(config, risorsaId) {
+  const c = ((config && config.cabine) || []).find((x) => x.id === risorsaId);
+  return c ? Math.max(1, Number(c.quantita) || 1) : 1;
+}
+
+// Quante occupazioni si accavallano al massimo dentro un intervallo.
+function puntaOccupazione(busy, iv) {
+  const eventi = [];
+  for (const b of busy || []) {
+    const from = Math.max(b.from, iv.from), to = Math.min(b.to, iv.to);
+    if (from < to) { eventi.push([from, 1]); eventi.push([to, -1]); }
+  }
+  eventi.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  let n = 0, max = 0;
+  for (const [, d] of eventi) { n += d; max = Math.max(max, n); }
+  return max;
+}
+
+// Con due cabine dello stesso tipo la seconda resta utilizzabile mentre la
+// prima è occupata: conta quante ne servono nello stesso momento, non se
+// la risorsa è "libera" o no.
+const risorsaLibera = (occ, risorsaId, intervalli, capacita) => {
   const busy = occ.get(risorsaId);
   if (!busy || !busy.length) return true;
-  return !intervalli.some((iv) => busy.some((b) => sovrappone(iv.from, iv.to, b.from, b.to)));
+  const cap = Math.max(1, capacita || 1);
+  return intervalli.every((iv) => puntaOccupazione(busy, iv) < cap);
 };
 
 // Finestre di lavoro di una risorsa in un giorno della settimana. Una cabina
@@ -179,6 +202,20 @@ export function finestreSalone(config, wd) {
   return out;
 }
 
+// I tratti in cui tutte le unità di una risorsa multipla sono occupate.
+function intervalliSaturi(busy, cap) {
+  const bordi = [...new Set(busy.flatMap((b) => [b.from, b.to]))].sort((a, b) => a - b);
+  const out = [];
+  for (let i = 0; i < bordi.length - 1; i++) {
+    const from = bordi[i], to = bordi[i + 1];
+    if (busy.filter((b) => b.from <= from && b.to >= to).length >= cap) {
+      const ultimo = out[out.length - 1];
+      if (ultimo && ultimo.to === from) ultimo.to = to; else out.push({ from, to });
+    }
+  }
+  return out;
+}
+
 // Spazi liberi di una risorsa in una giornata, dentro le sue finestre di
 // lavoro e al netto di ciò che ha già in agenda. Serve alla modalità
 // "ottimizzata" per capire che buchi lascerebbe un nuovo appuntamento.
@@ -188,7 +225,10 @@ export function spaziLiberiRisorsa(config, dateStr, risorsaId, occ, earliest) {
   const cab = st ? null : ((config && config.cabine) || []).find((c) => c.id === risorsaId);
   if (!st && !cab) return [];
   const finestre = finestreDi(st || cab, wd, st ? [] : finestreSalone(config, wd));
-  const busy = (occ.get(risorsaId) || []).slice().sort((a, b) => a.from - b.from);
+  const cap = capacitaRisorsa(config, risorsaId);
+  // Con più cabine dello stesso tipo è occupato solo ciò che le satura tutte.
+  const busy = (cap > 1 ? intervalliSaturi(occ.get(risorsaId) || [], cap) : (occ.get(risorsaId) || []).slice())
+    .sort((a, b) => a.from - b.from);
   const minimo = earliest == null ? -1 : earliest;
   const out = [];
   for (const w of finestre) {
@@ -266,7 +306,7 @@ export function assegnaRisorse(config, impegni, serviceIds, dateStr, start, occ,
       if (!(abilitati || []).includes(st.id)) return false;
       if (risorsaAssente(st, dateStr)) return false;
       if (!dentroLeFinestre(finestreDi(st, wd, []), iv)) return false;
-      if (!o.sovrapponi && !risorsaLibera(occ, st.id, iv)) return false;
+      if (!o.sovrapponi && !risorsaLibera(occ, st.id, iv, 1)) return false;
       return true;
     });
     if (!ok.length) return null;
@@ -289,7 +329,7 @@ export function assegnaRisorse(config, impegni, serviceIds, dateStr, start, occ,
     if (!cab) return false;
     if (risorsaAssente(cab, dateStr)) return false;
     if (!dentroLeFinestre(finestreDi(cab, wd, apertura), iv)) return false;
-    return o.sovrapponi || risorsaLibera(occ, cabinaId, iv);
+    return o.sovrapponi || risorsaLibera(occ, cabinaId, iv, capacitaRisorsa(config, cabinaId));
   };
 
   for (const [cid, iv] of cabinaDelServizio) if (!cabinaUtilizzabile(cid, iv)) return null;

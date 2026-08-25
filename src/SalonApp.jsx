@@ -2506,7 +2506,7 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
   });
   const cabine = config.cabine || [];
   const updCabine = (next) => saveConfig({ ...config, cabine: next });
-  const addCabina = () => updCabine([...cabine, { id: uid(), name: "Nuova cabina", availability: {}, off: [] }]);
+  const addCabina = () => updCabine([...cabine, { id: uid(), name: "Nuova cabina", quantita: 1, availability: {}, off: [] }]);
   const editCabina = (id, patch) => updCabine(cabine.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   // Togliendo una cabina vanno ripuliti i riferimenti, altrimenti resterebbero
   // servizi e operatori legati a una cabina che non esiste più.
@@ -2686,7 +2686,10 @@ function SettingsView({ config, saveConfig, bookings, setBookings, clients, setC
           <div className="flex items-center justify-between mb-4"><h3 className="font-semibold flex items-center gap-2"><DoorOpen size={16} className="brand-accent" /> Cabine</h3><button onClick={addCabina} className="flex items-center gap-1 text-sm brand-bg px-3 py-1.5 rounded-lg"><Plus size={15} /> Aggiungi</button></div>
           {cabine.length === 0
             ? <p className="text-sm text-stone-400">Nessuna cabina. Servono ai servizi che occupano uno spazio del salone — la lampada, la sala spa — anche quando non impegnano nessun operatore.</p>
-            : <div className="space-y-3">{cabine.map((c) => <CabinaEditor key={c.id} c={c} onEdit={(patch) => editCabina(c.id, patch)} onDelete={() => { if (confirm(`Eliminare la cabina "${c.name}"? I servizi e gli operatori collegati resteranno senza cabina.`)) delCabina(c.id); }} />)}</div>}
+            : <>
+              <div className="space-y-3">{cabine.map((c) => <CabinaEditor key={c.id} c={c} onEdit={(patch) => editCabina(c.id, patch)} onDelete={() => { if (confirm(`Eliminare la cabina "${c.name}"? I servizi e gli operatori collegati resteranno senza cabina.`)) delCabina(c.id); }} />)}</div>
+              <p className="text-xs text-stone-400 mt-3">Il numero accanto al nome è quante postazioni di quel tipo hai: con due lettini abbronzanti il secondo cliente entra lo stesso mentre il primo è dentro.</p>
+            </>}
         </section>
 
         {F.maxOperatori > 1 ? <OperatorAccounts staff={staff} /> : null}
@@ -2951,15 +2954,20 @@ function Assenze({ off, onChange, titolo, vuoto }) {
 function CabinaEditor({ c, onEdit, onDelete }) {
   const [aperta, setAperta] = useState(false);
   const suoiOrari = c.availability && Object.keys(c.availability).length;
+  const quantita = Math.max(1, Number(c.quantita) || 1);
   return (
     <div className="border border-stone-200 rounded-xl p-4">
       <div className="flex items-center gap-2">
         <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 brand-soft brand-accent"><DoorOpen size={17} /></div>
         <input value={c.name} onChange={(e) => onEdit({ name: e.target.value })} placeholder="Nome cabina" className="font-medium px-2 py-1.5 rounded-lg border border-stone-300 text-sm brand-ring min-w-0 flex-1" />
+        <div className="flex items-center gap-1 shrink-0" title="Quante cabine di questo tipo esistono">
+          <span className="text-[11px] text-stone-400">×</span>
+          <input type="number" min={1} step={1} value={quantita} onChange={(e) => onEdit({ quantita: Math.max(1, Math.round(Number(e.target.value) || 1)) })} className="w-14 px-2 py-1.5 rounded-lg border border-stone-300 text-sm text-right brand-ring" />
+        </div>
         <button onClick={() => setAperta((o) => !o)} className="text-xs font-medium border border-stone-300 text-stone-600 px-2.5 py-1.5 rounded-lg hover:bg-stone-50 shrink-0">{aperta ? "Chiudi" : "Orari"}</button>
         <button onClick={onDelete} className="p-2 text-stone-400 hover:text-red-500 shrink-0"><Trash2 size={16} /></button>
       </div>
-      {!aperta ? <p className="text-[11px] text-stone-400 mt-1.5">{suoiOrari ? "Con orari propri." : "Disponibile quando è aperto il salone."}</p> : null}
+      {!aperta ? <p className="text-[11px] text-stone-400 mt-1.5">{quantita > 1 ? `${quantita} postazioni di questo tipo · ` : ""}{suoiOrari ? "Con orari propri." : "Disponibile quando è aperto il salone."}</p> : null}
       {aperta ? (
         <div className="mt-3">
           <OrariSettimana availability={c.availability} onChange={(av) => onEdit({ availability: av })} titolo="Orari propri (lascia vuoto per seguire il salone)" vuoto="Come il salone" />
