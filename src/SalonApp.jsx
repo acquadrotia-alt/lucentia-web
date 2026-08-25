@@ -1242,6 +1242,9 @@ function AgendaView({ config, bookings, setBookings, clients, setClients, sales,
   const [selOnline, setSelOnline] = useState(null);
   const [selEvento, setSelEvento] = useState(null);
   const [resch, setResch] = useState(null);
+  // "elenco" è la lista di sempre; "studio" è la linea del tempo, che mostra
+  // quante persone sono in salone contemporaneamente.
+  const [vista, setVista] = useState("elenco");
 
   const span = mode === "week" ? 7 : mode === "3day" ? 3 : 1;
   const days = useMemo(() => { const start = mode === "week" ? mondayOf(anchor) : anchor; return Array.from({ length: span }, (_, i) => addDays(start, i)); }, [anchor, mode, span]);
@@ -1295,10 +1298,19 @@ function AgendaView({ config, bookings, setBookings, clients, setClients, sales,
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-1 bg-stone-100/80 rounded-xl p-1">
           {VIEW_MODES.map((m) => { const k = m[0], l = m[1], Icon = m[2]; return (
-            <button key={k} onClick={() => setMode(k)} aria-current={mode === k ? "true" : undefined} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-[background-color,color,box-shadow] duration-200 ${mode === k ? "bg-white shadow-[var(--lc-shadow-xs)] text-stone-900" : "text-stone-500 hover:text-stone-700"}`}><Icon size={15} /><span className="hidden sm:inline">{l}</span></button>
+            <button key={k} onClick={() => { setMode(k); if (k !== "day") setVista("elenco"); }} aria-current={mode === k ? "true" : undefined} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-[background-color,color,box-shadow] duration-200 ${mode === k ? "bg-white shadow-[var(--lc-shadow-xs)] text-stone-900" : "text-stone-500 hover:text-stone-700"}`}><Icon size={15} /><span className="hidden sm:inline">{l}</span></button>
           ); })}
         </div>
-        <select value={filter} onChange={(e) => setFilter(e.target.value)} className="px-3 py-2 rounded-lg border border-stone-300 text-sm bg-white brand-ring transition-colors hover:border-stone-400"><option value="all">Tutti gli operatori</option>{staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1 bg-stone-100/80 rounded-xl p-1">
+            {[["elenco", "Elenco", CalendarDays], ["studio", "Studio", Boxes]].map(([k, l, Icon]) => (
+              <button key={k} onClick={() => { setVista(k); if (k === "studio") setMode("day"); }} aria-current={vista === k ? "true" : undefined}
+                title={k === "studio" ? "La giornata su una linea del tempo: si vede chi è in salone nello stesso momento" : "Elenco degli appuntamenti"}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition ${vista === k ? "bg-white shadow-[var(--lc-shadow-xs)] text-stone-900" : "text-stone-500 hover:text-stone-700"}`}><Icon size={15} /><span className="hidden sm:inline">{l}</span></button>
+            ))}
+          </div>
+          <select value={filter} onChange={(e) => setFilter(e.target.value)} className="px-3 py-2 rounded-lg border border-stone-300 text-sm bg-white brand-ring transition-colors hover:border-stone-400"><option value="all">Tutti gli operatori</option>{staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
+        </div>
       </div>
 
       <div className="flex items-center justify-between gap-2">
@@ -1318,6 +1330,9 @@ function AgendaView({ config, bookings, setBookings, clients, setClients, sales,
               <p className="text-sm font-medium text-stone-600">Nessun appuntamento</p>
               <p className="text-xs text-stone-400 mt-1">Tocca «Appuntamento» in alto per aggiungerne uno.</p>
             </div>
+          ) : vista === "studio" ? (
+            <VistaStudio giorno={days[0]} items={byDay[days[0]]} staff={staff} cabine={config.cabine} filtro={filter}
+              onApri={(b) => (b._evento ? setSelEvento(b) : b.online ? setSelOnline(b) : setSel(b))} />
           ) : byDay[days[0]].map((b, i) => (b._evento ? <EventCard key={b.id} ev={b} staff={staff} big onClick={() => setSelEvento(b)} /> : <ApptCard key={b.id} b={b} staff={staff} services={services} cabine={config.cabine} big index={i} onClick={() => (b.online ? setSelOnline(b) : setSel(b))} />))}
         </div>
       ) : (
@@ -1391,6 +1406,111 @@ function risorseDi(b, staff, cabine) {
   const persone = ids.map((id) => (staff || []).find((x) => x.id === id)).filter(Boolean).map((x) => x.name);
   const stanze = ids.map((id) => (cabine || []).find((c) => c.id === id)).filter(Boolean).map((c) => c.name);
   return { persone, stanze, etichetta: [persone.join(", "), stanze.join(", ")].filter(Boolean).join(" · ") || "—" };
+}
+
+// ---- Vista studio: la giornata su una linea del tempo ----------------------
+// Un elenco non fa vedere quante persone sono in salone nello stesso momento:
+// con i servizi a fasi possono esserci sei clienti con tre operatori, perché
+// qualcuno è in posa e qualcun altro è in cabina da solo. Qui ogni riga è un
+// cliente e i blocchi dicono quale risorsa lo sta seguendo in quel momento.
+function VistaStudio({ giorno, items, staff, cabine, filtro, onApri }) {
+  const SCALA = 2; // pixel per minuto
+  const fasiDi = (b) => (b._evento
+    ? (b.staffIds || []).map((id) => ({ tipo: "operatore", risorsaId: id, from: b.startMin, to: b.endMin }))
+    : impegniBooking(b));
+  const conFasi = items.map((b) => ({ b, fasi: fasiDi(b) }));
+  const tutti = conFasi.flatMap((x) => x.fasi);
+  if (!items.length) return (
+    <div className="lc-fade-up flex flex-col items-center justify-center text-center py-14 rounded-2xl border border-dashed border-stone-200 bg-white/40">
+      <div className="w-12 h-12 rounded-full brand-soft flex items-center justify-center mb-3"><CalendarDays size={22} className="brand-accent" /></div>
+      <p className="text-sm font-medium text-stone-600">Nessun appuntamento</p>
+      <p className="text-xs text-stone-400 mt-1">Tocca «Appuntamento» in alto per aggiungerne uno.</p>
+    </div>
+  );
+  const inizi = [...tutti.map((f) => f.from), ...items.map((b) => b.startMin)];
+  const fini = [...tutti.map((f) => f.to), ...items.map((b) => b.endMin)];
+  const t0 = Math.floor(Math.min(...inizi) / 60) * 60;
+  const t1 = Math.ceil(Math.max(...fini) / 60) * 60;
+  const larghezza = Math.max((t1 - t0) * SCALA, 320);
+  const ore = [];
+  for (let t = t0; t <= t1; t += 60) ore.push(t);
+  const nome = (id) => {
+    const st = (staff || []).find((x) => x.id === id);
+    if (st) return st.name;
+    const c = (cabine || []).find((x) => x.id === id);
+    return c ? c.name : "—";
+  };
+  const isCabina = (id) => (cabine || []).some((c) => c.id === id);
+  const adesso = giorno === todayStr() ? new Date().getHours() * 60 + new Date().getMinutes() : null;
+
+  // Quanti clienti sono in salone contemporaneamente, momento per momento.
+  const picco = (() => {
+    const eventi = [];
+    for (const b of items) { eventi.push([b.startMin, 1]); eventi.push([b.endMin, -1]); }
+    eventi.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    let n = 0, max = 0;
+    for (const [, d] of eventi) { n += d; max = Math.max(max, n); }
+    return max;
+  })();
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-stone-500">
+        <span>{filtro === "all" ? "Tutto lo studio" : `Giornata di ${nome(filtro)}`}</span>
+        {filtro === "all"
+          ? <span>Fino a <b className="text-stone-700">{picco}</b> {picco === 1 ? "cliente" : "clienti"} in contemporanea · {(staff || []).length} operator{(staff || []).length === 1 ? "e" : "i"}</span>
+          : <span>Fino a <b className="text-stone-700">{picco}</b> {picco === 1 ? "suo cliente" : "suoi clienti"} in salone insieme</span>}
+      </div>
+      <div className="overflow-x-auto -mx-1 px-1 pb-1">
+        <div style={{ width: larghezza + 148 }}>
+          {/* righello delle ore */}
+          <div className="flex sticky top-0 z-10 bg-white/90 backdrop-blur">
+            <div className="w-36 shrink-0" />
+            <div className="relative h-6" style={{ width: larghezza }}>
+              {ore.map((t) => (
+                <div key={t} className="absolute top-0 bottom-0 border-l border-stone-200" style={{ left: (t - t0) * SCALA }}>
+                  <span className="pl-1 text-[10px] text-stone-400 tabular-nums">{minToStr(t)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1.5 relative">
+            {adesso != null && adesso >= t0 && adesso <= t1 ? (
+              <div className="absolute top-0 bottom-0 w-px bg-red-400/70 pointer-events-none z-10" style={{ left: 144 + (adesso - t0) * SCALA }}>
+                <span className="absolute -top-1 -left-1 w-2 h-2 rounded-full bg-red-400" />
+              </div>
+            ) : null}
+            {conFasi.map(({ b, fasi }) => (
+              <button key={b.id} onClick={() => onApri(b)} className="flex w-full text-left group">
+                <div className="w-36 shrink-0 pr-2 min-w-0">
+                  <div className="text-[13px] font-medium truncate text-stone-800 group-hover:text-stone-900">{b._evento ? b.titolo : b.clientName}</div>
+                  <div className="text-[11px] text-stone-400 truncate">{minToStr(b.startMin)}–{minToStr(b.endMin)}</div>
+                </div>
+                <div className="relative h-9 rounded-lg bg-stone-100/70" style={{ width: larghezza }}>
+                  {/* durata complessiva: il chiaro fra i blocchi è l'attesa del cliente */}
+                  <div className="absolute top-0 bottom-0 rounded-lg border border-dashed border-stone-300/80"
+                    style={{ left: (b.startMin - t0) * SCALA, width: Math.max((b.endMin - b.startMin) * SCALA, 2) }} />
+                  {fasi.map((f, i) => {
+                    const suo = filtro === "all" || f.risorsaId === filtro;
+                    return (
+                      <div key={i} title={`${nome(f.risorsaId)} · ${minToStr(f.from)}–${minToStr(f.to)}`}
+                        className={`absolute top-1 bottom-1 rounded-md px-1.5 flex items-center overflow-hidden ${suo ? "" : "opacity-40"}`}
+                        style={{ left: (f.from - t0) * SCALA, width: Math.max((f.to - f.from) * SCALA, 6),
+                          background: isCabina(f.risorsaId) ? "#e7e5e4" : "var(--brand)",
+                          color: isCabina(f.risorsaId) ? "#57534e" : "#fff" }}>
+                        <span className="text-[10px] font-medium truncate">{nome(f.risorsaId)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      <p className="text-[11px] text-stone-400">Ogni riga è un cliente. I blocchi pieni sono gli operatori, quelli grigi le cabine; il tratteggio senza blocchi è tempo in cui il cliente è in salone ma non occupa nessuno — per esempio una posa.</p>
+    </div>
+  );
 }
 
 function ApptCard({ b, staff, services, cabine, onClick, big, index = 0 }) {
