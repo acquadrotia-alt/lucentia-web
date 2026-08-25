@@ -10,7 +10,7 @@
 //   disattivata, l'azienda non può leggere/salvare i dati.
 // ============================================================================
 
-import { orariPossibili, impegniServizio, durataServizio, senzaOperatore, occupazioneDelGiorno, spaziAttorno } from "../../src/orari.js";
+import { orariPossibili, impegniServizio, durataServizio, senzaOperatore, operatoriDelServizio, occupazioneDelGiorno, spaziAttorno } from "../../src/orari.js";
 
 const COLLEZIONI = ["config", "bookings", "clients", "catalog", "sales", "vouchers", "eventi"];
 const MODULI = ["fidelity", "vendite", "statistiche", "marketing", "allergeni", "pacchetti", "online", "op3", "opinf"];
@@ -438,16 +438,24 @@ export async function onRequest(context) {
     const mode = booking.mode === "griglia" ? "griglia" : booking.mode === "ottimizzata" ? "ottimizzata" : "antivuoto";
     // Prenotabile online = ha una durata e c'è una risorsa capace di farlo.
     // Un servizio a sola cabina (la lampada) non richiede nessun operatore.
+    // Chi lo può fare lo dice il servizio: serve almeno un abilitato che lavori.
+    const abilitatiDi = (s) => operatoriDelServizio(s, config.services || [], config.staff || []);
     const services = (config.services || []).filter((s) => {
       if (durataServizio(s) <= 0) return false;
       if (senzaOperatore(impegniServizio(s))) return ((config.cabine || []).length > 0);
-      return (config.staff || []).some((st) => (st.serviceIds || []).includes(s.id) && st.availability && Object.keys(st.availability).length);
+      const ids = abilitatiDi(s);
+      return (config.staff || []).some((st) => ids.includes(st.id) && st.availability && Object.keys(st.availability).length);
     });
 
     // info attività + servizi prenotabili + contenuti del mini-sito
     if (segs[2] == null && method === "GET") {
       const b = config.branding || {};
-      const staffPub = (config.staff || []).filter((st) => st.availability && Object.keys(st.availability).length && (st.serviceIds || []).some((sid) => services.find((s) => s.id === sid))).map((st) => ({ id: st.id, name: st.name, role: st.role || "", avatar: st.avatar || null, photo: st.photo || null, serviceIds: st.serviceIds || [] }));
+      // Al mini-sito serve sapere, per ogni operatore, quali servizi sa fare:
+      // si ricava dalle abilitazioni dichiarate dai servizi.
+      const puoFare = (stId) => services.filter((s) => abilitatiDi(s).includes(stId)).map((s) => s.id);
+      const staffPub = (config.staff || [])
+        .filter((st) => st.availability && Object.keys(st.availability).length && puoFare(st.id).length)
+        .map((st) => ({ id: st.id, name: st.name, role: st.role || "", avatar: st.avatar || null, photo: st.photo || null, serviceIds: puoFare(st.id) }));
       const sito = config.sito || {};
       const eventiRaw = (await getCollezione(env, aid, "eventi")) || [];
       const oggi = todayISO();

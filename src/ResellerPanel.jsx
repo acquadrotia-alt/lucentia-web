@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { ShieldCheck, LogOut, Plus, KeyRound, Ban, BadgeCheck, Trash2, CalendarClock, Store, Mail, Boxes, X, Check, Users, Tag, Building2, Receipt, Filter, Inbox, Phone, Sparkles, Clock, Eraser, AlertTriangle } from "lucide-react";
 
+// Versione del programma (da package.json, iniettata da Vite).
+const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
+
 const DURATE = [[1, "1 mese"], [3, "3 mesi"], [6, "6 mesi"], [12, "12 mesi"], [24, "24 mesi"], [0, "Illimitata"]];
 const OPT = [["fidelity", "Fidelity"], ["vendite", "Vendite"], ["statistiche", "Statistiche"], ["marketing", "Marketing"], ["allergeni", "Allergeni e patologie"], ["pacchetti", "Pacchetti sedute"]];
 const OPT_KEYS = OPT.map((m) => m[0]);
@@ -207,6 +210,9 @@ export default function ResellerPanel({ email, master, onLogout, apiGet, apiSend
         {master && tab === "richieste" ? <RichiesteView apiGet={apiGet} apiSend={apiSend} flash={flash} /> : null}
         </div>
       </main>
+      <footer className="max-w-3xl mx-auto w-full px-4 pb-5 flex">
+        <span className="ml-auto text-[11px] text-stone-400 tabular-nums tracking-wide select-all" title="Versione del programma">Versione {APP_VERSION}</span>
+      </footer>
     </div>
   );
 }

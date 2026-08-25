@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { Calendar, ChevronLeft, ChevronRight, LogOut, Clock, User, CheckCircle2 } from "lucide-react";
 
+// Versione del programma (da package.json, iniettata da Vite).
+const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
+
 const pad2 = (n) => String(n).padStart(2, "0");
 const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; };
 const parseDate = (s) => { const [y, m, d] = String(s).split("-").map(Number); return new Date(y, m - 1, d); };
@@ -99,6 +102,9 @@ export default function OperatorApp({ user, azienda, onLogout }) {
 
         <p className="text-xs text-stone-400 text-center mt-6">Hai {upcoming} appuntament{upcoming === 1 ? "o" : "i"} in programma da oggi in poi.</p>
       </main>
+      <footer className="max-w-2xl mx-auto w-full px-4 pb-4 flex">
+        <span className="ml-auto text-[11px] text-stone-400 tabular-nums tracking-wide select-all" title="Versione del programma">Versione {APP_VERSION}</span>
+      </footer>
     </div>
   );
 }

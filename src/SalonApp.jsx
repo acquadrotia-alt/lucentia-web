@@ -1105,6 +1105,9 @@ export default function SalonApp({ onLogout, moduli, azienda, demo }) {
           {b.phone ? <span className="flex items-center gap-1.5"><Phone size={14} className="brand-accent" /> {b.phone}</span> : null}
           {b.email ? <span className="flex items-center gap-1.5"><Mail size={14} className="brand-accent" /> {b.email}</span> : null}
           {b.address ? <span className="flex items-center gap-1.5"><MapPin size={14} className="brand-accent" /> {b.address}</span> : null}
+          {/* Versione: serve a capire a colpo d'occhio se il programma si è
+              aggiornato dopo un rilascio. */}
+          <span className="ml-auto text-[11px] text-stone-400 tabular-nums tracking-wide select-all" title="Versione del programma">Versione {APP_VERSION}</span>
         </div>
       </footer>
     </div>
@@ -3006,7 +3009,26 @@ function ImpegniEditor({ svc, cabine, staff, operatoriServizio, onChange }) {
   // scriverlo "Operatore A" farebbe solo pensare a una persona precisa.
   const posti = seq ? [...new Set(seq.filter((x) => x.tipo !== "cabina").map((x) => Number(x.posto) || 1))] : [];
   const lettera = (n) => String.fromCharCode(64 + (Number(n) || 1));
-  const nomePosto = (n) => (posti.length > 1 ? `Operatore ${lettera(n)}` : "Operatore");
+  const nomeDi = (id) => ((staff || []).find((x) => x.id === id) || {}).name;
+  // Chi può davvero coprire un posto: l'intersezione delle liste delle sue fasi,
+  // o in mancanza quella del servizio.
+  const abilitatiDelPosto = (posto) => {
+    const n = Number(posto) || 1; // la chiave della barra di riepilogo è una stringa
+    let lista = null;
+    for (const f of (seq || []).filter((x) => x.tipo !== "cabina" && (Number(x.posto) || 1) === n)) {
+      const l = Array.isArray(f.operatori) && f.operatori.length ? f.operatori : (operatoriServizio || []);
+      lista = lista === null ? l : lista.filter((id) => l.includes(id));
+    }
+    return lista || [];
+  };
+  // Se il posto è ristretto a qualcuno in particolare, meglio dirne il nome che
+  // una lettera: è l'informazione che serve davvero leggendo la sequenza.
+  const nomePosto = (posto) => {
+    const n = Number(posto) || 1;
+    const nomi = abilitatiDelPosto(n).map(nomeDi).filter(Boolean);
+    if (nomi.length && nomi.length < (operatoriServizio || []).length) return nomi.slice(0, 3).join(", ") + (nomi.length > 3 ? "…" : "");
+    return posti.length > 1 ? `Operatore ${lettera(n)}` : "Operatore";
+  };
   // Un impegno aggiunto parte dove finisce l'ultimo, così non si accavalla da
   // solo; una cabina invece copre di norma tutto il servizio.
   const add = (tipo) => onChange({ impegni: [...seq, tipo === "cabina"
@@ -3083,7 +3105,8 @@ function ImpegniEditor({ svc, cabine, staff, operatoriServizio, onChange }) {
             {x.tipo !== "cabina" ? (
               <div className="w-full pt-1.5 border-t border-stone-100">
                 <ScegliOperatori staff={staff} valore={x.operatori} ereditati={operatoriServizio}
-                  onChange={(v) => set(i, { operatori: v })} etichetta="Chi può fare questa fase" />
+                  onChange={(v) => set(i, { operatori: v })}
+                  etichetta={`Chi può fare questa fase${Array.isArray(x.operatori) && x.operatori.length ? "" : " · ora tutti quelli del servizio"}`} />
               </div>
             ) : null}
           </div>
