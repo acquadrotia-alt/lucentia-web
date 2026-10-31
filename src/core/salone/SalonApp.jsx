@@ -148,7 +148,8 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
   };
   const b = config.branding;
   // Favicon + titolo scheda = brand del cliente (salone) quando si è dentro la sua pagina.
-  useEffect(() => { setBrandTab(b.logo, b.name ? `${b.name} · ${modalita === "cliente" ? "Gestionale" : "Lucentia"}` : undefined); }, [b.logo, b.name, modalita]);
+  const faviconSito = config.sito && config.sito.favicon;
+  useEffect(() => { setBrandTab(faviconSito || b.logo, b.name ? `${b.name} · ${modalita === "cliente" ? "Gestionale" : "Lucentia"}` : undefined); }, [b.logo, b.name, modalita, faviconSito]);
   const pickBackupDir = async () => {
     if (!window.showDirectoryPicker) { alert("La scelta della cartella non è supportata in questo ambiente. Su Windows funziona; altrimenti usa \"Esporta backup\"."); return; }
     try { const h = await window.showDirectoryPicker({ mode: "readwrite", id: "lucentia-backup" }); await saveDirHandle(h); setBackupDir(h); setBackupDirName(h.name || "cartella"); } catch (e) {}

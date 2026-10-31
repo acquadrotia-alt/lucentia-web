@@ -72,7 +72,7 @@ async function chiama(st, path, { method = "GET", body } = {}) {
 }
 const slots = async (st, servizio) => (await chiama(st, `/api/prenota/${AID}/slots?date=${GIORNO}&service=${servizio}`)).body.slots.map((s) => s.label);
 const prenota = (st, servizio, start, nome = "Anna Rossi") =>
-  chiama(st, `/api/prenota/${AID}`, { method: "POST", body: { date: GIORNO, service: servizio, start, name: nome, phone: "3401112233" } });
+  chiama(st, `/api/prenota/${AID}`, { method: "POST", body: { date: GIORNO, service: servizio, start, name: nome, phone: "3401112233", privacy: true } });
 
 test("i servizi a risorse compaiono tra quelli prenotabili online", async () => {
   const st = scenario();

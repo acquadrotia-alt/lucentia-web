@@ -56,6 +56,10 @@ export async function payloadPubblico(env, aid, az, config, services, abilitatiD
       descrizione: sito.descrizione || "",
       copertina: sito.copertina || null,
       logoEsteso: sito.logoEsteso || null,
+      favicon: sito.favicon || null,
+      fotoChiSiamo: sito.fotoChiSiamo || null,
+      titoloHome: sito.titoloHome || "",
+      legale: (() => { const l = sito.legale || {}; return { ragioneSociale: l.ragioneSociale || "", piva: l.piva || "", codiceFiscale: l.codiceFiscale || "", sede: l.sede || "", emailPrivacy: l.emailPrivacy || "", pec: l.pec || "", rea: l.rea || "" }; })(),
       orari: sito.orari || "",
       instagram: sito.instagram || "",
       facebook: sito.facebook || "",
@@ -128,6 +132,8 @@ export async function prenota(ctx, segs, statoDi) {
     }
     const svc = services.find((s) => s.id === serviceId);
     if (!svc) return json({ error: "Servizio non valido." }, 400);
+    // Niente prenotazione senza il consenso al trattamento dei dati.
+    if (!body.privacy) return json({ error: "Per prenotare devi accettare l'informativa sulla privacy." }, 400);
     const staffSel = String(body.staff || "");
     const bookings = (await getCollezione(env, aid, "bookings")) || [];
     const online = await onlineBookingsOf(env, aid, date);

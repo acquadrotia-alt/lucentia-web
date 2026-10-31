@@ -80,7 +80,7 @@ async function chiama(st, path, { method = "GET", body } = {}) {
 }
 const info = (st) => chiama(st, `/api/prenota/${AID}`).then((r) => r.body);
 const slots = async (st, svc, staff) => (await chiama(st, `/api/prenota/${AID}/slots?date=${GIORNO}&service=${svc}${staff ? `&staff=${staff}` : ""}`)).body.slots.map((s) => s.label);
-const prenota = (st, svc, start, nome = "Cliente") => chiama(st, `/api/prenota/${AID}`, { method: "POST", body: { date: GIORNO, service: svc, start, name: nome, phone: "3401112233" } });
+const prenota = (st, svc, start, nome = "Cliente") => chiama(st, `/api/prenota/${AID}`, { method: "POST", body: { date: GIORNO, service: svc, start, name: nome, phone: "3401112233", privacy: true } });
 
 // ---- l'elenco dei servizi e degli operatori segue il nuovo modello --------
 test("i servizi prenotabili online li decide l'abilitazione del servizio", async () => {

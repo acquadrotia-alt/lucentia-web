@@ -178,6 +178,37 @@ export function SitoWebCard({ config, saveConfig, cliente = false }) {
           )}
         </div>
 
+        <div className="grid sm:grid-cols-2 gap-3">
+          <div>
+            <span className="text-xs font-medium text-stone-400 uppercase tracking-wide block mb-1.5">Favicon <span className="normal-case text-stone-300">· l'iconcina della scheda del browser, quadrata</span></span>
+            {sito.favicon ? <div className="inline-flex items-center gap-2 border border-stone-200 rounded-xl p-2 bg-white"><img src={sito.favicon} alt="Favicon" className="h-8 w-8 object-contain" /><button type="button" onClick={() => save({ favicon: null })} className="p-1 text-stone-400 hover:text-red-500" title="Rimuovi"><Trash2 size={14} /></button></div> : (
+              <label className="flex items-center justify-center gap-2 border-2 border-dashed border-stone-200 rounded-xl py-3 text-sm text-stone-400 cursor-pointer hover:border-stone-300 hover:text-stone-500 transition"><ImageIcon size={16} /> Carica la favicon<input type="file" accept="image/*" className="hidden" onChange={async (e) => { const file = e.target.files && e.target.files[0]; if (!file) return; try { save({ favicon: await fileToResizedDataURL(file, 128) }); } catch (err) { alert("Impossibile caricare l'immagine."); } e.target.value = ""; }} /></label>
+            )}
+          </div>
+          <div>
+            <span className="text-xs font-medium text-stone-400 uppercase tracking-wide block mb-1.5">Foto per «Chi siamo» <span className="normal-case text-stone-300">· facoltativa</span></span>
+            {sito.fotoChiSiamo ? <div className="relative inline-block rounded-xl overflow-hidden border border-stone-200"><img src={sito.fotoChiSiamo} alt="Chi siamo" className="h-16 w-auto" /><button type="button" onClick={() => save({ fotoChiSiamo: null })} className="absolute top-1 right-1 bg-white/90 text-stone-600 rounded-lg p-1 shadow-sm hover:text-red-500" title="Rimuovi"><Trash2 size={13} /></button></div> : (
+              <label className="flex items-center justify-center gap-2 border-2 border-dashed border-stone-200 rounded-xl py-3 text-sm text-stone-400 cursor-pointer hover:border-stone-300 hover:text-stone-500 transition"><ImageIcon size={16} /> Carica una foto<input type="file" accept="image/*" className="hidden" onChange={async (e) => { const file = e.target.files && e.target.files[0]; if (!file) return; try { save({ fotoChiSiamo: await fileToCoverDataURL(file, 1200) }); } catch (err) { alert("Impossibile caricare l'immagine."); } e.target.value = ""; }} /></label>
+            )}
+          </div>
+        </div>
+
+        <label className="text-sm block"><span className="text-xs font-medium text-stone-400 uppercase tracking-wide block mb-1">Titolo grande della home <span className="normal-case text-stone-300">· vuoto = «Il tuo momento di bellezza, ogni giorno.»</span></span>
+          <input value={sito.titoloHome || ""} onChange={(e) => save({ titoloHome: e.target.value })} placeholder="Es. Bellezza e benessere, nel cuore di Oleggio." className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+        </label>
+
+        <div className="rounded-xl border border-stone-200 p-4">
+          <div className="text-xs font-medium text-stone-400 uppercase tracking-wide mb-1">Dati legali</div>
+          <p className="text-xs text-stone-500 mb-3">Compaiono in fondo a ogni pagina e nelle pagine Privacy, Cookie e Note legali del sito. Sono obbligatori per legge: finché mancano, il sito mostra un avviso al loro posto.</p>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {[["ragioneSociale", "Ragione sociale / titolare", "Es. Estetica Aura di Maria Rossi"], ["piva", "Partita IVA", "01234567890"], ["codiceFiscale", "Codice fiscale (se diverso)", ""], ["sede", "Sede legale", "Via, numero, CAP Città (Prov)"], ["emailPrivacy", "Email per richieste privacy", "privacy@..."], ["pec", "PEC (facoltativa)", ""], ["rea", "Numero REA (facoltativo)", ""]].map(([k, label, ph]) => (
+              <label key={k} className="text-sm block"><span className="text-xs font-medium text-stone-400 uppercase tracking-wide block mb-1">{label}</span>
+                <input value={(sito.legale || {})[k] || ""} onChange={(e) => save({ legale: { ...(sito.legale || {}), [k]: e.target.value } })} placeholder={ph} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+              </label>
+            ))}
+          </div>
+        </div>
+
         <label className="flex items-center gap-2.5 cursor-pointer">
           <input type="checkbox" checked={sito.mostraEventi !== false} onChange={(e) => save({ mostraEventi: e.target.checked })} style={{ accentColor: "var(--brand)" }} className="w-4 h-4" />
           <span className="text-sm text-stone-700">Mostra gli eventi futuri sul {cliente ? "sito" : "mini-sito"}</span>

@@ -81,7 +81,7 @@ test("una modalità non riconosciuta ricade su anti-vuoto", async () => {
 
 test("due clienti sullo stesso orario: il secondo viene rifiutato", async () => {
   const st = scenario("ottimizzata");
-  const dati = { date: GIORNO, service: "taglio", start: h(10), name: "Maria Bianchi", phone: "3401112233" };
+  const dati = { date: GIORNO, service: "taglio", start: h(10), name: "Maria Bianchi", phone: "3401112233", privacy: true };
 
   const primo = await chiama(st, `/api/prenota/${AID}`, { method: "POST", body: dati });
   assert.equal(primo.status, 200);
@@ -102,7 +102,7 @@ test("uno slot libero ma non ottimale resta comunque confermabile", async () => 
   // la verifica finale però guarda solo se lo slot è occupato: rifiutarlo
   // sarebbe una disponibilità persa senza motivo (es. slot visto poco prima,
   // o giudizio cambiato per una prenotazione altrui nel frattempo)
-  const r = await chiama(st, `/api/prenota/${AID}`, { method: "POST", body: { date: GIORNO, service: "taglio", start: h(10, 15), name: "Laura Costa", phone: "3403334455" } });
+  const r = await chiama(st, `/api/prenota/${AID}`, { method: "POST", body: { date: GIORNO, service: "taglio", start: h(10, 15), name: "Laura Costa", phone: "3403334455", privacy: true } });
   assert.equal(r.status, 200);
   assert.equal(st.inserite[0].startMin, h(10, 15));
 });

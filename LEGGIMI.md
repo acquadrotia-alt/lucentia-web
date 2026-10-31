@@ -177,6 +177,17 @@ Se il ceppo ha aggiunto una migrazione, eseguila anche nel D1 del cliente.
 I conflitti sono rari se le personalizzazioni restano in `src/cliente/` e
 `server/cliente/`: il ceppo non tocca quelle cartelle.
 
+## 4 bis. Checklist di consegna di un cliente
+
+Da chiedere SEMPRE al cliente prima di andare online, e inserire in Impostazioni → Sito e prenotazioni:
+
+- **Favicon** (icona quadrata della scheda del browser): obbligatoria. Se il cliente non ce l'ha, si ricava da un dettaglio del logo.
+- Logo esteso scontornato (PNG o WebP con trasparenza) e logo quadrato.
+- Foto di copertina e, se possibile, una foto per «Chi siamo».
+- **Dati legali**: ragione sociale o titolare, partita IVA, sede legale, email per la privacy, PEC. Finché mancano, le pagine Privacy, Cookie e Note legali mostrano un avviso al loro posto.
+- Telefono, indirizzo, orari di apertura, Instagram e Facebook.
+- Presentazione («Chi siamo») e categorie dei servizi.
+
 ## 5. Personalizzare un cliente
 
 | Cosa | Dove |
