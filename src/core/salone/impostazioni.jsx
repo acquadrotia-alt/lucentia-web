@@ -111,6 +111,21 @@ export function SitoWebCard({ config, saveConfig, cliente = false }) {
 
       <div className="space-y-4">
         <div>
+          <span className="text-xs font-medium text-stone-400 uppercase tracking-wide block mb-1.5">Logo esteso <span className="normal-case text-stone-300">· orizzontale, con il nome: va nell'intestazione del sito al posto del nome scritto</span></span>
+          {sito.logoEsteso ? (
+            <div className="relative inline-block rounded-xl overflow-hidden border border-stone-200 bg-white p-2">
+              <img src={sito.logoEsteso} alt="Logo esteso" className="h-14 w-auto" />
+              <button type="button" onClick={() => save({ logoEsteso: null })} className="absolute top-1 right-1 bg-white/90 text-stone-600 rounded-lg p-1 shadow-sm hover:text-red-500" title="Rimuovi"><Trash2 size={13} /></button>
+            </div>
+          ) : (
+            <label className="flex items-center justify-center gap-2 border-2 border-dashed border-stone-200 rounded-xl py-3 text-sm text-stone-400 cursor-pointer hover:border-stone-300 hover:text-stone-500 transition">
+              <ImageIcon size={16} /> Carica il logo con il nome (PNG o JPG)
+              <input type="file" accept="image/*" className="hidden" onChange={async (e) => { const file = e.target.files && e.target.files[0]; if (!file) return; try { save({ logoEsteso: await fileToCoverDataURL(file, 1000) }); } catch (err) { alert("Impossibile caricare l'immagine."); } e.target.value = ""; }} />
+            </label>
+          )}
+        </div>
+
+        <div>
           <span className="text-xs font-medium text-stone-400 uppercase tracking-wide block mb-1.5">Foto di copertina</span>
           {sito.copertina ? (
             <div className="relative rounded-xl overflow-hidden border border-stone-200">
@@ -355,6 +370,7 @@ export function SettingsView({ config, saveConfig, bookings, setBookings, client
           <div className="space-y-2">{services.map((s) => (
             <div key={s.id} className="flex flex-wrap items-center gap-2">
               <input value={s.name} onChange={(e) => editService(s.id, { name: e.target.value })} className="flex-1 min-w-[140px] px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
+              <input value={s.categoria || ""} onChange={(e) => editService(s.id, { categoria: e.target.value })} list="lc-categorie-servizi" placeholder="Categoria" title="Categoria (raggruppa il listino sul sito e nella prenotazione online)" className="w-32 px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" />
               <div className="flex items-center gap-1"><input type="number" min={5} step={5} value={s.durationMin} onChange={(e) => editService(s.id, { durationMin: Math.max(5, Number(e.target.value) || 5) })} className="w-16 px-2 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring" title="Durata" /><span className="text-xs text-stone-400">min</span></div>
               <div className="flex items-center gap-1"><input type="number" min={0} step={0.5} value={s.price != null ? s.price : ""} onChange={(e) => editService(s.id, { price: e.target.value === "" ? null : Math.max(0, Number(e.target.value) || 0) })} placeholder="—" className="w-20 px-2 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring" title="Prezzo" /><span className="text-xs text-stone-400">€</span></div>
               {F.fidelity && loyalty.mode === "perService" ? <div className="flex items-center gap-1"><input type="number" min={0} step={1} value={s.points != null ? s.points : 1} onChange={(e) => editService(s.id, { points: Math.max(0, Math.round(Number(e.target.value) || 0)) })} className="w-14 px-2 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring" title="Punti fedeltà" /><span className="text-xs text-stone-400">pt</span></div> : null}
@@ -363,7 +379,8 @@ export function SettingsView({ config, saveConfig, bookings, setBookings, client
               {seqAperta === s.id ? <div className="w-full"><ImpegniEditor svc={s} cabine={cabine} staff={staff} operatoriServizio={operatoriDelServizio(s, services, staff)} onChange={(patch) => editService(s.id, patch)} /></div> : null}
             </div>
           ))}</div>
-          <p className="text-xs text-stone-400 mt-3">Con <Layers size={12} className="inline align--1" /> imposti come il servizio occupa le risorse: una posa che libera l'operatore, due operatori diversi, o una cabina senza nessun operatore.</p>
+          <datalist id="lc-categorie-servizi">{[...new Set(services.map((x) => x.categoria).filter(Boolean))].map((c) => <option key={c} value={c} />)}</datalist>
+          <p className="text-xs text-stone-400 mt-3">La <b>categoria</b> (es. Viso, Corpo, Epilazione) raggruppa i servizi sul sito e nella prenotazione online; lasciala vuota se il listino è corto. Con <Layers size={12} className="inline align--1" /> imposti come il servizio occupa le risorse: una posa che libera l'operatore, due operatori diversi, o una cabina senza nessun operatore.</p>
         </section>
 
   {F.fidelity && (

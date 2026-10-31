@@ -49,12 +49,13 @@ export async function payloadPubblico(env, aid, az, config, services, abilitatiD
   return {
     ok: true,
     salone: brandPubblico(az, config),
-    services: services.map((s) => ({ id: s.id, name: s.name, durationMin: durataServizio(s), price: s.price != null ? s.price : null, senzaOperatore: senzaOperatore(impegniServizio(s)) || undefined })),
+    services: services.map((s) => ({ id: s.id, name: s.name, categoria: s.categoria || null, durationMin: durataServizio(s), price: s.price != null ? s.price : null, senzaOperatore: senzaOperatore(impegniServizio(s)) || undefined })),
     staff: staffPub,
     horizonDays,
     sito: {
       descrizione: sito.descrizione || "",
       copertina: sito.copertina || null,
+      logoEsteso: sito.logoEsteso || null,
       orari: sito.orari || "",
       instagram: sito.instagram || "",
       facebook: sito.facebook || "",

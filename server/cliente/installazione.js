@@ -42,7 +42,7 @@ export async function sito(ctx, esito) {
   const booking = config.onlineBooking || {};
   // Sul sito il listino mostra TUTTI i servizi con una durata, anche quelli
   // non prenotabili online (es. senza operatore abilitato al momento).
-  const listino = (config.services || []).filter((s) => s && s.name).map((s) => ({ id: s.id, name: s.name, price: s.price != null ? s.price : null, durationMin: Number(s.durationMin) || null }));
+  const listino = (config.services || []).filter((s) => s && s.name).map((s) => ({ id: s.id, name: s.name, categoria: s.categoria || null, price: s.price != null ? s.price : null, durationMin: Number(s.durationMin) || null }));
   return json({ ...payload, salone: { id: az.id, ...payload.salone }, listino, prenotazioniOnline: moduli.includes("online") && !booking.paused, moduli });
 }
 
