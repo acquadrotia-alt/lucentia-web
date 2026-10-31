@@ -2,9 +2,8 @@
 // Utilità condivise dall'API: risposte JSON, cookie, password, date, moduli
 // e stato della licenza. Nessuna dipendenza dal database.
 // ============================================================================
-import pkg from "../../package.json" with { type: "json" };
-
-export const APP_VERSION = pkg.version;
+// La versione viene da server/core/versione.js, generato dal build a partire da package.json.
+export { APP_VERSION } from "./versione.js";
 
 export const COLLEZIONI = ["config", "bookings", "clients", "catalog", "sales", "vouchers", "eventi"];
 // I moduli del core, quelli che il gestionale conosce di suo. Un'installazione
