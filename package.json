@@ -1,13 +1,13 @@
 {
   "name": "lucentia-web",
   "private": true,
-  "version": "1.30.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node scripts/prerender.mjs",
+    "build": "node scripts/versione.mjs && vite build && node scripts/prerender.mjs",
     "preview": "vite preview",
-    "test": "node --test \"test/*.test.mjs\""
+    "test": "node scripts/versione.mjs && node --test \"test/*.test.mjs\""
   },
   "dependencies": {
     "lucide-react": "^0.383.0",

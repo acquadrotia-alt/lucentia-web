@@ -1,154 +1,182 @@
-import { ArrowRight, Sparkles, Cloud, Smartphone, ShieldCheck, Monitor, HeartHandshake, Zap } from "lucide-react";
-import { GOLD, GOLD_SOFT, INK, Reveal, SiteLink, ContattiSection, useSite } from "./ui.jsx";
-import { FUNZIONALITA_HOME, PIANI } from "./dati.js";
+import { ArrowRight, Sparkles, Globe, LayoutTemplate, Check } from "lucide-react";
+import { GOLD, GOLD_SOFT, ACCENT, INK, Reveal, SiteLink, ContattiSection, CtaBand, useSite, BtnInk, BtnLight, Eyebrow, Titolo, Intestazione, IconTile, Browser, Telefono } from "./ui.jsx";
+import { FUNZIONALITA_HOME, FIDUCIA, PASSI, PERCHE, LICENZA_SINTESI } from "./dati.js";
 
-// Home: la prima cosa che si vede aprendo il sito. Racconta cos'è Lucentia,
-// mostra un assaggio di funzionalità e piani e rimanda alle pagine dedicate.
+// Le tre anteprime in evidenza nel blocco funzionalità della home.
+const VETRINA = [
+  { img: "/anteprime/agenda-desktop.webp", alt: "Agenda del gestionale Lucentia", chip: "Agenda", sotto: "Operatori, cabine e fasi" },
+  { img: "/anteprime/clienti-desktop.webp", alt: "Scheda clienti del gestionale Lucentia", chip: "Clienti", sotto: "Storico, fidelity, pacchetti" },
+  { img: "/anteprime/minisito-desktop.webp", alt: "Sito vetrina di un salone realizzato con Lucentia", chip: "Il tuo sito", sotto: "Prenotazioni ed eventi" },
+];
+
+// Home: la prima cosa che si vede aprendo il sito. Racconta il concetto
+// (sito + dominio + gestionale dedicati), un assaggio di funzionalità, i tre
+// passi, le ragioni per scegliere Lucentia, la licenza in sintesi e i contatti.
 export default function HomePage() {
-  const { onLogin, openLead } = useSite();
+  const { openLead } = useSite();
   return (
     <>
       {/* HERO */}
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0 lc-fade-in" style={{ background: `radial-gradient(60% 60% at 50% 0%, ${GOLD_SOFT} 0%, #ffffff 70%)` }} />
-        <div className="pointer-events-none absolute -top-24 -left-24 w-72 h-72 rounded-full opacity-50 lc-float" style={{ background: `radial-gradient(circle, ${GOLD_SOFT} 0%, transparent 70%)` }} />
-        <div className="pointer-events-none absolute top-10 -right-20 w-80 h-80 rounded-full opacity-40 lc-float" style={{ background: `radial-gradient(circle, ${GOLD_SOFT} 0%, transparent 70%)`, animationDelay: "1.4s" }} />
-        <div className="relative max-w-4xl mx-auto px-5 pt-16 pb-20 text-center">
-          <img src="/lucentia-logo.png" alt="Lucentia — Gestionale per parrucchieri ed estetisti" className="h-28 sm:h-36 w-auto mx-auto mb-8 lc-pop-in" />
-          <div className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full mb-5 lc-fade-up" style={{ background: GOLD_SOFT, color: GOLD, animationDelay: "120ms" }}><Sparkles size={13} className="lc-float" /> Gestionale per parrucchieri ed estetisti</div>
-          <h1 className="font-display text-4xl sm:text-6xl font-bold leading-[1.08] tracking-tight text-stone-900 lc-fade-up" style={{ animationDelay: "200ms" }}>Tutto il tuo salone,<br className="hidden sm:block" /> in un'unica app <span className="font-display-i" style={{ color: GOLD }}>elegante</span>.</h1>
-          <p className="mt-5 text-base sm:text-lg text-stone-500 max-w-2xl mx-auto lc-fade-up" style={{ animationDelay: "300ms" }}>Agenda, clienti, fidelity, vendite, magazzino e statistiche. Sul cloud, sempre con te, semplice da usare ogni giorno.</p>
-          <div className="mt-8 flex items-center justify-center gap-3 flex-wrap lc-fade-up" style={{ animationDelay: "400ms" }}>
-            <button onClick={() => openLead({ kind: "demo" })} className="text-white font-semibold px-6 py-3 rounded-xl inline-flex items-center gap-2 shadow-sm lc-shine hover:shadow-lg hover:-translate-y-0.5 transition" style={{ background: GOLD }}><Sparkles size={17} /> Prova gratis 10 giorni</button>
-            <button onClick={onLogin} className="font-semibold px-6 py-3 rounded-xl inline-flex items-center gap-2 border hover:-translate-y-0.5 hover:bg-stone-900 hover:text-white transition" style={{ borderColor: INK, color: INK }}>Accedi <ArrowRight size={17} /></button>
-            <SiteLink to="/funzionalita" className="font-semibold px-6 py-3 rounded-xl inline-flex items-center gap-2 text-stone-500 hover:text-stone-800">Scopri le funzionalità</SiteLink>
+        <div className="max-w-6xl mx-auto px-5 pt-10 pb-16 sm:pt-16 sm:pb-24 grid lg:grid-cols-2 gap-12 lg:gap-10 items-center">
+          <div className="relative z-10">
+            <div className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full bg-stone-100 text-stone-700 lc-fade-up"><span className="w-2 h-2 rounded-full" style={{ background: GOLD }} /> Per parrucchieri e centri estetici</div>
+            <h1 className="mt-5 font-bold tracking-[-0.035em] leading-[1.02] text-stone-900 text-[2.75rem] sm:text-6xl lg:text-[4.25rem] lc-fade-up" style={{ animationDelay: "100ms" }}>
+              Il tuo sito.<br />Il tuo dominio.<br />Il tuo <span style={{ color: ACCENT }}>gestionale</span>.
+            </h1>
+            <p className="mt-6 text-lg text-stone-600 leading-relaxed max-w-lg lc-fade-up" style={{ animationDelay: "200ms" }}>Un progetto dedicato per ogni salone, non un abbonamento a un software condiviso: un sito vetrina sul tuo dominio e, dietro, un gestionale completo costruito su come lavori.</p>
+            <div className="mt-8 flex items-center gap-3 flex-wrap lc-fade-up" style={{ animationDelay: "300ms" }}>
+              <BtnInk size="lg" onClick={() => openLead({ kind: "demo" })}><Sparkles size={17} style={{ color: GOLD }} /> Prova la demo gratis</BtnInk>
+              <BtnLight size="lg" onClick={() => openLead({ kind: "licenza" })}>Richiedi un preventivo</BtnLight>
+            </div>
+            <div className="mt-9 flex items-center gap-x-6 gap-y-3 flex-wrap text-sm text-stone-600 lc-fade-up" style={{ animationDelay: "400ms" }}>
+              {FIDUCIA.map(([Icon, t], i) => (
+                <span key={i} className="inline-flex items-center gap-2"><Icon size={17} style={{ color: ACCENT }} /> {t}</span>
+              ))}
+            </div>
           </div>
-          <div className="mt-8 flex items-center justify-center gap-5 text-xs text-stone-400 flex-wrap lc-fade-up" style={{ animationDelay: "500ms" }}>
-            <span className="inline-flex items-center gap-1.5"><Cloud size={14} /> Sul cloud</span>
-            <span className="inline-flex items-center gap-1.5"><Smartphone size={14} /> Multi-dispositivo</span>
-            <span className="inline-flex items-center gap-1.5"><ShieldCheck size={14} /> Dati protetti</span>
+
+          {/* Visual: agenda desktop in cornice, telefono in sovrapposizione */}
+          <div className="relative lc-fade-up lg:pl-6" style={{ animationDelay: "250ms" }}>
+            <div className="relative rounded-[2.5rem] overflow-hidden aspect-[5/4] sm:aspect-[4/3] lg:aspect-[5/4.4]" style={{ background: `linear-gradient(145deg, ${GOLD_SOFT} 0%, #ebe1cc 100%)` }}>
+              <div className="pointer-events-none absolute -top-16 -right-16 w-72 h-72 rounded-full opacity-70" style={{ background: `radial-gradient(circle, rgba(184,137,59,0.35) 0%, transparent 70%)` }} />
+              <div className="absolute left-[9%] top-[13%] w-[108%]">
+                <Browser src="/anteprime/agenda-desktop.webp" alt="Agenda del gestionale Lucentia: la giornata del salone con appuntamenti per operatore" className="!rounded-2xl" />
+              </div>
+            </div>
+            <Telefono src="/anteprime/agenda-mobile.webp" alt="Agenda di Lucentia su smartphone" className="absolute w-[30%] max-w-[11rem] -bottom-6 -left-2 sm:-left-4 -rotate-6 lc-float" />
+            <div className="absolute top-5 -right-1 sm:top-8 sm:-right-3 bg-white rounded-2xl shadow-lg border border-stone-100 px-4 py-3 flex items-center gap-3 lc-fade-up" style={{ animationDelay: "700ms" }}>
+              <span className="relative flex w-2.5 h-2.5"><span className="absolute inline-flex w-full h-full rounded-full bg-emerald-400 opacity-60 animate-ping" /><span className="relative inline-flex w-2.5 h-2.5 rounded-full bg-emerald-500" /></span>
+              <div className="leading-tight"><div className="text-[13px] font-semibold text-stone-900">tuodominio.it</div><div className="text-[11px] text-stone-500">Sito e gestionale online</div></div>
+            </div>
           </div>
         </div>
       </section>
 
       {/* COS'È */}
-      <section className="max-w-4xl mx-auto px-5 py-14 text-center">
-        <Reveal className="text-xs font-semibold tracking-[0.2em] uppercase mb-3" style={{ color: GOLD }}>Cos'è Lucentia</Reveal>
-        <Reveal as="p" delay={80} className="text-xl sm:text-[1.7rem] sm:leading-[1.5] text-stone-700 leading-relaxed font-light">Lucentia è il gestionale pensato per <span className="font-display-i font-medium text-stone-900">parrucchieri e centri estetici</span>: organizza gli appuntamenti, fidelizza i clienti, gestisci vendite e magazzino e tieni tutto sotto controllo da un'unica schermata, con un'interfaccia curata e immediata.</Reveal>
-      </section>
-
-      {/* ANTEPRIMA */}
-      <section className="relative overflow-hidden bg-stone-50 border-y border-stone-100">
-        <div className="max-w-6xl mx-auto px-5 py-16">
-          <div className="text-center mb-10">
-            <Reveal className="text-xs font-semibold tracking-[0.2em] uppercase mb-3" style={{ color: GOLD }}>Dentro l'app</Reveal>
-            <Reveal as="h2" delay={80} className="font-display text-3xl sm:text-4xl font-bold text-stone-900">Guarda Lucentia dal vivo</Reveal>
-            <Reveal as="p" delay={160} className="mt-3 text-stone-500 max-w-2xl mx-auto">La stessa app, identica su computer, tablet e telefono: apri l'agenda alla reception e ritrovi tutto sul cellulare, ovunque sei.</Reveal>
+      <section className="max-w-6xl mx-auto px-5 pt-4 pb-16 sm:pb-24">
+        <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
+          <div>
+            <Reveal><Eyebrow className="mb-3">Cos'è Lucentia</Eyebrow></Reveal>
+            <Reveal delay={60}><Titolo>Un indirizzo per i tuoi clienti, uno per te</Titolo></Reveal>
+            <Reveal as="p" delay={120} className="mt-5 text-lg text-stone-600 leading-relaxed">Il tuo dominio ospita il sito vetrina del salone: foto, servizi, eventi, catalogo e prenotazione online. Dietro, su <b className="text-stone-900">/gestionale</b>, lavori ogni giorno con agenda, clienti e cassa. Tutto in un database solo tuo, aggiornato da un unico posto.</Reveal>
+            <Reveal delay={180} className="mt-6">
+              <SiteLink to="/come-funziona" className="font-semibold inline-flex items-center gap-2 hover:gap-3 transition-all" style={{ color: ACCENT }}>Scopri come funziona <ArrowRight size={17} /></SiteLink>
+            </Reveal>
           </div>
-          <Reveal delay={200} className="relative max-w-4xl mx-auto pb-10 sm:pb-14">
-            {/* Cornice "browser" con l'agenda desktop */}
-            <div className="rounded-2xl border border-stone-200 bg-white overflow-hidden" style={{ boxShadow: "var(--lc-shadow-xl)" }}>
-              <div className="flex items-center gap-1.5 px-4 py-2.5 bg-stone-50 border-b border-stone-100">
-                <span className="w-2.5 h-2.5 rounded-full bg-stone-200" /><span className="w-2.5 h-2.5 rounded-full bg-stone-200" /><span className="w-2.5 h-2.5 rounded-full bg-stone-200" />
-                <span className="ml-3 text-[11px] text-stone-300 tracking-wide inline-flex items-center gap-1"><Monitor size={11} /> lucentia-app.com</span>
-              </div>
-              <img src="/anteprime/agenda-desktop.webp" alt="Agenda appuntamenti di Lucentia su desktop: giornata del salone con appuntamenti per operatore" width="1600" height="1000" loading="lazy" className="w-full h-auto" />
-            </div>
-            {/* Telefono in sovrapposizione con l'agenda mobile */}
-            <div className="absolute -bottom-2 -right-2 sm:bottom-0 sm:right-6 w-32 sm:w-44 rounded-[1.8rem] sm:rounded-[2.2rem] border-[5px] sm:border-[6px] border-stone-900 bg-stone-900 overflow-hidden rotate-3 lc-float" style={{ boxShadow: "var(--lc-shadow-xl)" }}>
-              <img src="/anteprime/agenda-mobile.webp" alt="Agenda di Lucentia su smartphone" width="780" height="1688" loading="lazy" className="w-full h-auto" />
-            </div>
-          </Reveal>
-          <Reveal delay={260} className="text-center">
-            <SiteLink to="/funzionalita" className="font-semibold inline-flex items-center gap-2 hover:gap-3 transition-all" style={{ color: GOLD }}>Vedi tutte le anteprime <ArrowRight size={17} /></SiteLink>
+          <div className="grid sm:grid-cols-2 gap-4">
+            {[
+              [Globe, "tuodominio.it", "Il sito vetrina", "Personalizzato con le tue foto, i tuoi colori e i tuoi testi. Prenotazioni online, eventi e catalogo prodotti si aggiornano dal gestionale.", false],
+              [LayoutTemplate, "tuodominio.it/gestionale", "Il gestionale", "Agenda intelligente, scheda cliente, fidelity, cassa e magazzino, statistiche, marketing: i moduli che ti servono, su misura.", true],
+            ].map(([Icon, url, t, d, dark], i) => (
+              <Reveal key={i} delay={i * 100} className={`rounded-3xl p-6 lc-lift ${dark ? "text-white" : "bg-stone-50 border border-stone-200"}`} style={dark ? { background: INK } : undefined}>
+                <div className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full ${dark ? "bg-white/10 text-stone-200" : "bg-white border border-stone-200 text-stone-600"}`}><Icon size={12} style={{ color: GOLD }} /> {url}</div>
+                <h3 className={`mt-4 text-xl font-bold tracking-tight ${dark ? "" : "text-stone-900"}`}>{t}</h3>
+                <p className={`mt-2 text-[15px] leading-relaxed ${dark ? "text-stone-300" : "text-stone-600"}`}>{d}</p>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FUNZIONALITÀ */}
+      <section className="max-w-6xl mx-auto px-5">
+        <div className="bg-stone-100 rounded-[2rem] sm:rounded-[2.5rem] px-5 py-12 sm:p-12 lg:p-16">
+          <Intestazione eyebrow="Funzionalità" titolo="Tutto il salone in un unico gestionale" testo="Dall'appuntamento all'incasso, dalla scheda cliente al sito: ogni funzione al suo posto, con i moduli attivati su misura." />
+          <div className="mt-12 grid md:grid-cols-3 gap-8 md:gap-6">
+            {FUNZIONALITA_HOME.map(([Icon, t, d], i) => (
+              <Reveal key={i} delay={i * 90} className="flex items-start gap-4">
+                <IconTile icon={Icon} size={52} />
+                <div><h3 className="font-bold text-stone-900 text-lg tracking-tight">{t}</h3><p className="mt-1 text-[15px] text-stone-600 leading-relaxed">{d}</p></div>
+              </Reveal>
+            ))}
+          </div>
+          <div className="mt-12 grid md:grid-cols-3 gap-5">
+            {VETRINA.map((v, i) => (
+              <Reveal key={i} delay={i * 90} className="relative rounded-3xl overflow-hidden bg-white border border-stone-200 aspect-[4/3] lc-lift group">
+                <img src={v.img} alt={v.alt} loading="lazy" className="absolute inset-0 w-full h-full object-cover object-left-top transition-transform duration-700 group-hover:scale-[1.04]" style={{ objectPosition: "0 0" }} />
+                <div className="absolute inset-x-0 bottom-0 h-1/2" style={{ background: "linear-gradient(to top, rgba(28,25,23,0.45), transparent)" }} />
+                <div className="absolute left-4 bottom-4 bg-white rounded-2xl shadow-lg px-4 py-2.5">
+                  <div className="text-[13px] font-bold text-stone-900">{v.chip}</div>
+                  <div className="text-[11px] text-stone-500">{v.sotto}</div>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+          <Reveal delay={200} className="mt-10 text-center">
+            <BtnLight size="lg" to="/funzionalita">Tutte le funzionalità <ArrowRight size={17} /></BtnLight>
           </Reveal>
         </div>
       </section>
 
-      {/* ASSAGGIO FUNZIONALITÀ */}
-      <section className="max-w-6xl mx-auto px-5 py-16">
-        <div className="text-center mb-12">
-          <Reveal className="text-xs font-semibold tracking-[0.2em] uppercase mb-3" style={{ color: GOLD }}>Funzionalità</Reveal>
-          <Reveal as="h2" delay={80} className="font-display text-3xl sm:text-4xl font-bold text-stone-900">Tutto ciò che serve al tuo salone</Reveal>
-          <Reveal as="p" delay={160} className="mt-3 text-stone-500 max-w-2xl mx-auto">Un assaggio di quello che puoi fare ogni giorno con Lucentia.</Reveal>
-        </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {FUNZIONALITA_HOME.map(([Icon, title, desc], i) => (
-            <Reveal key={i} delay={(i % 3) * 90} className="group bg-white rounded-2xl border border-stone-200 p-6 lc-lift">
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-4 transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3" style={{ background: GOLD_SOFT, color: GOLD }}><Icon size={20} /></div>
-              <h3 className="font-semibold text-stone-900 mb-1.5">{title}</h3>
-              <p className="text-sm text-stone-500 leading-relaxed">{desc}</p>
+      {/* COME FUNZIONA */}
+      <section className="max-w-6xl mx-auto px-5 py-16 sm:py-24">
+        <Intestazione eyebrow="Come funziona" titolo="Online in 3 semplici passi" testo="Dalla demo gratuita al tuo dominio: ti accompagniamo noi, un passo alla volta." />
+        <div className="relative mt-14 grid md:grid-cols-3 gap-10 md:gap-6">
+          <div className="hidden md:block absolute top-10 left-[calc(16.67%+2.75rem)] right-[calc(16.67%+2.75rem)] h-px bg-stone-200" aria-hidden="true" />
+          {PASSI.map((p, i) => (
+            <Reveal key={i} delay={i * 120} className="flex flex-col items-center text-center">
+              <div className="relative w-20 h-20 rounded-full flex items-center justify-center" style={{ background: GOLD_SOFT, color: ACCENT }}>
+                <p.icon size={30} strokeWidth={1.75} />
+              </div>
+              <div className="mt-6 flex items-start gap-3 text-left max-w-xs">
+                <span className="mt-0.5 w-6 h-6 rounded-full text-white text-xs font-bold flex items-center justify-center shrink-0" style={{ background: INK }}>{i + 1}</span>
+                <div><h3 className="font-bold text-stone-900 text-lg tracking-tight leading-snug">{p.titolo}</h3><p className="mt-1.5 text-[15px] text-stone-600 leading-relaxed">{p.breve}</p></div>
+              </div>
             </Reveal>
           ))}
         </div>
-        <Reveal delay={200} className="mt-10 text-center">
-          <SiteLink to="/funzionalita" className="font-semibold px-6 py-3 rounded-xl inline-flex items-center gap-2 border hover:-translate-y-0.5 hover:bg-stone-900 hover:text-white transition" style={{ borderColor: INK, color: INK }}>Vedi tutte le funzionalità <ArrowRight size={17} /></SiteLink>
+        <Reveal delay={300} className="mt-12 flex items-center justify-center gap-3 flex-wrap">
+          <BtnInk size="lg" onClick={() => openLead({ kind: "demo" })}><Sparkles size={17} style={{ color: GOLD }} /> Inizia dalla demo</BtnInk>
+          <SiteLink to="/come-funziona" className="font-semibold inline-flex items-center gap-2 hover:gap-3 transition-all px-3" style={{ color: ACCENT }}>Il percorso nel dettaglio <ArrowRight size={17} /></SiteLink>
         </Reveal>
       </section>
 
       {/* PERCHÉ LUCENTIA */}
-      <section className="bg-stone-50 border-y border-stone-100">
-        <div className="max-w-6xl mx-auto px-5 py-16">
-          <div className="text-center mb-10">
-            <Reveal className="text-xs font-semibold tracking-[0.2em] uppercase mb-3" style={{ color: GOLD }}>Perché Lucentia</Reveal>
-            <Reveal as="h2" delay={80} className="font-display text-3xl sm:text-4xl font-bold text-stone-900">Pensato per chi sta dietro alla poltrona</Reveal>
-          </div>
-          <div className="grid sm:grid-cols-3 gap-5 max-w-4xl mx-auto">
-            {[
-              [Zap, "Si impara in un pomeriggio", "Niente menu infiniti: le schermate seguono il flusso della giornata, dall'appuntamento all'incasso."],
-              [Cloud, "Sempre sincronizzato", "I dati sono sul cloud: dal computer della reception al telefono in borsa, trovi sempre tutto aggiornato."],
-              [HeartHandshake, "Assistenza vera", "Ti seguiamo noi, dalla configurazione iniziale ai dubbi di ogni giorno. Nessun call center."],
-            ].map(([Icon, t, d], i) => (
-              <Reveal key={i} delay={i * 100} className="bg-white rounded-2xl border border-stone-200 p-6 text-center lc-lift">
-                <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: GOLD_SOFT, color: GOLD }}><Icon size={22} /></div>
-                <h3 className="font-semibold text-stone-900 mb-1.5">{t}</h3>
-                <p className="text-sm text-stone-500 leading-relaxed">{d}</p>
+      <section className="max-w-6xl mx-auto px-5">
+        <div className="bg-stone-100 rounded-[2rem] sm:rounded-[2.5rem] px-5 py-12 sm:p-12 lg:p-16">
+          <Intestazione eyebrow="Perché Lucentia" titolo="Pensato per chi sta dietro alla poltrona" testo="Niente software condiviso, niente call center: un progetto costruito sul tuo salone, che cresce con te." />
+          <div className="mt-12 grid md:grid-cols-2 gap-5">
+            {PERCHE.map(([Icon, t, d], i) => (
+              <Reveal key={i} delay={(i % 2) * 100} className="bg-white rounded-3xl p-6 sm:p-8 flex items-start gap-5 lc-lift">
+                <div className="w-14 h-14 rounded-full flex items-center justify-center shrink-0" style={{ background: GOLD_SOFT, color: ACCENT }}><Icon size={24} strokeWidth={1.75} /></div>
+                <div><h3 className="font-bold text-stone-900 text-lg tracking-tight">{t}</h3><p className="mt-2 text-[15px] text-stone-600 leading-relaxed">{d}</p></div>
               </Reveal>
             ))}
           </div>
         </div>
       </section>
 
-      {/* PIANI IN SINTESI */}
-      <section style={{ background: INK }} className="text-white">
-        <div className="max-w-6xl mx-auto px-5 py-16">
-          <div className="text-center mb-12">
-            <Reveal className="text-xs font-semibold tracking-[0.2em] uppercase mb-3" style={{ color: GOLD }}>Piani di licenza</Reveal>
-            <Reveal as="h2" delay={80} className="font-display text-3xl sm:text-4xl font-bold">Tre piani, nessun vincolo nascosto</Reveal>
-            <Reveal as="p" delay={160} className="mt-3 text-stone-400 text-sm">Canone mensile, IVA esclusa. Il confronto completo è nella pagina Piani.</Reveal>
+      {/* LICENZA IN SINTESI */}
+      <section className="max-w-6xl mx-auto px-5 py-16 sm:py-24">
+        <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
+          <div>
+            <Reveal><Eyebrow className="mb-3">Licenza annuale</Eyebrow></Reveal>
+            <Reveal delay={60}><Titolo>Un solo canone all'anno, tutto incluso</Titolo></Reveal>
+            <Reveal as="p" delay={120} className="mt-5 text-lg text-stone-600 leading-relaxed">Dominio, hosting su Cloudflare, sito, gestionale, aggiornamenti e assistenza: nessun costo nascosto. Il prezzo è su preventivo, in base ai moduli e alle personalizzazioni che servono al tuo salone.</Reveal>
+            <Reveal delay={180} className="mt-6 flex flex-wrap gap-2">
+              {LICENZA_SINTESI.map((t) => (
+                <span key={t} className="inline-flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-full bg-stone-100 text-stone-700"><Check size={14} style={{ color: ACCENT }} /> {t}</span>
+              ))}
+            </Reveal>
           </div>
-          <div className="grid sm:grid-cols-3 gap-5 max-w-4xl mx-auto">
-            {PIANI.map((p, pi) => (
-              <Reveal key={p.name} delay={pi * 110} className={`rounded-2xl p-6 flex flex-col lc-lift ${p.highlight ? "lc-glow-card sm:-translate-y-2" : ""}`} style={{ background: p.highlight ? "#26231f" : "#211e1b", border: `1px solid ${p.highlight ? GOLD : "#3a352f"}` }}>
-                {p.highlight ? <div className="self-start text-[11px] font-semibold px-2.5 py-1 rounded-full mb-3" style={{ background: GOLD, color: INK }}>Consigliato</div> : <div className="h-[26px] mb-3" />}
-                <div className="font-display text-2xl font-semibold" style={{ color: p.highlight ? GOLD : "#fff" }}>{p.name}</div>
-                <div className="mt-2 flex items-baseline gap-2">
-                  <span className="font-display text-4xl font-bold">€{p.price}</span>
-                  {p.full ? <span className="text-lg text-stone-500 line-through">€{p.full}</span> : null}
-                  <span className="text-stone-400 text-sm">/mese</span>
-                </div>
-                <div className="text-xs text-stone-400 mt-1">{p.operatori} · IVA escl.</div>
-                <p className="text-sm text-stone-400 mt-4 flex-1">{p.tagline}</p>
-                <SiteLink to="/piani" className={`mt-6 w-full font-semibold py-2.5 rounded-xl transition hover:-translate-y-0.5 text-center inline-flex items-center justify-center gap-1.5 ${p.highlight ? "lc-shine" : "hover:bg-white/5"}`} style={p.highlight ? { background: GOLD, color: INK } : { background: "transparent", color: "#fff", border: "1px solid #4a443d" }}>Vedi il piano</SiteLink>
-              </Reveal>
-            ))}
-          </div>
-          <Reveal delay={340} className="text-center mt-10">
-            <SiteLink to="/piani" className="font-semibold inline-flex items-center gap-2 hover:gap-3 transition-all" style={{ color: GOLD }}>Confronta i piani e i moduli aggiuntivi <ArrowRight size={17} /></SiteLink>
+          <Reveal delay={120} className="rounded-[2rem] p-7 sm:p-9 border" style={{ background: GOLD_SOFT, borderColor: "#e9dcc0" }}>
+            <div className="text-[11px] font-bold tracking-[0.18em] uppercase" style={{ color: ACCENT }}>Su preventivo</div>
+            <div className="mt-3 font-bold tracking-tight text-stone-900 text-2xl sm:text-3xl leading-tight">Ci racconti il tuo salone, ti rispondiamo con un'offerta chiara.</div>
+            <ul className="mt-5 space-y-2.5 text-[15px] text-stone-700">
+              {["Moduli e integrazioni scelti insieme", "Attivabili in qualsiasi momento, anche dopo", "Il sito e il gestionale vengono sospesi solo se la licenza non viene rinnovata"].map((t) => (
+                <li key={t} className="flex items-start gap-2.5"><Check size={17} className="mt-0.5 shrink-0" style={{ color: ACCENT }} /> {t}</li>
+              ))}
+            </ul>
+            <div className="mt-7 flex items-center gap-3 flex-wrap">
+              <BtnInk size="lg" onClick={() => openLead({ kind: "licenza" })}>Richiedi un preventivo <ArrowRight size={17} /></BtnInk>
+              <SiteLink to="/licenza" className="font-semibold inline-flex items-center gap-2 hover:gap-3 transition-all px-2" style={{ color: ACCENT }}>Cosa include <ArrowRight size={17} /></SiteLink>
+            </div>
           </Reveal>
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="max-w-4xl mx-auto px-5 py-16 text-center">
-        <Reveal as="img" src="/lucentia-mark.png" alt="Lucentia" className="h-14 w-14 rounded-2xl mx-auto mb-5 lc-float" />
-        <Reveal as="h2" delay={80} className="font-display text-3xl sm:text-4xl font-bold text-stone-900">Pronto a far brillare il tuo salone?</Reveal>
-        <Reveal as="p" delay={160} className="mt-3 text-stone-500">Attiva una prova gratuita di 10 giorni, oppure accedi con le credenziali ricevute dal tuo fornitore.</Reveal>
-        <Reveal delay={240} className="mt-7 flex items-center justify-center gap-3 flex-wrap">
-          <button onClick={() => openLead({ kind: "demo" })} className="text-white font-semibold px-7 py-3 rounded-xl inline-flex items-center gap-2 lc-shine hover:-translate-y-0.5 hover:shadow-lg transition" style={{ background: GOLD }}><Sparkles size={17} /> Prova gratis 10 giorni</button>
-          <button onClick={onLogin} className="text-white font-semibold px-7 py-3 rounded-xl inline-flex items-center gap-2 lc-shine hover:-translate-y-0.5 hover:shadow-lg transition" style={{ background: INK }}>Accedi a Lucentia <ArrowRight size={17} /></button>
-        </Reveal>
-      </section>
+      <CtaBand titolo="Pronto a dare al tuo salone un indirizzo tutto suo?" testo="Prova la demo gratuita per 10 giorni, oppure raccontaci come lavori e ti prepariamo un preventivo su misura." />
 
       <ContattiSection />
     </>

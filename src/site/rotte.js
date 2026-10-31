@@ -7,28 +7,39 @@ export const ROTTE = [
   {
     path: "/",
     out: "index.html",
-    title: "Lucentia — Gestionale per parrucchieri ed estetisti",
-    description: "Lucentia è il gestionale cloud per parrucchieri e centri estetici: agenda appuntamenti, scheda cliente, fidelity, vendite, magazzino e statistiche in un'unica app elegante. Prova gratis 10 giorni.",
-    ogTitle: "Lucentia — Gestionale per parrucchieri ed estetisti",
-    ogDescription: "Agenda, clienti, fidelity, vendite, magazzino e statistiche. Sul cloud, sempre con te, semplice da usare ogni giorno. Prova gratis 10 giorni.",
+    title: "Lucentia — Il tuo sito, il tuo dominio, il tuo gestionale per saloni",
+    description: "Lucentia realizza per ogni salone un sito vetrina sul proprio dominio e, dietro, un gestionale completo su misura: agenda intelligente, clienti, fidelity, cassa e magazzino, statistiche, prenotazioni online. Licenza annuale tutto incluso, demo gratuita 10 giorni.",
+    ogTitle: "Lucentia — Il tuo sito, il tuo dominio, il tuo gestionale",
+    ogDescription: "Un progetto dedicato per ogni parrucchiere e centro estetico: sito vetrina personalizzato e gestionale completo su tuodominio.it/gestionale. Licenza annuale tutto incluso. Prova la demo gratis.",
   },
   {
     path: "/funzionalita",
     out: "funzionalita/index.html",
-    title: "Funzionalità — Lucentia, gestionale per parrucchieri ed estetisti",
-    description: "Tutte le funzioni di Lucentia: agenda e appuntamenti, scheda cliente, fidelity, pacchetti, buoni, cassa e magazzino, statistiche, marketing WhatsApp, eventi e mini-sito con prenotazioni online. Con le anteprime reali dell'app.",
-    ogTitle: "Funzionalità di Lucentia — tutto quello che puoi fare",
-    ogDescription: "Agenda, clienti, fidelity, pacchetti, cassa e magazzino, statistiche, marketing, eventi e mini-sito con prenotazioni online. Guarda le anteprime dell'app.",
+    title: "Funzionalità — Lucentia, gestionale su misura per parrucchieri ed estetisti",
+    description: "Tutte le funzioni del gestionale Lucentia: agenda con operatori, cabine e servizi a fasi, scheda cliente, fidelity, pacchetti, buoni regalo, cassa e magazzino, statistiche, marketing WhatsApp, allergeni, eventi, prenotazioni online dal tuo sito. Con le anteprime reali dell'app.",
+    ogTitle: "Funzionalità di Lucentia — tutto quello che fa il tuo gestionale",
+    ogDescription: "Agenda intelligente, clienti, fidelity, pacchetti, cassa e magazzino, statistiche, marketing, eventi e prenotazioni online dal tuo sito. Guarda le anteprime dell'app.",
   },
   {
-    path: "/piani",
-    out: "piani/index.html",
-    title: "Piani e prezzi — Lucentia, gestionale per parrucchieri ed estetisti",
-    description: "I piani di Lucentia: Basic da € 9/mese, Smart da € 12/mese, Pro da € 19,50/mese (IVA esclusa). Confronto dettagliato dei moduli inclusi, numero di operatori e add-on prenotazioni online a € 4/mese.",
-    ogTitle: "Piani e prezzi di Lucentia",
-    ogDescription: "Basic € 9, Smart € 12, Pro € 19,50 al mese, IVA esclusa. Confronta moduli, operatori e l'add-on prenotazioni online a € 4/mese.",
+    path: "/come-funziona",
+    out: "come-funziona/index.html",
+    title: "Come funziona — Lucentia, dalla demo al tuo dominio in 3 passi",
+    description: "Come nasce un progetto Lucentia: provi la demo gratuita per 10 giorni, progettiamo insieme sito e gestionale su misura, vai online con il tuo dominio. Cosa personalizziamo, come funzionano aggiornamenti e assistenza, domande frequenti.",
+    ogTitle: "Come funziona Lucentia — dalla demo al tuo dominio",
+    ogDescription: "Tre passi: demo gratuita, progettazione su misura di sito e gestionale, online con il tuo dominio. Aggiornamenti e assistenza inclusi.",
+  },
+  {
+    path: "/licenza",
+    out: "licenza/index.html",
+    title: "Licenza annuale — Lucentia, sito e gestionale tutto incluso",
+    description: "La licenza annuale Lucentia comprende dominio, hosting su Cloudflare, sito vetrina, gestionale, aggiornamenti e assistenza. Moduli e integrazioni attivabili in qualsiasi momento. Prezzo su preventivo, in base ai moduli e alle personalizzazioni.",
+    ogTitle: "Licenza annuale Lucentia — tutto incluso, su preventivo",
+    ogDescription: "Dominio, hosting, sito, gestionale, aggiornamenti e assistenza in un solo canone annuale. Moduli e integrazioni attivabili quando vuoi. Richiedi un preventivo.",
   },
 ];
+
+// Vecchi percorsi che continuano a funzionare puntando alla pagina nuova.
+const ALIAS = { "/piani": "/licenza", "/prezzi": "/licenza" };
 
 // Normalizza un percorso del browser su una delle rotte conosciute.
 // Qualunque percorso non riconosciuto ricade sulla home.
@@ -36,6 +47,7 @@ export function normalizePath(p) {
   let s = String(p || "/").split("?")[0].split("#")[0].toLowerCase();
   if (s.length > 1) s = s.replace(/\/+$/, "");
   if (!s.startsWith("/")) s = "/" + s;
+  if (ALIAS[s]) s = ALIAS[s];
   return ROTTE.some((r) => r.path === s) ? s : "/";
 }
 
