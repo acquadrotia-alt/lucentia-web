@@ -77,7 +77,7 @@ async function chiama(st, path, { method = "GET", body } = {}) {
 }
 const slots = async (st, servizio) => (await chiama(st, `/api/prenota/${AID}/slots?date=${GIORNO}&service=${servizio}`)).body.slots;
 const prenota = (st, servizio, start) =>
-  chiama(st, `/api/prenota/${AID}`, { method: "POST", body: { date: GIORNO, service: servizio, start, name: "Anna Rossi", phone: "3401112233" } });
+  chiama(st, `/api/prenota/${AID}`, { method: "POST", body: { date: GIORNO, service: servizio, start, name: "Anna Rossi", phone: "3401112233", privacy: true } });
 
 for (const migrato of [true, false]) {
   const come = migrato ? "migrato" : "non migrato";

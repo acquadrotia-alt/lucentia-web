@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { Calendar, Clock, Check, ChevronRight, ChevronLeft, User, Users, Phone, Mail, Sparkles, MapPin, ArrowRight, Scissors, AlertCircle, CalendarClock, Trash2, X, PartyPopper, Info, MessageCircle, Instagram, Facebook, Globe, ShoppingBag } from "lucide-react";
 import { AvatarSvg, avatarIdFor } from "./avatars.jsx";
 import { setBrandTab } from "./favicon.js";
+import { gruppiServizi } from "./core/sito/contenuti.js";
+export { gruppiServizi };
 
 // --- Aggiungi al calendario ---
 function calStamps(date, start, end) {
@@ -24,17 +26,6 @@ const MONTHS = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "l
 const fmtLong = (s) => { const d = parseDate(s); return `${WDAY[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`; };
 const eur = (n) => "€ " + (Math.round((Number(n) || 0) * 100) / 100).toFixed(2).replace(".", ",").replace(",00", "");
 
-// Raggruppa i servizi per categoria (se almeno uno ce l'ha), nell'ordine in
-// cui le categorie compaiono nel listino; quelli senza finiscono in fondo.
-export function gruppiServizi(services) {
-  const lista = Array.isArray(services) ? services : [];
-  if (!lista.some((s) => s && s.categoria)) return [{ nome: null, items: lista }];
-  const ordine = []; const mappa = new Map();
-  for (const s of lista) { const k = (s.categoria || "").trim() || "Altri servizi"; if (!mappa.has(k)) { mappa.set(k, []); ordine.push(k); } mappa.get(k).push(s); }
-  if (ordine.includes("Altri servizi")) { ordine.splice(ordine.indexOf("Altri servizi"), 1); ordine.push("Altri servizi"); }
-  return ordine.map((k) => ({ nome: k, items: mappa.get(k) }));
-}
-
 async function api(path) { const r = await fetch("/api/prenota/" + path); return { ok: r.ok, status: r.status, data: await r.json().catch(() => ({})) }; }
 
 function Centered({ children }) {
@@ -51,6 +42,7 @@ export default function BookingPage({ aid }) {
   const [slots, setSlots] = useState(null); // null=loading, []=none
   const [slot, setSlot] = useState(null);
   const [f, setF] = useState({ name: "", phone: "", email: "", note: "" });
+  const [privacy, setPrivacy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [done, setDone] = useState(null);
@@ -58,7 +50,13 @@ export default function BookingPage({ aid }) {
   useEffect(() => {
     (async () => {
       const r = await api(aid);
-      if (r.ok && r.data && r.data.ok) { setInfo(r.data); setState("ready"); setBrandTab(r.data.salone.logo, r.data.salone.brandName); }
+      if (r.ok && r.data && r.data.ok) {
+        setInfo(r.data); setState("ready"); setBrandTab((r.data.sito && r.data.sito.favicon) || r.data.salone.logo, `Prenota · ${r.data.salone.brandName}`);
+        // Arrivando dal listino del sito (/prenota?servizio=ID) il servizio è già scelto.
+        const pre = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("servizio") : null;
+        const svc = pre && Array.isArray(r.data.services) ? r.data.services.find((x) => x.id === pre) : null;
+        if (svc) setService(svc);
+      }
       else setState("error");
     })();
   }, [aid]);
@@ -79,15 +77,18 @@ export default function BookingPage({ aid }) {
   const stepData = showOps ? 4 : 3;
 
   const primary = (info && info.salone.primary) || "#b8893b";
+  // Sul dominio del salone l'informativa è /privacy; dal link del portale si apre quella del salone sul portale.
+  const privacyUrl = typeof window !== "undefined" && window.location.pathname.startsWith("/prenota") ? "/privacy" : `/privacy?salone=${encodeURIComponent(aid)}`;
   const horizon = (info && info.horizonDays) || 30;
   const days = Array.from({ length: horizon }, (_, i) => addDays(todayStr(), i));
 
   const submit = async () => {
     if (!service || !slot) { setErr("Scegli servizio e orario."); return; }
     if (!f.name.trim() || f.phone.replace(/\D/g, "").length < 6) { setErr("Inserisci nome e un numero di telefono valido."); return; }
+    if (!privacy) { setErr("Per prenotare devi accettare l'informativa sulla privacy."); return; }
     setBusy(true); setErr("");
     try {
-      const r = await fetch("/api/prenota/" + aid, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date, start: slot.start, service: service.id, staff: staffSel, name: f.name.trim(), phone: f.phone.trim(), email: f.email.trim(), note: f.note.trim() }) });
+      const r = await fetch("/api/prenota/" + aid, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date, start: slot.start, service: service.id, staff: staffSel, name: f.name.trim(), phone: f.phone.trim(), email: f.email.trim(), note: f.note.trim(), privacy: true }) });
       const j = await r.json().catch(() => ({}));
       setBusy(false);
       if (!r.ok) { setErr(j.error || "Si è verificato un errore. Riprova."); if (r.status === 409) loadSlots(service.id, date, staffSel); return; }
@@ -263,6 +264,10 @@ export default function BookingPage({ aid }) {
               <span className="text-stone-500">Riepilogo</span>
               <span className="text-stone-800 font-medium text-right">{service.name}{staffSel ? ` · ${(operators.find((o) => o.id === staffSel) || {}).name}` : ""} · <span className="capitalize">{fmtLong(date)}</span> · <span className="tabular-nums">{slot.label}</span></span>
             </div>
+            <label className="mt-4 flex items-start gap-2.5 text-xs text-stone-600 cursor-pointer">
+              <input type="checkbox" checked={privacy} onChange={(e) => { setPrivacy(e.target.checked); setErr(""); }} className="w-4 h-4 mt-0.5 shrink-0" style={{ accentColor: primary }} />
+              <span>Ho letto l'<a href={privacyUrl} target="_blank" rel="noreferrer" className="underline" style={{ color: primary }}>informativa sulla privacy</a> e acconsento al trattamento dei miei dati per gestire la prenotazione. *</span>
+            </label>
             {err ? <p className="text-xs text-red-500 mt-3 flex items-center gap-1.5"><AlertCircle size={13} /> {err}</p> : null}
             <button onClick={submit} disabled={busy} className="mt-4 w-full text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 lc-shine hover:brightness-105 transition" style={{ background: primary }}>
               {busy ? <><span className="lc-spinner" style={{ width: 16, height: 16, borderWidth: 2, borderColor: "rgba(255,255,255,0.4)", borderTopColor: "#fff" }} /> Conferma…</> : <>Conferma prenotazione <ArrowRight size={16} /></>}
