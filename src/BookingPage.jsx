@@ -24,6 +24,17 @@ const MONTHS = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "l
 const fmtLong = (s) => { const d = parseDate(s); return `${WDAY[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`; };
 const eur = (n) => "€ " + (Math.round((Number(n) || 0) * 100) / 100).toFixed(2).replace(".", ",").replace(",00", "");
 
+// Raggruppa i servizi per categoria (se almeno uno ce l'ha), nell'ordine in
+// cui le categorie compaiono nel listino; quelli senza finiscono in fondo.
+export function gruppiServizi(services) {
+  const lista = Array.isArray(services) ? services : [];
+  if (!lista.some((s) => s && s.categoria)) return [{ nome: null, items: lista }];
+  const ordine = []; const mappa = new Map();
+  for (const s of lista) { const k = (s.categoria || "").trim() || "Altri servizi"; if (!mappa.has(k)) { mappa.set(k, []); ordine.push(k); } mappa.get(k).push(s); }
+  if (ordine.includes("Altri servizi")) { ordine.splice(ordine.indexOf("Altri servizi"), 1); ordine.push("Altri servizi"); }
+  return ordine.map((k) => ({ nome: k, items: mappa.get(k) }));
+}
+
 async function api(path) { const r = await fetch("/api/prenota/" + path); return { ok: r.ok, status: r.status, data: await r.json().catch(() => ({})) }; }
 
 function Centered({ children }) {
@@ -176,12 +187,17 @@ export default function BookingPage({ aid }) {
         <section className="lc-card p-4 lc-fade-up">
           <div className="flex items-center gap-2 mb-3"><span className="w-6 h-6 rounded-full text-xs font-semibold flex items-center justify-center" style={accent}>1</span><h2 className="font-semibold text-stone-900 tracking-tight">Scegli il servizio</h2></div>
           {info.services.length === 0 ? <p className="text-sm text-stone-400">Nessun servizio prenotabile online al momento.</p> : (
-            <div className="grid sm:grid-cols-2 gap-2">{info.services.map((s) => { const on = service && service.id === s.id; return (
-              <button key={s.id} onClick={() => { setService(s); setStaffSel(""); }} className="text-left rounded-xl border p-3 transition" style={on ? { borderColor: primary, background: `${primary}0d` } : { borderColor: "#e7e5e4" }}>
-                <div className="font-medium text-stone-900 text-sm flex items-center justify-between gap-2">{s.name}{on ? <Check size={15} style={{ color: primary }} /> : null}</div>
-                <div className="text-xs text-stone-400 mt-0.5 flex items-center gap-2"><span className="inline-flex items-center gap-1"><Clock size={11} /> {s.durationMin} min</span>{s.price != null ? <span>· {eur(s.price)}</span> : null}</div>
-              </button>
-            ); })}</div>
+            gruppiServizi(info.services).map((g) => (
+              <div key={g.nome || "_"} className="mb-3 last:mb-0">
+                {g.nome ? <div className="text-[11px] font-semibold uppercase tracking-[0.15em] mb-1.5 mt-1" style={{ color: primary }}>{g.nome}</div> : null}
+                <div className="grid sm:grid-cols-2 gap-2">{g.items.map((s) => { const on = service && service.id === s.id; return (
+                  <button key={s.id} onClick={() => { setService(s); setStaffSel(""); }} className="text-left rounded-xl border p-3 transition" style={on ? { borderColor: primary, background: `${primary}0d` } : { borderColor: "#e7e5e4" }}>
+                    <div className="font-medium text-stone-900 text-sm flex items-center justify-between gap-2">{s.name}{on ? <Check size={15} style={{ color: primary }} /> : null}</div>
+                    <div className="text-xs text-stone-400 mt-0.5 flex items-center gap-2"><span className="inline-flex items-center gap-1"><Clock size={11} /> {s.durationMin} min</span>{s.price != null ? <span>· {eur(s.price)}</span> : null}</div>
+                  </button>
+                ); })}</div>
+              </div>
+            ))
           )}
         </section>
 

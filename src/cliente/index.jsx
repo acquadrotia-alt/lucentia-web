@@ -44,7 +44,12 @@ export const ESTENSIONI = {
   //    (il componente riceve { dati, vai }); compaiono anche nel menù.
   sito: { Home: null, sezioni: [], pagine: [] },
 
-  // Tema: sovrascrive i colori del gestionale e del sito se il cliente non
-  // vuole affidarsi a config.branding.primary. Es. { primary: "#0d9488" }.
+  // Tema del sito del salone (tutto facoltativo):
+  //  primary         colore principale (altrimenti config.branding.primary)
+  //  accento         colore per etichette, sfondi tenui e dettagli
+  //  sfondoAlternato colore delle sezioni alternate (es. una crema)
+  //  fontTitoli      nome di un Google Font per i titoli (es. "Playfair Display")
+  //  fontTesto       nome di un Google Font per il testo (es. "Montserrat")
+  // Es. { primary: "#4A3A32", accento: "#8FA17A", sfondoAlternato: "#F6EFE7", fontTitoli: "Playfair Display", fontTesto: "Montserrat" }
   tema: {},
 };

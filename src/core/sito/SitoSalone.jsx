@@ -3,6 +3,7 @@ import { Calendar, Clock, Phone, Mail, MapPin, MessageCircle, Instagram, Faceboo
 import { AvatarSvg, avatarIdFor } from "../../avatars.jsx";
 import { setBrandTab } from "../../favicon.js";
 import { ESTENSIONI } from "../../cliente/index.jsx";
+import { gruppiServizi } from "../../BookingPage.jsx";
 
 // ============================================================================
 // Il SITO del salone, servito sulla radice del suo dominio (installazioni
@@ -22,12 +23,13 @@ const hhmm = (m) => `${pad2(Math.floor(m / 60))}:${pad2(m % 60)}`;
 const eur = (n) => "€ " + (Math.round((Number(n) || 0) * 100) / 100).toFixed(2).replace(".", ",").replace(",00", "");
 
 function Sezione({ id, kicker, titolo, testo, children, primary, alt }) {
+  void primary;
   return (
-    <section id={id} className={`scroll-mt-20 ${alt ? "bg-stone-50 border-y border-stone-100" : ""}`}>
+    <section id={id} className={`scroll-mt-20 ${alt ? "border-y border-stone-100" : ""}`} style={alt ? { background: "var(--alternato, #fafaf9)" } : undefined}>
       <div className="max-w-5xl mx-auto px-5 py-14 sm:py-16">
         {(kicker || titolo) ? (
           <div className="mb-8">
-            {kicker ? <div className="text-xs font-semibold tracking-[0.2em] uppercase mb-2" style={{ color: primary }}>{kicker}</div> : null}
+            {kicker ? <div className="text-xs font-semibold tracking-[0.2em] uppercase mb-2" style={{ color: "var(--accento)" }}>{kicker}</div> : null}
             {titolo ? <h2 className="font-display text-3xl sm:text-4xl font-semibold text-stone-900">{titolo}</h2> : null}
             {testo ? <p className="mt-3 text-stone-500 max-w-2xl">{testo}</p> : null}
           </div>
@@ -55,7 +57,16 @@ export default function SitoSalone({ inst, path, vai }) {
   }, []);
 
   const brand = (dati && dati.salone) || (inst && inst.salone) || {};
-  const primary = (ESTENSIONI.tema && ESTENSIONI.tema.primary) || brand.primary || "#b8893b";
+  // Tema: il colore principale viene dal brand del salone (o da ESTENSIONI.tema);
+  // il cliente può aggiungere un colore d'accento per etichette e sfondi, un
+  // colore per le sezioni alternate e i font di titoli e testo.
+  const tema = ESTENSIONI.tema || {};
+  const primary = tema.primary || brand.primary || "#b8893b";
+  const accento = tema.accento || primary;
+  const alternato = tema.sfondoAlternato || "#fafaf9";
+  const fontTitoli = tema.fontTitoli || null;
+  const fontTesto = tema.fontTesto || null;
+  const googleFonts = [fontTitoli, fontTesto].filter(Boolean).filter((f, i, a) => a.indexOf(f) === i);
 
   if (stato === "loading") return <div className="min-h-screen bg-stone-50 flex items-center justify-center"><div className="lc-spinner" /></div>;
   if (stato === "errore") return (
@@ -93,13 +104,17 @@ export default function SitoSalone({ inst, path, vai }) {
   const Link = ({ to, className = "", children, ...rest }) => <a href={to} onClick={(e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); setMenu(false); vai(to); }} className={className} {...rest}>{children}</a>;
 
   return (
-    <div className="min-h-screen bg-white text-stone-800" style={{ "--brand": primary }}>
+    <div className="min-h-screen bg-white text-stone-800 lc-sito" style={{ "--brand": primary, "--accento": accento, "--alternato": alternato, ...(fontTesto ? { fontFamily: `'${fontTesto}', 'Hanken Grotesk', system-ui, sans-serif` } : {}) }}>
+      {googleFonts.length ? <link rel="stylesheet" href={`https://fonts.googleapis.com/css2?${googleFonts.map((f) => `family=${encodeURIComponent(f).replace(/%20/g, "+")}:wght@400;500;600;700`).join("&")}&display=swap`} /> : null}
+      {fontTitoli ? <style>{`.lc-sito .font-display{font-family:'${fontTitoli}','Playfair Display',Georgia,serif}`}</style> : null}
       {/* Intestazione */}
       <header className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-stone-100">
         <div className="max-w-5xl mx-auto px-5 h-16 flex items-center justify-between gap-4">
           <Link to="/" className="flex items-center gap-2.5 min-w-0">
-            {brand.logo ? <img src={brand.logo} alt={brand.brandName} className="h-9 w-9 rounded-xl object-cover ring-1 ring-stone-200" /> : <div className="h-9 w-9 rounded-xl flex items-center justify-center text-white" style={{ background: primary }}><Sparkles size={18} /></div>}
-            <span className="font-display text-lg font-semibold text-stone-900 truncate">{brand.brandName}</span>
+            {sito.logoEsteso ? <img src={sito.logoEsteso} alt={brand.brandName} className="h-11 w-auto max-w-[220px] object-contain" /> : <>
+              {brand.logo ? <img src={brand.logo} alt={brand.brandName} className="h-9 w-9 rounded-xl object-cover ring-1 ring-stone-200" /> : <div className="h-9 w-9 rounded-xl flex items-center justify-center text-white" style={{ background: primary }}><Sparkles size={18} /></div>}
+              <span className="font-display text-lg font-semibold text-stone-900 truncate">{brand.brandName}</span>
+            </>}
           </Link>
           <nav className="hidden md:flex items-center gap-5">
             {NAV.map(([to, label]) => <Link key={to} to={to} className="text-sm text-stone-500 hover:text-stone-900">{label}</Link>)}
@@ -132,11 +147,11 @@ export default function SitoSalone({ inst, path, vai }) {
                   </div>
                 </div>
               ) : (
-                <div className="relative" style={{ background: `radial-gradient(70% 80% at 50% 0%, ${primary}22 0%, #ffffff 70%)` }}>
+                <div className="relative" style={{ background: `radial-gradient(70% 80% at 50% 0%, ${accento}2e 0%, ${alternato} 55%, #ffffff 100%)` }}>
                   <div className="max-w-5xl mx-auto px-5 pt-20 pb-16 text-center">
-                    {brand.logo ? <img src={brand.logo} alt={brand.brandName} className="h-24 w-24 rounded-3xl object-cover mx-auto mb-6 shadow-md ring-4 ring-white lc-pop-in" /> : null}
-                    {brand.tagline ? <div className="text-xs font-semibold tracking-[0.2em] uppercase mb-3" style={{ color: primary }}>{brand.tagline}</div> : null}
-                    <h1 className="font-display text-4xl sm:text-6xl font-semibold leading-[1.05] text-stone-900">{brand.brandName}</h1>
+                    {sito.logoEsteso ? <img src={sito.logoEsteso} alt={brand.brandName} className="h-36 sm:h-48 w-auto max-w-[90%] object-contain mx-auto mb-6 lc-pop-in" /> : (brand.logo ? <img src={brand.logo} alt={brand.brandName} className="h-24 w-24 rounded-3xl object-cover mx-auto mb-6 shadow-md ring-4 ring-white lc-pop-in" /> : null)}
+                    {brand.tagline ? <div className="text-xs font-semibold tracking-[0.2em] uppercase mb-3" style={{ color: accento }}>{brand.tagline}</div> : null}
+                    {sito.logoEsteso ? <h1 className="sr-only">{brand.brandName}</h1> : <h1 className="font-display text-4xl sm:text-6xl font-semibold leading-[1.05] text-stone-900">{brand.brandName}</h1>}
                     {sito.descrizione ? <p className="mt-5 text-stone-500 max-w-2xl mx-auto text-base sm:text-lg leading-relaxed">{sito.descrizione}</p> : null}
                     <div className="mt-8 flex items-center justify-center gap-3 flex-wrap">
                       {prenota ? <Link to="/prenota" className="font-semibold px-6 py-3 rounded-xl inline-flex items-center gap-2 text-white lc-shine" style={{ background: primary }}><Calendar size={17} /> Prenota online</Link> : null}
@@ -164,18 +179,23 @@ export default function SitoSalone({ inst, path, vai }) {
             {/* Servizi */}
             {listino.length ? (
               <Sezione id="servizi" kicker="Servizi" titolo="Il nostro listino" primary={primary} alt>
-                <div className="grid sm:grid-cols-2 gap-3">
-                  {listino.map((s) => (
-                    <div key={s.id} className="bg-white rounded-2xl border border-stone-200 p-4 flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${primary}1a`, color: primary }}><Scissors size={18} /></div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-stone-900 truncate">{s.name}</div>
-                        {s.durationMin ? <div className="text-xs text-stone-400 inline-flex items-center gap-1"><Clock size={11} /> {s.durationMin} min</div> : null}
-                      </div>
-                      {s.price != null ? <div className="font-semibold text-stone-900 tabular-nums">{eur(s.price)}</div> : null}
+                {gruppiServizi(listino).map((g) => (
+                  <div key={g.nome || "_"} className="mb-8 last:mb-0">
+                    {g.nome ? <h3 className="font-display text-xl sm:text-2xl font-semibold text-stone-900 mb-3 flex items-center gap-3"><span className="inline-block w-8 h-px" style={{ background: accento }} />{g.nome}</h3> : null}
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      {g.items.map((s) => (
+                        <div key={s.id} className="bg-white rounded-2xl border border-stone-200 p-4 flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${accento}26`, color: primary }}><Scissors size={18} /></div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-stone-900 truncate">{s.name}</div>
+                            {s.durationMin ? <div className="text-xs text-stone-400 inline-flex items-center gap-1"><Clock size={11} /> {s.durationMin} min</div> : null}
+                          </div>
+                          {s.price != null ? <div className="font-semibold text-stone-900 tabular-nums">{eur(s.price)}</div> : null}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
                 {prenota ? <div className="mt-8 text-center"><Link to="/prenota" className="font-semibold inline-flex items-center gap-2 hover:gap-3 transition-all" style={{ color: primary }}>Prenota il tuo appuntamento <ArrowRight size={17} /></Link></div> : null}
               </Sezione>
             ) : null}
