@@ -151,9 +151,9 @@ export default function SitoSalone({ inst, path, vai }) {
 
       {/* Intestazione */}
       <header className="sticky top-0 z-30 backdrop-blur border-b border-stone-100/80" style={{ background: "rgba(255,255,255,0.85)" }}>
-        <div className="max-w-6xl mx-auto px-5 sm:px-8 h-[72px] flex items-center justify-between gap-6">
+        <div className="max-w-6xl mx-auto px-5 sm:px-8 h-20 flex items-center justify-between gap-6">
           <Link to="/" className="flex items-center gap-2.5 min-w-0" aria-label={`${brand.brandName} — home`}>
-            {sito.logoEsteso ? <img src={sito.logoEsteso} alt={brand.brandName} width="220" height="48" className="h-12 w-auto max-w-[220px] object-contain" /> : <>
+            {sito.logoEsteso ? <img src={sito.logoEsteso} alt={brand.brandName} width="260" height="64" className="h-14 sm:h-16 w-auto max-w-[260px] object-contain" /> : <>
               {brand.logo ? <img src={brand.logo} alt="" width="36" height="36" className="h-9 w-9 rounded-xl object-cover" /> : <div className="h-9 w-9 rounded-xl flex items-center justify-center text-white" style={{ background: primary }}><Sparkles size={18} /></div>}
               <span className="font-display text-lg font-semibold text-stone-900 truncate">{brand.brandName}</span>
             </>}
@@ -364,7 +364,7 @@ function PaginaServizi({ brand, gruppi, listino, Link, prenota, Prenota, pastell
     <>
       <TestataPagina eyebrow="Listino" titolo="I nostri servizi" testo={`Tutti i trattamenti di ${brand.brandName}, con durata e prezzo. ${prenota ? "Ogni voce si prenota online." : "Chiamaci per fissare il tuo appuntamento."}`} sfondo={pastelli[1]} />
       {conCategorie ? (
-        <div className="sticky top-[72px] z-20 bg-white/90 backdrop-blur border-b border-stone-100">
+        <div className="sticky top-20 z-20 bg-white/90 backdrop-blur border-b border-stone-100">
           <div className="max-w-6xl mx-auto px-5 sm:px-8 py-3 flex gap-2 overflow-x-auto no-scrollbar">
             {gruppi.map((g) => <a key={g.nome} href={`#${slug(g.nome)}`} onClick={(e) => { e.preventDefault(); const el = document.getElementById(slug(g.nome)); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }} className="shrink-0 text-xs font-semibold px-3.5 py-2 rounded-full border border-stone-200 text-stone-600 hover:border-stone-400 whitespace-nowrap">{g.nome}</a>)}
           </div>
@@ -372,7 +372,7 @@ function PaginaServizi({ brand, gruppi, listino, Link, prenota, Prenota, pastell
       ) : null}
       <Sezione>
         {gruppi.map((g, i) => (
-          <div key={g.nome || "_"} id={slug(g.nome)} className="scroll-mt-36 mb-14 last:mb-0">
+          <div key={g.nome || "_"} id={slug(g.nome)} className="scroll-mt-40 mb-14 last:mb-0">
             {g.nome ? <div className="flex items-end justify-between gap-4 mb-5"><h2 className="font-display text-2xl sm:text-3xl font-semibold text-stone-900 flex items-center gap-3"><span className="inline-block w-10 h-1 rounded-full" style={{ background: pastelli[i % pastelli.length], filter: "saturate(1.4)" }} />{g.nome}</h2><span className="text-xs text-stone-400">{g.items.length} trattament{g.items.length === 1 ? "o" : "i"}</span></div> : null}
             <ListaServizi items={g.items} Link={Link} prenota={prenota} />
           </div>
