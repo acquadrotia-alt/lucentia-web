@@ -2,6 +2,7 @@ CREATE TABLE IF NOT EXISTS aziende (id TEXT PRIMARY KEY, denominazione TEXT, lic
 CREATE TABLE IF NOT EXISTS utenti (id TEXT PRIMARY KEY, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, ruolo TEXT NOT NULL DEFAULT 'azienda', azienda_id TEXT, nome TEXT, staff_id TEXT, reseller_parent TEXT, creato_il TEXT DEFAULT (datetime('now')));
 CREATE TABLE IF NOT EXISTS sessioni (token TEXT PRIMARY KEY, utente_id TEXT NOT NULL, scadenza TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS dati_app (id TEXT PRIMARY KEY, azienda_id TEXT NOT NULL, collezione TEXT NOT NULL, dati TEXT NOT NULL, aggiornato_il TEXT DEFAULT (datetime('now')));
+-- Tabelle storiche (rivenditori e fatturazione): non più usate dal codice, lasciate per i database esistenti.
 CREATE TABLE IF NOT EXISTS rivenditori (id TEXT PRIMARY KEY, ragione_sociale TEXT, piva TEXT, codice_fiscale TEXT, indirizzo TEXT, cap TEXT, citta TEXT, provincia TEXT, sdi TEXT, pec TEXT, email TEXT, telefono TEXT, note TEXT, licenza_scadenza TEXT, attiva INTEGER DEFAULT 1, sconto INTEGER DEFAULT 50, creato_il TEXT DEFAULT (datetime('now')));
 CREATE TABLE IF NOT EXISTS licenze_eventi (id TEXT PRIMARY KEY, azienda_id TEXT, reseller_id TEXT, tipo TEXT, mesi INTEGER, prezzo_imponibile TEXT, prezzo_finale TEXT, fatturato INTEGER DEFAULT 0, fatturato_il TEXT, creato_il TEXT DEFAULT (datetime('now')));
 CREATE INDEX IF NOT EXISTS idx_dati_azienda ON dati_app(azienda_id, collezione);
@@ -14,3 +15,9 @@ CREATE INDEX IF NOT EXISTS idx_richieste_creato ON richieste(creato_il);
 -- così le scritture del salone (blob dati_app) non possono sovrascriverle.
 CREATE TABLE IF NOT EXISTS prenotazioni_online (id TEXT PRIMARY KEY, azienda_id TEXT NOT NULL, data TEXT NOT NULL, start_min INTEGER NOT NULL, end_min INTEGER NOT NULL, service_id TEXT, staff_id TEXT, client_code TEXT, client_name TEXT, client_phone TEXT, client_email TEXT, note TEXT, stato TEXT DEFAULT 'attiva', impegni TEXT, creato_il TEXT DEFAULT (datetime('now')));
 CREATE INDEX IF NOT EXISTS idx_prenotazioni_azienda ON prenotazioni_online(azienda_id, data);
+-- Installazioni cliente (solo portale): ogni cliente ha il suo sito+gestionale
+-- su Cloudflare col proprio dominio e database; qui vivono licenza annuale,
+-- moduli attivi e l'impronta della chiave con cui l'installazione si presenta.
+CREATE TABLE IF NOT EXISTS installazioni (id TEXT PRIMARY KEY, nome TEXT, dominio TEXT, chiave_hash TEXT, licenza_scadenza TEXT, attiva INTEGER DEFAULT 1, moduli TEXT, moduli_disponibili TEXT, note TEXT, versione TEXT, dominio_rilevato TEXT, ultimo_contatto TEXT, creata_il TEXT DEFAULT (datetime('now')));
+-- Copia locale della licenza ricevuta dal portale (solo installazioni cliente).
+CREATE TABLE IF NOT EXISTS licenza_locale (id TEXT PRIMARY KEY, dati TEXT, verificata_il TEXT, tentata_il TEXT);

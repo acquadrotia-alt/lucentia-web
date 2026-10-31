@@ -3,9 +3,10 @@ import { SiteCtx, SiteHeader, SiteFooter, LeadModal } from "./ui.jsx";
 import { normalizePath, rottaDi, SITO } from "./rotte.js";
 import HomePage from "./HomePage.jsx";
 import FunzionalitaPage from "./FunzionalitaPage.jsx";
-import PianiPage from "./PianiPage.jsx";
+import ComeFunzionaPage from "./ComeFunzionaPage.jsx";
+import LicenzaPage from "./LicenzaPage.jsx";
 
-const PAGINE = { "/": HomePage, "/funzionalita": FunzionalitaPage, "/piani": PianiPage };
+const PAGINE = { "/": HomePage, "/funzionalita": FunzionalitaPage, "/come-funziona": ComeFunzionaPage, "/licenza": LicenzaPage };
 
 // Scorre fino all'ancora richiesta, riprovando finché la nuova pagina non
 // ha finito di montare l'elemento.
@@ -32,9 +33,9 @@ function applicaMeta(path) {
   setMeta('meta[name="twitter:description"]', "content", r.ogDescription);
 }
 
-// Sito pubblico (visitatori non autenticati): home, funzionalità e piani sono
-// tre pagine reali con URL proprio, servite come HTML statico dal build e
-// navigate senza ricaricare grazie alla History API.
+// Sito pubblico (visitatori non autenticati): home, funzionalità, come
+// funziona e licenza sono quattro pagine reali con URL proprio, servite come
+// HTML statico dal build e navigate senza ricaricare grazie alla History API.
 export default function Site({ onLogin, initialPath }) {
   const [path, setPath] = useState(() => normalizePath(initialPath != null ? initialPath : (typeof window !== "undefined" ? window.location.pathname : "/")));
   const [lead, setLead] = useState(null);
@@ -70,9 +71,12 @@ export default function Site({ onLogin, initialPath }) {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  // All'apertura diretta di un URL con ancora (es. /#contatti).
+  // All'apertura diretta di un URL con ancora (es. /#contatti) e dei vecchi
+  // percorsi (es. /piani → /licenza): l'URL in barra viene allineato.
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const dest = normalizePath(window.location.pathname);
+    if (window.location.pathname !== dest && window.location.pathname !== dest + "/") window.history.replaceState(null, "", dest + window.location.hash);
     const h = (window.location.hash || "").replace("#", "");
     if (h && h !== "login" && h !== "accedi") scrollAdAncora(h);
   }, []);
@@ -88,9 +92,8 @@ export default function Site({ onLogin, initialPath }) {
           <Pagina />
         </main>
         <SiteFooter />
-        {lead ? <LeadModal kind={lead.kind} piano={lead.piano} onClose={() => setLead(null)} onLogin={onLogin} /> : null}
+        {lead ? <LeadModal kind={lead.kind} onClose={() => setLead(null)} onLogin={onLogin} /> : null}
       </div>
     </SiteCtx.Provider>
   );
 }
-
