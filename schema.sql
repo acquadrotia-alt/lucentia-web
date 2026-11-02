@@ -21,3 +21,6 @@ CREATE INDEX IF NOT EXISTS idx_prenotazioni_azienda ON prenotazioni_online(azien
 CREATE TABLE IF NOT EXISTS installazioni (id TEXT PRIMARY KEY, nome TEXT, dominio TEXT, chiave_hash TEXT, licenza_scadenza TEXT, attiva INTEGER DEFAULT 1, moduli TEXT, moduli_disponibili TEXT, note TEXT, versione TEXT, dominio_rilevato TEXT, ultimo_contatto TEXT, creata_il TEXT DEFAULT (datetime('now')));
 -- Copia locale della licenza ricevuta dal portale (solo installazioni cliente).
 CREATE TABLE IF NOT EXISTS licenza_locale (id TEXT PRIMARY KEY, dati TEXT, verificata_il TEXT, tentata_il TEXT);
+-- Archivio riservato delle integrazioni (Gmail, Google Calendar, feed iCalendar):
+-- segreti per salone che l'API dei dati non restituisce mai al browser.
+CREATE TABLE IF NOT EXISTS integrazioni (azienda_id TEXT NOT NULL, chiave TEXT NOT NULL, dati TEXT NOT NULL, aggiornato_il TEXT DEFAULT (datetime('now')), PRIMARY KEY (azienda_id, chiave));

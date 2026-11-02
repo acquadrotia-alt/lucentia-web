@@ -1,7 +1,7 @@
 // Contenuti del sito pubblico: funzionalità, approfondimenti, passi,
 // licenza, moduli e domande frequenti. Tenuti qui per non duplicarli tra le
 // pagine. Attenzione: il sito non riporta prezzi — la licenza è su preventivo.
-import { Calendar, Users, Star, Layers, ShoppingBag, BarChart3, MessageCircle, HeartPulse, KeyRound, Cloud, FileText, ShieldCheck, Gift, CalendarClock, PartyPopper, Globe, Database, Server, Wrench, Palette, Sparkles, Rocket, PenTool, RefreshCw, Headset, ToggleRight, Puzzle, Image, Type, LayoutTemplate, Package, Scissors, Lock } from "lucide-react";
+import { Calendar, Users, Star, Mail, Layers, ShoppingBag, BarChart3, MessageCircle, HeartPulse, KeyRound, Cloud, FileText, ShieldCheck, Gift, CalendarClock, PartyPopper, Globe, Database, Server, Wrench, Palette, Sparkles, Rocket, PenTool, RefreshCw, Headset, ToggleRight, Puzzle, Image, Type, LayoutTemplate, Package, Scissors, Lock } from "lucide-react";
 
 // ===== Funzionalità del gestionale, senza alcun riferimento a prezzi =====
 export const FUNZIONALITA = [
@@ -151,6 +151,7 @@ export const MODULI = [
   { key: "marketing", icon: MessageCircle, nome: "Marketing WhatsApp", desc: "Promemoria appuntamento, auguri e promozioni inviati via WhatsApp direttamente dalla scheda del cliente." },
   { key: "allergeni", icon: HeartPulse, nome: "Allergeni & patologie", desc: "Schede salute con allergie, patologie e note, con avvisi automatici quando apri l'appuntamento del cliente." },
   { key: "online", icon: CalendarClock, nome: "Prenotazioni online & mini-sito", desc: "I clienti prenotano dal tuo sito 24 ore su 24, scelgono l'operatore e trovano eventi e informazioni. Gli orari si incastrano in automatico in agenda." },
+  { key: "google", icon: Mail, nome: "Gmail & Google Calendar", desc: "Conferme e promemoria ai clienti dalla tua casella Gmail, e l'agenda sincronizzata a due vie con i calendari Google di ogni operatore, anche dal telefono." },
   { key: "integrazioni", icon: Wrench, nome: "Integrazioni su misura", desc: "Funzioni, collegamenti e automazioni realizzati sul metodo di lavoro del tuo salone, aggiunti al gestionale quando servono." },
 ];
 

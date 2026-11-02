@@ -12,7 +12,7 @@ import { ShieldCheck, LogOut, Plus, KeyRound, Ban, BadgeCheck, Trash2, CalendarC
 const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
 
 const DURATE = [[12, "12 mesi"], [24, "24 mesi"], [1, "1 mese"], [3, "3 mesi"], [6, "6 mesi"], [0, "Illimitata"]];
-const OPT = [["fidelity", "Fidelity"], ["vendite", "Vendite"], ["statistiche", "Statistiche"], ["marketing", "Marketing"], ["allergeni", "Allergeni e patologie"], ["pacchetti", "Pacchetti sedute"]];
+const OPT = [["fidelity", "Fidelity"], ["vendite", "Vendite"], ["statistiche", "Statistiche"], ["marketing", "Marketing"], ["allergeni", "Allergeni e patologie"], ["pacchetti", "Pacchetti sedute"], ["google", "Gmail e Google Calendar"]];
 const OPT_KEYS = OPT.map((m) => m[0]);
 const OPER = [["1", "1 operatore"], ["3", "Fino a 3 operatori"], ["inf", "Operatori illimitati"]];
 const tierFrom = (m) => { const a = Array.isArray(m) ? m : []; return a.includes("opinf") ? "inf" : (a.includes("op3") ? "3" : "1"); };

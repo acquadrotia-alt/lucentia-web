@@ -206,7 +206,7 @@ un modulo del core, non nella cartella del cliente.
 ## 6. Il gestionale: promemoria
 
 - **Moduli**: Fidelity, Vendite, Statistiche, Marketing, Allergeni e patologie, Pacchetti
-  sedute; livello operatori 1 / fino a 3 / illimitati; Prenotazioni online (richiede
+  sedute, Gmail e Google Calendar; livello operatori 1 / fino a 3 / illimitati; Prenotazioni online (richiede
   più di un operatore). Sempre inclusi: Agenda, Clienti, Buoni regalo, Eventi.
   Un salone con colonna `moduli` NULL ha tutto attivo.
 - **Accessi operatori** (piani con più operatori): da Impostazioni → Operatori e cabine il
@@ -216,7 +216,17 @@ un modulo del core, non nella cartella del cliente.
 - **Migrazioni**: `migrazione-prenotazioni.sql` crea la tabella delle prenotazioni online
   (obbligatoria per il modulo), `migrazione-risorse.sql` aggiunge la colonna `impegni`
   (senza, una prenotazione online occupa l'operatore per tutta la durata del servizio),
-  `migrazione-installazioni.sql` crea `installazioni` (portale) e `licenza_locale` (installazioni).
+  `migrazione-installazioni.sql` crea `installazioni` (portale) e `licenza_locale` (installazioni),
+  `migrazione-integrazioni.sql` crea `integrazioni` (segreti di Gmail/Google Calendar, codice del feed).
+- **Gmail e Google Calendar** (modulo `google`, Impostazioni → Google): il titolare crea un
+  progetto su Google Cloud, abilita Gmail API e Google Calendar API, pubblica la schermata
+  consenso OAuth (Esterno) con gli ambiti `gmail.send` e `calendar`, crea un ID client
+  «Applicazione web» con URI di reindirizzamento `https://<dominio>/api/gmail?action=ritorno`
+  (la pagina lo mostra pronto da copiare) e incolla ID client e client secret nel gestionale;
+  poi «Collega account Google». Le email ai clienti (conferma/promemoria dall'agenda) partono
+  dalla sua casella; ogni operatore si abbina a un calendario Google già esistente (a due vie,
+  ogni 2 minuti); c'è anche un feed iCalendar con codice segreto per telefono e Outlook.
+  Segreti nella tabella `integrazioni` (`migrazione-integrazioni.sql`), mai nel browser.
 - **Zona ripristino** (Impostazioni → Dati e backup): azzera punti, azzera vendite e
   appuntamenti, ripristino totale, protetti da password.
 - **Svuota dati** (pannello, saloni di prova): riporta un salone a licenza vuota lasciando
