@@ -309,13 +309,13 @@ export const STATUS = {
 export const BRAND_CSS = ".brand-bg{background:var(--brand);color:#fff}.brand-bg:hover:not(:disabled){background:var(--brand-dark)}.brand-soft{background:var(--brand-soft)}.brand-text{color:var(--brand-text)}.brand-accent{color:var(--brand)}.brand-border{border-color:var(--brand)!important}.brand-hover:hover{border-color:var(--brand)}.brand-ring:focus,.brand-ring:focus-within{outline:none;box-shadow:0 0 0 3px var(--brand-ring)}";
 // `has(chiave)` legge qualunque modulo, compresi quelli su misura dichiarati
 // in src/cliente/moduli.js e accesi dal portale.
-export const ALL_FLAGS = { fidelity: true, vendite: true, statistiche: true, marketing: true, allergeni: true, pacchetti: true, online: true, google: true, maxOperatori: Infinity, moduli: null, has: () => true };
+export const ALL_FLAGS = { fidelity: true, vendite: true, statistiche: true, marketing: true, allergeni: true, pacchetti: true, online: true, google: true, fatture: true, maxOperatori: Infinity, moduli: null, has: () => true };
 export function flagsFromModuli(moduli) {
   if (!Array.isArray(moduli)) return ALL_FLAGS;
   const has = (k) => moduli.includes(k);
   return {
     fidelity: has("fidelity"), vendite: has("vendite"), statistiche: has("statistiche"),
-    marketing: has("marketing"), allergeni: has("allergeni"), pacchetti: has("pacchetti"), online: has("online"), google: has("google"),
+    marketing: has("marketing"), allergeni: has("allergeni"), pacchetti: has("pacchetti"), online: has("online"), google: has("google"), fatture: has("fatture"),
     maxOperatori: has("opinf") ? Infinity : (has("op3") ? 3 : 1),
     moduli, has,
   };

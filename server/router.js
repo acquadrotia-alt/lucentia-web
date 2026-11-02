@@ -24,6 +24,7 @@ import { installazione, sito, setupCliente } from "./cliente/installazione.js";
 import { rotteCliente } from "./cliente/rotte.js";
 import { gmail, gmailRitorno } from "./core/gmail.js";
 import { gcal } from "./core/gcal.js";
+import { effatta } from "./core/effatta.js";
 import { icsGestione, icsFeed } from "./core/ics.js";
 import { getAzienda } from "./core/sessione.js";
 import { parseModuli } from "./core/util.js";
@@ -106,6 +107,16 @@ async function gestisci(context) {
     return await me(context, sess, statoDi, extra);
   }
   if (segs[0] === "verify-password" && method === "POST") return await verifyPasswordRoute(context, sess);
+
+  // ---- Effatta (fatture elettroniche): solo il titolare, licenza attiva, modulo "fatture" ----
+  if (segs[0] === "effatta") {
+    if (sess.ruolo !== "azienda" || !sess.azienda_id) return json({ error: "riservato al titolare del salone" }, 403);
+    const azf = await getAzienda(env, sess.azienda_id);
+    if (!azf || (await statoDi(azf)) !== "active") return json({ error: "licenza non attiva" }, 403);
+    if (azf.demo) return json({ error: "non disponibile nella demo" }, 403);
+    if (!parseModuli(azf.moduli, cliente ? chiaviExtra() : undefined).includes("fatture")) return json({ error: "Il modulo Fatture elettroniche non è attivo su questa licenza." }, 403);
+    return await effatta(context, sess, azf.id);
+  }
 
   // ---- Google (Gmail, Calendar, feed): solo il titolare, solo col modulo "google" acceso ----
   if (segs[0] === "gmail" || segs[0] === "gcal" || segs[0] === "agenda-ics") {

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { Sparkles, Calendar, Clock, User, Mail, Plus, Trash2, Check, ChevronLeft, ChevronRight, X, Users, CalendarPlus, Phone, Image as ImageIcon, Sunrise, Sun, Moon, Search, Gift, Hash, Ban, UserX, Undo2, Timer, CalendarClock, Wallet, AlertTriangle, Tag, Boxes, Layers, AlertCircle, CalendarRange, CalendarDays, PartyPopper, Share2, Pencil, DoorOpen } from "lucide-react";
+import { Sparkles, Calendar, Clock, User, Mail, Plus, Trash2, Check, ChevronLeft, ChevronRight, X, Users, CalendarPlus, Phone, Image as ImageIcon, Sunrise, Sun, Moon, Search, Gift, Hash, Ban, UserX, Undo2, Timer, CalendarClock, Wallet, AlertTriangle, Tag, Boxes, Layers, AlertCircle, CalendarRange, CalendarDays, PartyPopper, Share2, Pencil, DoorOpen, FileText } from "lucide-react";
 import { orariPossibili, durataServizio, impegniServizio, senzaOperatore, impegniBooking, operatoriDelServizio } from "../../orari.js";
 import { ESTENSIONI } from "../../cliente/index.jsx";
 import { ADVANCE_DAYS, uid, minToStr, strToMin, pd, todayStr, parseDate, addDays, WDAY_SHORT, MONTHS, fmtDate, fmtDateTime, eur, fileToCoverDataURL, qualifiedStaff, staffOff, salonClosure, upsertClient, loyaltyConfig, clientBalance, matchPackage, STATUS, useMods, FieldIcon, Row } from "./comuni.jsx";
@@ -285,7 +285,7 @@ export function ApptItem({ b, staff, services, onCal, onCancel, onEdit, canCance
   );
 }
 
-export function AgendaPage({ config, bookings, setBookings, clients, setClients, sales, catalog, hidePartial, canAddBooking, canAddClient, onlineBk, onImportOnline, onCancelOnline, canManageOnline, eventi, setEventi, impegniEventi, aziendaId, google = null }) {
+export function AgendaPage({ config, bookings, setBookings, clients, setClients, sales, catalog, hidePartial, canAddBooking, canAddClient, onlineBk, onImportOnline, onCancelOnline, canManageOnline, eventi, setEventi, impegniEventi, aziendaId, google = null, onFattura = null }) {
   const [adding, setAdding] = useState(false);
   const [addingEv, setAddingEv] = useState(false);
   const [editingEv, setEditingEv] = useState(null);
@@ -305,7 +305,7 @@ export function AgendaPage({ config, bookings, setBookings, clients, setClients,
       {adding ? <ManualBooking config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} canAddBooking={canAddBooking} canAddClient={canAddClient} impegniEventi={impegniEventi} onDone={() => setAdding(false)} /> : null}
       {addingEv ? <EventForm config={config} eventi={eventi} setEventi={setEventi} onDone={() => setAddingEv(false)} /> : null}
       {editingEv ? <EventForm config={config} eventi={eventi} setEventi={setEventi} editing={editingEv} onDone={() => setEditingEv(null)} /> : null}
-      <AgendaView config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={hidePartial} onlineBk={onlineBk || []} onImportOnline={onImportOnline} onCancelOnline={onCancelOnline} canManageOnline={canManageOnline} eventi={eventi} setEventi={setEventi} impegniEventi={impegniEventi} aziendaId={aziendaId} google={google} onEditEvento={(ev) => { setEditingEv(ev); setAddingEv(false); setAdding(false); }} />
+      <AgendaView config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={hidePartial} onlineBk={onlineBk || []} onImportOnline={onImportOnline} onCancelOnline={onCancelOnline} canManageOnline={canManageOnline} eventi={eventi} setEventi={setEventi} impegniEventi={impegniEventi} aziendaId={aziendaId} google={google} onFattura={onFattura} onEditEvento={(ev) => { setEditingEv(ev); setAddingEv(false); setAdding(false); }} />
     </div>
   );
 }
@@ -313,7 +313,7 @@ export function AgendaPage({ config, bookings, setBookings, clients, setClients,
 export const VIEW_MODES = [["day", "Giorno", CalendarDays], ["3day", "3 giorni", CalendarRange], ["week", "Settimana", Calendar]];
 export function mondayOf(dateStr) { const d = parseDate(dateStr); const wd = (d.getDay() + 6) % 7; return addDays(dateStr, -wd); }
 
-export function AgendaView({ config, bookings, setBookings, clients, setClients, sales, catalog, hidePartial, onlineBk, onImportOnline, onCancelOnline, canManageOnline, eventi, setEventi, impegniEventi, aziendaId, onEditEvento, google = null }) {
+export function AgendaView({ config, bookings, setBookings, clients, setClients, sales, catalog, hidePartial, onlineBk, onImportOnline, onCancelOnline, canManageOnline, eventi, setEventi, impegniEventi, aziendaId, onEditEvento, google = null, onFattura = null }) {
   const staff = config.staff, services = config.services;
   const [anchor, setAnchor] = useState(todayStr());
   const [mode, setMode] = useState("day");
@@ -441,7 +441,7 @@ export function AgendaView({ config, bookings, setBookings, clients, setClients,
 
       {totalCount + eventCount > 0 ? <p className="text-xs text-stone-400 text-center pt-1">{totalCount} appuntament{totalCount === 1 ? "o" : "i"}{eventCount ? ` e ${eventCount} event${eventCount === 1 ? "o" : "i"}` : ""} nel periodo · tocca una card per gestirla</p> : null}
 
-      {sel ? <ApptActions booking={sel} config={config} clients={clients} setClients={setClients} bookings={bookings} sales={sales} catalog={catalog} hidePartial={hidePartial} onStatus={setStatus} onResch={(bk) => { setResch(bk); setSel(null); }} onClose={() => setSel(null)} onEmailInviata={(id, voce) => setBookings(bookings.map((x) => (x.id === id ? { ...x, emailInviate: [voce, ...(x.emailInviate || [])].slice(0, 10) } : x)))} /> : null}
+      {sel ? <ApptActions booking={sel} config={config} clients={clients} setClients={setClients} bookings={bookings} sales={sales} catalog={catalog} hidePartial={hidePartial} onStatus={setStatus} onResch={(bk) => { setResch(bk); setSel(null); }} onClose={() => setSel(null)} onEmailInviata={(id, voce) => setBookings(bookings.map((x) => (x.id === id ? { ...x, emailInviate: [voce, ...(x.emailInviate || [])].slice(0, 10) } : x)))} onFattura={onFattura ? (bk) => { onFattura(bk); setSel(null); } : null} /> : null}
       {selGoogle && google ? <GoogleEventoModal ev={selGoogle} staff={staff} onClose={() => setSelGoogle(null)} onElimina={google.eliminaEsterno} /> : null}
       {selOnline ? <OnlineApptModal booking={selOnline} config={config} canManage={canManageOnline} onImport={(bk) => { onImportOnline && onImportOnline(bk); setSelOnline(null); }} onCancel={(bk) => { onCancelOnline && onCancelOnline(bk); setSelOnline(null); }} onClose={() => setSelOnline(null)} /> : null}
       {resch ? <RescheduleModal booking={resch} config={config} bookings={bookings} impegniEventi={impegniEventi} onClose={() => setResch(null)} onSave={(d2, startMin, slot) => applyResch(resch, d2, startMin, slot)} /> : null}
@@ -830,7 +830,7 @@ export function DettaglioAppuntamento({ b, config }) {
   );
 }
 
-export function ApptActions({ booking, config, clients, setClients, bookings, sales, catalog, hidePartial, onStatus, onResch, onClose, onEmailInviata }) {
+export function ApptActions({ booking, config, clients, setClients, bookings, sales, catalog, hidePartial, onStatus, onResch, onClose, onEmailInviata, onFattura = null }) {
   const F = useMods();
   const b = booking;
   const [email, setEmail] = useState(false);
@@ -937,7 +937,10 @@ export function ApptActions({ booking, config, clients, setClients, bookings, sa
               <button onClick={() => onStatus(b.id, "cancelled")} className="col-span-2 flex items-center justify-center gap-1.5 text-sm font-medium border border-stone-300 text-stone-500 px-3 py-2.5 rounded-lg hover:bg-stone-50"><Ban size={15} /> Annulla</button>
             </>
           ) : (
-            <button onClick={() => onStatus(b.id, undefined)} className="col-span-2 flex items-center justify-center gap-1.5 text-sm font-medium border border-stone-300 text-stone-600 px-3 py-2.5 rounded-lg hover:bg-stone-50"><Undo2 size={15} /> Ripristina</button>
+            <>
+              <button onClick={() => onStatus(b.id, undefined)} className="col-span-2 flex items-center justify-center gap-1.5 text-sm font-medium border border-stone-300 text-stone-600 px-3 py-2.5 rounded-lg hover:bg-stone-50"><Undo2 size={15} /> Ripristina</button>
+              {onFattura && (b.status === "done" || b.status === "partial") ? (b.fatturaId ? <div className="col-span-2 text-center text-xs text-stone-500">Fattura n. {b.fatturaNumero} già emessa per questo appuntamento.</div> : <button onClick={() => onFattura(b)} className="col-span-2 flex items-center justify-center gap-1.5 text-sm font-medium border brand-border brand-accent bg-white px-3 py-2.5 rounded-lg hover:brand-soft"><FileText size={15} /> Emetti fattura</button>) : null}
+            </>
           )}
         </div>
         )}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { User, Plus, Trash2, Check, ChevronRight, X, Image as ImageIcon, Search, Star, Timer, Printer, ShoppingCart, Package, Tag, Minus, Boxes, Receipt, Layers, AlertCircle, PackagePlus } from "lucide-react";
+import { User, Plus, Trash2, Check, ChevronRight, X, Image as ImageIcon, Search, Star, Timer, Printer, ShoppingCart, Package, Tag, Minus, Boxes, Receipt, Layers, AlertCircle, PackagePlus, FileText } from "lucide-react";
 import { uid, eur, fmtDateTime, fileToSquareDataURL, generateCode, useMods, Field } from "./comuni.jsx";
 import { printSale } from "./stampa.jsx";
 
@@ -23,7 +23,7 @@ export function applyLoadToCatalog(catalog, items) {
   });
   return { ...catalog, products };
 }
-export function ShopView({ catalog, setCatalog, sales, setSales, clients, setClients, branding, loyalty, hidePartial, canAddClient, demo }) {
+export function ShopView({ catalog, setCatalog, sales, setSales, clients, setClients, branding, loyalty, hidePartial, canAddClient, demo, onFattura = null }) {
   const [tab, setTab] = useState("pos");
   const TABS = [["pos", "Cassa", ShoppingCart], ["load", "Carico", PackagePlus], ["catalog", "Catalogo", Boxes], ["history", "Storico", Receipt]];
   const lock = (node) => (
@@ -42,7 +42,7 @@ export function ShopView({ catalog, setCatalog, sales, setSales, clients, setCli
       {tab === "pos" ? <PosTab catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} clients={clients} setClients={setClients} branding={branding} loyalty={loyalty} hidePartial={hidePartial} canAddClient={canAddClient} /> : null}
       {tab === "load" ? (demo ? lock(<LoadTab catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} />) : <LoadTab catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} />) : null}
       {tab === "catalog" ? (demo ? lock(<CatalogTab catalog={catalog} setCatalog={setCatalog} loyalty={loyalty} />) : <CatalogTab catalog={catalog} setCatalog={setCatalog} loyalty={loyalty} />) : null}
-      {tab === "history" ? <SalesHistoryTab sales={sales} branding={branding} hidePartial={hidePartial} /> : null}
+      {tab === "history" ? <SalesHistoryTab sales={sales} branding={branding} hidePartial={hidePartial} onFattura={onFattura} /> : null}
     </div>
   );
 }
@@ -322,7 +322,7 @@ export function ProductEditor({ product, categories, loyalty, onChange, onDelete
   );
 }
 
-export function SalesHistoryTab({ sales, branding, hidePartial }) {
+export function SalesHistoryTab({ sales, branding, hidePartial, onFattura = null }) {
   const [openId, setOpenId] = useState(null);
   const [flt, setFlt] = useState("all");
   const isLoad = (r) => r.type === "load";
@@ -361,7 +361,8 @@ export function SalesHistoryTab({ sales, branding, hidePartial }) {
             {open ? (
               <div className="px-3 pb-3 border-t border-stone-100 pt-2">
                 <div className="space-y-1 text-sm">{s.items.map((it, i) => (<div key={i} className="flex justify-between gap-2"><span className="text-stone-600">{load ? `+${it.qty}` : `${it.qty}×`} {it.name}{it.label ? ` (${it.label})` : ""}</span>{load ? <span className="text-emerald-600 shrink-0">+{it.qty} pz</span> : <span className="text-stone-500 shrink-0">{eur(it.price * it.qty)}</span>}</div>))}</div>
-                {!load ? <button onClick={() => printSale(s, branding)} className="mt-3 text-xs font-medium border border-stone-300 text-stone-600 px-3 py-1.5 rounded-lg hover:bg-stone-50 inline-flex items-center gap-1.5"><Printer size={14} /> Stampa scontrino</button> : null}
+                {!load ? <div className="mt-3 flex flex-wrap gap-2 items-center"><button onClick={() => printSale(s, branding)} className="text-xs font-medium border border-stone-300 text-stone-600 px-3 py-1.5 rounded-lg hover:bg-stone-50 inline-flex items-center gap-1.5"><Printer size={14} /> Stampa scontrino</button>
+                  {onFattura ? (s.fatturaId ? <span className="text-xs text-stone-500 inline-flex items-center gap-1"><FileText size={13} /> Fattura n. {s.fatturaNumero}</span> : <button onClick={() => onFattura(s)} className="text-xs font-medium border brand-border brand-accent bg-white px-3 py-1.5 rounded-lg hover:brand-soft inline-flex items-center gap-1.5"><FileText size={14} /> Fattura</button>) : null}</div> : null}
               </div>
             ) : null}
           </div>
