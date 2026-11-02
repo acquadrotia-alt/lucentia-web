@@ -206,7 +206,7 @@ un modulo del core, non nella cartella del cliente.
 ## 6. Il gestionale: promemoria
 
 - **Moduli**: Fidelity, Vendite, Statistiche, Marketing, Allergeni e patologie, Pacchetti
-  sedute, Gmail e Google Calendar; livello operatori 1 / fino a 3 / illimitati; Prenotazioni online (richiede
+  sedute, Gmail e Google Calendar, Fatture elettroniche (Effatta); livello operatori 1 / fino a 3 / illimitati; Prenotazioni online (richiede
   più di un operatore). Sempre inclusi: Agenda, Clienti, Buoni regalo, Eventi.
   Un salone con colonna `moduli` NULL ha tutto attivo.
 - **Accessi operatori** (piani con più operatori): da Impostazioni → Operatori e cabine il
@@ -227,6 +227,15 @@ un modulo del core, non nella cartella del cliente.
   dalla sua casella; ogni operatore si abbina a un calendario Google già esistente (a due vie,
   ogni 2 minuti); c'è anche un feed iCalendar con codice segreto per telefono e Outlook.
   Segreti nella tabella `integrazioni` (`migrazione-integrazioni.sql`), mai nel browser.
+- **Fatture elettroniche** (modulo `fatture`, vista Fatture + Impostazioni → Fatture): il titolare
+  compila i dati della ditta (denominazione, P.IVA, sede, regime fiscale, aliquota o natura IVA,
+  numerazione) e le credenziali del servizio **fatture** di Effatta (utente, password, idMittente,
+  dataUserId se non arrivano col login; «Prova il collegamento» li deduce da `userId` e li conferma
+  con `checkToken`). Le fatture nascono dalla cassa (Vendite → Storico → Fattura), da un
+  appuntamento svolto (Emetti fattura) o da zero; l'XML FatturaPA si scarica sempre, e con Effatta
+  acceso «Invia allo SDI» fa UNA sola `sendXML`. L'esito dello SDI si aggiorna da solo ogni 2 ore,
+  le fatture dei fornitori (mese corrente e precedente) ogni ora, senza doppioni. Credenziali in
+  `integrazioni` (`effatta:cfg`), mai nel browser. Collezioni nuove: `fatture`, `acquisti`.
 - **Zona ripristino** (Impostazioni → Dati e backup): azzera punti, azzera vendite e
   appuntamenti, ripristino totale, protetti da password.
 - **Svuota dati** (pannello, saloni di prova): riporta un salone a licenza vuota lasciando

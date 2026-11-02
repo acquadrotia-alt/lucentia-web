@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { User, Trash2, ChevronLeft, ChevronRight, Users, History, Search, Gift, Star, AlertTriangle, Layers } from "lucide-react";
 import { ESTENSIONI } from "../../cliente/index.jsx";
+import { DatiFatturazioneCliente } from "./fatture.jsx";
 import { uid, fmtFullDate, eur, clientStats, loyaltyConfig, clientBalance, useMods, Field } from "./comuni.jsx";
 import { downloadICS, FidelityCard, CardActions } from "./stampa.jsx";
 import { ApptItem, initials } from "./agenda.jsx";
@@ -71,6 +72,7 @@ export function ClientsView({ config, bookings, clients, setClients, sales, cata
             <Field label="Codice tessera (facoltativo)"><input value={c.card || ""} onChange={(e) => patchClient(c.code, { card: e.target.value })} placeholder="Tessera fisica del cliente" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring" /></Field>
           </div>
         </div>
+        {F.has("fatture") ? <DatiFatturazioneCliente client={c} setClient={(patch) => patchClient(c.code, patch)} /> : null}
         {/* Punto di aggancio del cliente (src/cliente/index.jsx) */}
         {ESTENSIONI.schedaCliente ? <ESTENSIONI.schedaCliente client={c} setClient={(patch) => patchClient(c.code, patch)} config={config} /> : null}
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Sparkles, Calendar, Mail, Lock, Settings, Users, Phone, MapPin, Gift, LogOut, ShieldCheck, AlertTriangle, ShoppingBag, AlertCircle, BarChart3, MessageCircle } from "lucide-react";
+import { Sparkles, Calendar, Mail, Lock, Settings, Users, Phone, MapPin, Gift, LogOut, ShieldCheck, AlertTriangle, ShoppingBag, AlertCircle, BarChart3, MessageCircle, FileText } from "lucide-react";
 import { setBrandTab } from "../../favicon.js";
 import { APP_VERSION, RESELLER_CODE, uid, pad, todayStr, BRANDING, DEFAULT_CONFIG, DEFAULT_CATALOG, loadKey, saveKey, apiLoad, apiSaveVerificato, apiSave, apiSaveDebounced, loadLicense, saveLicense, licenseState, licenseOk, themeVars, eventiImpegni, buildDemoData, buildSampleData, BRAND_CSS, flagsFromModuli, ModsCtx, planName, LUCENTIA_LOGO, MAKER_LOGO } from "./comuni.jsx";
 import { BACKUP_KEY, backupPayload, saveDirHandle, loadDirHandle, clearDirHandle, writeBackupToDir } from "./backup.js";
@@ -12,6 +12,7 @@ import { MarketingView } from "./marketing.jsx";
 import { SettingsView } from "./impostazioni.jsx";
 import { ESTENSIONI } from "../../cliente/index.jsx";
 import { useGcal } from "./google.jsx";
+import { FattureView, useEffatta, bozzaDaVendita, bozzaDaAppuntamento, fattureConfig } from "./fatture.jsx";
 
 // `modalita` è "hub" (salone ospitato sul portale: demo o prova) oppure
 // "cliente" (installazione dedicata sul dominio del salone); `installazione`
@@ -27,6 +28,9 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
   const [sales, setSales] = useState([]);
   const [vouchers, setVouchers] = useState([]);
   const [eventi, setEventi] = useState([]); // eventi del salone (occupano uno o più operatori)
+  const [fatture, setFatture] = useState([]); // fatture elettroniche emesse (modulo fatture)
+  const [acquisti, setAcquisti] = useState([]); // fatture dei fornitori scaricate da Effatta
+  const [bozzaFattura, setBozzaFattura] = useState(null); // una fattura da compilare, nata da cassa o agenda
   const [onlineBk, setOnlineBk] = useState([]); // prenotazioni online ricevute (overlay, sola lettura)
   const [loading, setLoading] = useState(true);
   const loadedRef = useRef(false);
@@ -38,7 +42,7 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
     try { const u = new URL(window.location.href); const e = u.searchParams.get("gmail") || ""; if (e) { u.searchParams.delete("gmail"); window.history.replaceState({}, "", u.pathname + u.search + u.hash); } return e; } catch (e) { return ""; }
   });
   const [view, setView] = useState(esitoGoogle ? "settings" : "agenda");
-  const enabledSections = ["agenda", "clienti", "buoni", ...(flags.vendite ? ["shop"] : []), ...(flags.statistiche ? ["stats"] : []), ...(flags.marketing ? ["marketing"] : []), ...visteExtra.map((v) => v.id), "settings"];
+  const enabledSections = ["agenda", "clienti", "buoni", ...(flags.vendite ? ["shop"] : []), ...(flags.statistiche ? ["stats"] : []), ...(flags.marketing ? ["marketing"] : []), ...(flags.fatture ? ["fatture"] : []), ...visteExtra.map((v) => v.id), "settings"];
   useEffect(() => { if (!enabledSections.includes(view)) setView("agenda"); }, [moduli, view]);
   // Google Calendar a due vie (modulo "google"): legge e scrive gli
   // appuntamenti tramite questi riferimenti, così la lista è sempre quella
@@ -72,6 +76,10 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
       if (alive) setVouchers(Array.isArray(vch) ? vch : []);
       const evs = await apiLoad("eventi", null);
       if (alive) setEventi(Array.isArray(evs) ? evs : []);
+      if (flags.fatture) {
+        const [ft, ac] = await Promise.all([apiLoad("fatture", null), apiLoad("acquisti", null)]);
+        if (alive) { setFatture(Array.isArray(ft) ? ft : []); setAcquisti(Array.isArray(ac) ? ac : []); }
+      }
       if (cfg == null && bk == null && cl == null && sl == null) {
         const s = buildSampleData();
         setConfig(DEFAULT_CONFIG); setBookings(s.bookings); setClients(s.clients); setSales(s.sales); setCatalog(DEFAULT_CATALOG);
@@ -112,6 +120,17 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
   useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("catalog", catalog); }, [catalog]);
   useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("sales", sales); }, [sales]);
   useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("vouchers", vouchers); }, [vouchers]);
+  useEffect(() => { if (demoRef.current || !loadedRef.current || !flags.fatture) return; apiSaveDebounced("fatture", fatture); }, [fatture]);
+  useEffect(() => { if (demoRef.current || !loadedRef.current || !flags.fatture) return; apiSaveDebounced("acquisti", acquisti); }, [acquisti]);
+  // Effatta: esiti dello SDI ogni 2 ore e fatture dei fornitori ogni ora.
+  const effatta = useEffatta({ attiva: flags.fatture && !demo && !loading, fatture, setFatture, acquisti, setAcquisti });
+  // Una fattura da una vendita o da un appuntamento: si apre la vista Fatture col modulo già compilato.
+  const fatturaDa = (tipo, x) => { const cfgF = fattureConfig(config); setBozzaFattura(tipo === "vendita" ? bozzaDaVendita(x, clients, cfgF) : bozzaDaAppuntamento(x, config, clients, cfgF)); setView("fatture"); };
+  const fatturaEmessa = (f) => {
+    const o = f.origine || {};
+    if (o.tipo === "vendita") setSales((cur) => cur.map((s) => (s.id === o.id ? { ...s, fatturaId: f.id, fatturaNumero: f.numero } : s)));
+    if (o.tipo === "appuntamento") setBookings((cur) => cur.map((b) => (b.id === o.id ? { ...b, fatturaId: f.id, fatturaNumero: f.numero } : b)));
+  };
   // Gli eventi si salvano SUBITO (niente debounce) e con esito verificato: il
   // link pubblico viene condiviso a stretto giro, un salvataggio fallito e
   // silenzioso produrrebbe una pagina "evento non disponibile".
@@ -122,7 +141,7 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
       if (!r.ok) alert(`Attenzione: il salvataggio degli eventi non è riuscito (${r.error}). Se hai caricato un'immagine molto grande, riprova con una foto più leggera.`);
     })();
   }, [eventi]);
-  dataRef.current = { config, bookings, clients, catalog, sales, eventi };
+  dataRef.current = { config, bookings, clients, catalog, sales, eventi, fatture, acquisti };
   useEffect(() => { loadDirHandle().then((h) => { if (h) { setBackupDir(h); setBackupDirName(h.name || "cartella"); } }); }, []);
   useEffect(() => {
     const tick = async () => {
@@ -133,7 +152,7 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
       const today = todayStr(); const last = loadKey(BACKUP_KEY, null);
       if (last && last.date === today) return;
       const now = new Date(); const hhmm = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-      if (hhmm >= bkc.time) { try { await writeBackupToDir(h, backupPayload(d.config, d.bookings, d.clients, d.catalog, d.sales, d.eventi)); const info = { date: today, at: Date.now() }; saveKey(BACKUP_KEY, info); setLastBackup(info); } catch (e) {} }
+      if (hhmm >= bkc.time) { try { await writeBackupToDir(h, backupPayload(d.config, d.bookings, d.clients, d.catalog, d.sales, d.eventi, d.fatture, d.acquisti)); const info = { date: today, at: Date.now() }; saveKey(BACKUP_KEY, info); setLastBackup(info); } catch (e) {} }
     };
     const id = setInterval(tick, 60000); const t0 = setTimeout(tick, 5000);
     return () => { clearInterval(id); clearTimeout(t0); };
@@ -173,7 +192,7 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
   };
   const backupNow = async () => {
     const h = backupDirRef.current; if (!h) { alert("Scegli prima una cartella di destinazione."); return; }
-    try { await writeBackupToDir(h, backupPayload(config, bookings, clients, catalog, sales, eventi)); const info = { date: todayStr(), at: Date.now() }; saveKey(BACKUP_KEY, info); setLastBackup(info); alert("Backup salvato nella cartella scelta."); } catch (e) { alert("Backup non riuscito: permesso negato o cartella non disponibile. Riprova."); }
+    try { await writeBackupToDir(h, backupPayload(config, bookings, clients, catalog, sales, eventi, fatture, acquisti)); const info = { date: todayStr(), at: Date.now() }; saveKey(BACKUP_KEY, info); setLastBackup(info); alert("Backup salvato nella cartella scelta."); } catch (e) { alert("Backup non riuscito: permesso negato o cartella non disponibile. Riprova."); }
   };
   const clearBackupDir = async () => { await clearDirHandle(); setBackupDir(null); setBackupDirName(""); };
 
@@ -188,7 +207,7 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
 
   const ls = licenseState(license);
   const operatorWarn = session.role === "operator" && ls.state === "active" && !ls.unlimited && ls.days <= 30;
-  const ALL_NAV = [["agenda", "Agenda", Calendar], ["clienti", "Clienti", Users], ["buoni", "Buoni", Gift], ["shop", "Vendite", ShoppingBag], ["stats", "Statistiche", BarChart3], ["marketing", "Marketing", MessageCircle], ...visteExtra.map((v) => [v.id, v.label || v.id, v.icon || Sparkles]), ["settings", "Impostazioni", Settings]];
+  const ALL_NAV = [["agenda", "Agenda", Calendar], ["clienti", "Clienti", Users], ["buoni", "Buoni", Gift], ["shop", "Vendite", ShoppingBag], ["stats", "Statistiche", BarChart3], ["marketing", "Marketing", MessageCircle], ["fatture", "Fatture", FileText], ...visteExtra.map((v) => [v.id, v.label || v.id, v.icon || Sparkles]), ["settings", "Impostazioni", Settings]];
   const vistaExtra = visteExtra.find((v) => v.id === view);
   const propsEstensione = { config, saveConfig, bookings, setBookings, clients, setClients, catalog, setCatalog, sales, setSales, vouchers, setVouchers, eventi, setEventi, azienda, demo: isDemo };
   const canAddVoucher = !isDemo || vouchers.filter((v) => !v.seed).length < 5;
@@ -224,10 +243,11 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
       </header>
 
       <main key={view} className="max-w-5xl w-full mx-auto px-4 py-6 flex-1 lc-fade-up">
-        {view === "agenda" && <AgendaPage config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={session.hidePartial} canAddBooking={canAddBooking} canAddClient={canAddClient} onlineBk={flags.online ? onlineBk : []} onImportOnline={importOnline} onCancelOnline={cancelOnline} canManageOnline={session.role !== "operator"} eventi={eventi} setEventi={setEventi} impegniEventi={impegni} aziendaId={azienda && azienda.id} google={google} />}
+        {view === "agenda" && <AgendaPage config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={session.hidePartial} canAddBooking={canAddBooking} canAddClient={canAddClient} onlineBk={flags.online ? onlineBk : []} onImportOnline={importOnline} onCancelOnline={cancelOnline} canManageOnline={session.role !== "operator"} eventi={eventi} setEventi={setEventi} impegniEventi={impegni} aziendaId={azienda && azienda.id} google={google} onFattura={flags.fatture && !isDemo ? (b) => fatturaDa("appuntamento", b) : null} />}
         {view === "clienti" && <ClientsView config={config} bookings={bookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} vouchers={vouchers} setVouchers={setVouchers} />}
         {view === "buoni" && <GiftCardsView config={config} vouchers={vouchers} setVouchers={setVouchers} clients={clients} canAddVoucher={canAddVoucher} />}
-        {view === "shop" && <ShopView catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} clients={clients} setClients={setClients} branding={b} loyalty={config.loyalty} hidePartial={session.hidePartial} canAddClient={canAddClient} demo={isDemo} />}
+        {view === "shop" && <ShopView catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} clients={clients} setClients={setClients} branding={b} loyalty={config.loyalty} hidePartial={session.hidePartial} canAddClient={canAddClient} demo={isDemo} onFattura={flags.fatture && !isDemo ? (s) => fatturaDa("vendita", s) : null} />}
+        {view === "fatture" && <FattureView config={config} saveConfig={saveConfig} fatture={fatture} setFatture={setFatture} acquisti={acquisti} setAcquisti={setAcquisti} clients={clients} setClients={setClients} bozza={bozzaFattura} onBozzaUsata={() => setBozzaFattura(null)} onEmessa={fatturaEmessa} effatta={effatta} />}
         {view === "stats" && <StatsView config={config} bookings={bookings} clients={clients} sales={sales} catalog={catalog} vouchers={vouchers} />}
         {view === "marketing" && <MarketingView config={config} saveConfig={saveConfig} bookings={bookings} clients={clients} sales={sales} catalog={catalog} />}
         {vistaExtra ? <vistaExtra.componente {...propsEstensione} /> : null}
@@ -235,11 +255,11 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
           <div>
             <div className="mb-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2"><AlertCircle size={16} className="shrink-0 mt-0.5" /> In versione demo le impostazioni sono <b>visibili ma non modificabili</b>.</div>
             <fieldset disabled style={{ border: 0, margin: 0, padding: 0, minInlineSize: "auto" }}>
-              <SettingsView config={config} saveConfig={saveConfig} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} eventi={eventi} setEventi={setEventi} session={session} online={flags.online} aziendaId={azienda && azienda.id} license={license} onSaveLicense={updateLicense} backupDirName={backupDirName} onPickBackupDir={pickBackupDir} onClearBackupDir={clearBackupDir} onBackupNow={backupNow} lastBackup={lastBackup} licenza={{ plan: planName(moduli), scadenza: azienda && azienda.licenza_scadenza }} modalita={modalita} installazione={installazione} azienda={azienda} sezioneIniziale={esitoGoogle ? "google" : "attivita"} esitoGoogle={esitoGoogle} onEsitoGoogleVisto={() => setEsitoGoogle("")} />
+              <SettingsView config={config} saveConfig={saveConfig} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} eventi={eventi} setEventi={setEventi} session={session} online={flags.online} aziendaId={azienda && azienda.id} license={license} onSaveLicense={updateLicense} backupDirName={backupDirName} onPickBackupDir={pickBackupDir} onClearBackupDir={clearBackupDir} onBackupNow={backupNow} lastBackup={lastBackup} licenza={{ plan: planName(moduli), scadenza: azienda && azienda.licenza_scadenza }} modalita={modalita} installazione={installazione} azienda={azienda} sezioneIniziale={esitoGoogle ? "google" : "attivita"} esitoGoogle={esitoGoogle} onEsitoGoogleVisto={() => setEsitoGoogle("")} fatture={fatture} acquisti={acquisti} />
             </fieldset>
           </div>
         ) : (
-          <SettingsView config={config} saveConfig={saveConfig} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} eventi={eventi} setEventi={setEventi} session={session} online={flags.online} aziendaId={azienda && azienda.id} license={license} onSaveLicense={updateLicense} backupDirName={backupDirName} onPickBackupDir={pickBackupDir} onClearBackupDir={clearBackupDir} onBackupNow={backupNow} lastBackup={lastBackup} licenza={{ plan: planName(moduli), scadenza: azienda && azienda.licenza_scadenza }} modalita={modalita} installazione={installazione} azienda={azienda} sezioneIniziale={esitoGoogle ? "google" : "attivita"} esitoGoogle={esitoGoogle} onEsitoGoogleVisto={() => setEsitoGoogle("")} />
+          <SettingsView config={config} saveConfig={saveConfig} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} eventi={eventi} setEventi={setEventi} session={session} online={flags.online} aziendaId={azienda && azienda.id} license={license} onSaveLicense={updateLicense} backupDirName={backupDirName} onPickBackupDir={pickBackupDir} onClearBackupDir={clearBackupDir} onBackupNow={backupNow} lastBackup={lastBackup} licenza={{ plan: planName(moduli), scadenza: azienda && azienda.licenza_scadenza }} modalita={modalita} installazione={installazione} azienda={azienda} sezioneIniziale={esitoGoogle ? "google" : "attivita"} esitoGoogle={esitoGoogle} onEsitoGoogleVisto={() => setEsitoGoogle("")} fatture={fatture} acquisti={acquisti} />
         ))}
       </main>
 

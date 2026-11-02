@@ -81,5 +81,7 @@ export function saloneVuoto(denominazione) {
     sales: [],
     vouchers: [],
     eventi: [],
+    fatture: [],
+    acquisti: [],
   };
 }

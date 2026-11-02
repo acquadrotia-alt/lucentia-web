@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Sparkles, User, Mail, Plus, Trash2, Check, X, Users, CalendarPlus, Image as ImageIcon, Palette, Store, Star, RefreshCw, Printer, Download, Upload, KeyRound, CalendarX2, AlertTriangle, BadgeCheck, Boxes, Layers, AlertCircle, CalendarRange, ChevronUp, ChevronDown, FolderOpen, Globe, Instagram, Facebook, DoorOpen } from "lucide-react";
+import { Sparkles, User, Mail, Plus, Trash2, Check, X, Users, CalendarPlus, Image as ImageIcon, Palette, Store, Star, RefreshCw, Printer, Download, Upload, KeyRound, CalendarX2, AlertTriangle, BadgeCheck, Boxes, Layers, AlertCircle, CalendarRange, ChevronUp, ChevronDown, FolderOpen, Globe, Instagram, Facebook, DoorOpen, FileText } from "lucide-react";
 import { operatoriDelServizio } from "../../orari.js";
 import { AvatarSvg, AVATAR_IDS, avatarIdFor } from "../../avatars.jsx";
 import { RESELLER_CODE, uid, minToStr, strToMin, todayStr, DAYS, fmtDate, fmtFullDate, DEFAULT_LOYALTY, DEFAULT_CONFIG, BLANK_BRANDING, PRESETS, DEFAULT_CATALOG, makeLicense, licenseState, fileToResizedDataURL, fileToCoverDataURL, loyaltyConfig, clientPoints, buildSampleData, useMods, LUCENTIA_LOGO, MAKER_LOGO, Field } from "./comuni.jsx";
@@ -7,6 +7,7 @@ import { printPriceList } from "./stampa.jsx";
 import { exportBackup } from "./backup.js";
 import { ESTENSIONI } from "../../cliente/index.jsx";
 import { GoogleImpostazioni } from "./google.jsx";
+import { FattureImpostazioni } from "./fatture.jsx";
 
 export function LicensePanel({ license, onSave }) {
   const st = licenseState(license);
@@ -223,7 +224,7 @@ export function SitoWebCard({ config, saveConfig, cliente = false }) {
   );
 }
 
-export function SettingsView({ config, saveConfig, bookings, setBookings, clients, setClients, catalog, setCatalog, sales, setSales, eventi, setEventi, session, online, aziendaId, license, onSaveLicense, backupDirName, onPickBackupDir, onClearBackupDir, onBackupNow, lastBackup, licenza, modalita = "hub", installazione = null, azienda = null, sezioneIniziale = "attivita", esitoGoogle = "", onEsitoGoogleVisto }) {
+export function SettingsView({ config, saveConfig, bookings, setBookings, clients, setClients, catalog, setCatalog, sales, setSales, eventi, setEventi, session, online, aziendaId, license, onSaveLicense, backupDirName, onPickBackupDir, onClearBackupDir, onBackupNow, lastBackup, licenza, modalita = "hub", installazione = null, azienda = null, sezioneIniziale = "attivita", esitoGoogle = "", onEsitoGoogleVisto, fatture = [], acquisti = [] }) {
   const cliente = modalita === "cliente";
   const F = useMods();
   // Sezioni su misura del cliente (src/cliente/index.jsx), filtrate sui moduli accesi.
@@ -242,6 +243,7 @@ export function SettingsView({ config, saveConfig, bookings, setBookings, client
     ...(cliente && aziendaId ? [{ id: "online", label: "Sito e prenotazioni", icon: Globe }] : (online && aziendaId ? [{ id: "online", label: "Prenotazioni online", icon: CalendarPlus }] : [])),
     // Gmail e Google Calendar: solo col modulo acceso e su un salone vero.
     ...(F.has("google") && aziendaId ? [{ id: "google", label: "Google", icon: Mail }] : []),
+    ...(F.has("fatture") && aziendaId ? [{ id: "fatture", label: "Fatture", icon: FileText }] : []),
     ...sezioniExtra.map((s) => ({ id: s.id, label: s.label || s.id, icon: s.icon || Sparkles })),
     { id: "dati", label: "Dati e backup", icon: Download },
     { id: "licenza", label: "Licenza", icon: BadgeCheck },
@@ -473,6 +475,7 @@ export function SettingsView({ config, saveConfig, bookings, setBookings, client
           </> : null}
 
           {sezione === "google" && F.has("google") && aziendaId ? <GoogleImpostazioni config={config} saveConfig={saveConfig} esito={esitoGoogle} onEsitoVisto={onEsitoGoogleVisto} /> : null}
+          {sezione === "fatture" && F.has("fatture") && aziendaId ? <FattureImpostazioni config={config} saveConfig={saveConfig} /> : null}
 
           {sezioniExtra.map((s) => (sezione === s.id ? <s.componente key={s.id} config={config} saveConfig={saveConfig} azienda={azienda} /> : null))}
 
@@ -481,7 +484,7 @@ export function SettingsView({ config, saveConfig, bookings, setBookings, client
           <h3 className="font-semibold flex items-center gap-2 mb-3"><Download size={16} className="brand-accent" /> Backup dei dati</h3>
           <p className="text-sm text-stone-500 mb-3">I dati sono salvati su questo PC. Esporta regolarmente un backup per sicurezza. (La licenza non è inclusa nel backup.)</p>
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => exportBackup(config, bookings, clients, catalog, sales, eventi)} className="text-sm brand-bg px-3 py-2 rounded-lg inline-flex items-center gap-2"><Download size={15} /> Esporta backup</button>
+            <button onClick={() => exportBackup(config, bookings, clients, catalog, sales, eventi, fatture, acquisti)} className="text-sm brand-bg px-3 py-2 rounded-lg inline-flex items-center gap-2"><Download size={15} /> Esporta backup</button>
             <label className="text-sm border border-stone-300 text-stone-700 px-3 py-2 rounded-lg inline-flex items-center gap-2 cursor-pointer hover:bg-stone-50"><Upload size={15} /> Importa backup<input type="file" accept="application/json" onChange={importBackup} className="hidden" /></label>
           </div>
         </section>
@@ -1045,7 +1048,7 @@ export function LicenzaClienteCard({ licenza, installazione, azienda, moduli }) 
     setBusy(false);
   };
   const quando = esito && esito.verificata_il ? new Date(esito.verificata_il) : null;
-  const ETICHETTE = { fidelity: "Fidelity & premi", vendite: "Vendite & magazzino", statistiche: "Statistiche", marketing: "Marketing", allergeni: "Allergeni e patologie", pacchetti: "Pacchetti sedute", online: "Prenotazioni online", google: "Gmail e Google Calendar", op3: "Fino a 3 operatori", opinf: "Operatori illimitati" };
+  const ETICHETTE = { fidelity: "Fidelity & premi", vendite: "Vendite & magazzino", statistiche: "Statistiche", marketing: "Marketing", allergeni: "Allergeni e patologie", pacchetti: "Pacchetti sedute", online: "Prenotazioni online", google: "Gmail e Google Calendar", fatture: "Fatture elettroniche", op3: "Fino a 3 operatori", opinf: "Operatori illimitati" };
   const attivi = Array.isArray(moduli) ? moduli : [];
   const portale = installazione && installazione.portale;
   return (
