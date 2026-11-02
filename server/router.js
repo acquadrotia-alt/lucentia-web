@@ -22,6 +22,11 @@ import { installazioni, verificaLicenza } from "./hub/installazioni.js";
 import { aggiornaLicenza, statoCliente, forzaVerifica, descriviEsito, chiaviExtra, configurata } from "./cliente/licenza.js";
 import { installazione, sito, setupCliente } from "./cliente/installazione.js";
 import { rotteCliente } from "./cliente/rotte.js";
+import { gmail, gmailRitorno } from "./core/gmail.js";
+import { gcal } from "./core/gcal.js";
+import { icsGestione, icsFeed } from "./core/ics.js";
+import { getAzienda } from "./core/sessione.js";
+import { parseModuli } from "./core/util.js";
 
 // Un errore imprevisto (una colonna che manca, una query storta) non deve
 // arrivare al browser come crash del worker: la pagina pubblica lo leggerebbe
@@ -75,6 +80,13 @@ async function gestisci(context) {
     if (segs[0] === "licenze" && segs[1] === "verifica") return await verificaLicenza(context);
   }
 
+  // ---- Google: il ritorno dall'autorizzazione (Google non manda il cookie) e il feed iCalendar col codice ----
+  if (segs[0] === "gmail" && new URL(request.url).searchParams.get("action") === "ritorno" && method === "GET") return await gmailRitorno(context, cliente);
+  if (segs[0] === "agenda-ics" && method === "GET" && !new URL(request.url).searchParams.get("action")) {
+    const res = await env.DB.prepare("SELECT id, denominazione FROM aziende WHERE attiva = 1").all();
+    return await icsFeed(context, res.results || []);
+  }
+
   // ---- /api/prenota/:aid  e  /api/evento/:aid/:eid (pubbliche) ----
   if (segs[0] === "prenota" && segs[1]) return await prenota(context, segs, statoDi);
   if (segs[0] === "evento" && segs[1] && segs[2] && method === "GET") return await evento(context, segs, statoDi);
@@ -94,6 +106,18 @@ async function gestisci(context) {
     return await me(context, sess, statoDi, extra);
   }
   if (segs[0] === "verify-password" && method === "POST") return await verifyPasswordRoute(context, sess);
+
+  // ---- Google (Gmail, Calendar, feed): solo il titolare, solo col modulo "google" acceso ----
+  if (segs[0] === "gmail" || segs[0] === "gcal" || segs[0] === "agenda-ics") {
+    if (sess.ruolo !== "azienda" || !sess.azienda_id) return json({ error: "riservato al titolare del salone" }, 403);
+    const azg = await getAzienda(env, sess.azienda_id);
+    if (!azg || (await statoDi(azg)) !== "active") return json({ error: "licenza non attiva" }, 403);
+    if (azg.demo) return json({ error: "non disponibile nella demo" }, 403);
+    if (!parseModuli(azg.moduli, cliente ? chiaviExtra() : undefined).includes("google")) return json({ error: "Il modulo Google (Gmail e Calendar) non è attivo su questa licenza." }, 403);
+    if (segs[0] === "gmail") return await gmail(context, sess, azg.id);
+    if (segs[0] === "gcal") return await gcal(context, sess, azg.id);
+    return await icsGestione(context, sess, azg.id);
+  }
 
   if (cliente) {
     // ---- /api/licenza/verifica-ora (il titolare chiede di ricontrollare col portale) ----

@@ -1,8 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Sparkles, Calendar, Clock, User, Mail, Plus, Trash2, Check, ChevronLeft, ChevronRight, X, Users, CalendarPlus, Phone, Image as ImageIcon, Sunrise, Sun, Moon, Search, Gift, Hash, Ban, UserX, Undo2, Timer, CalendarClock, Wallet, AlertTriangle, Tag, Boxes, Layers, AlertCircle, CalendarRange, CalendarDays, PartyPopper, Share2, Pencil, DoorOpen } from "lucide-react";
 import { orariPossibili, durataServizio, impegniServizio, senzaOperatore, impegniBooking, operatoriDelServizio } from "../../orari.js";
 import { ESTENSIONI } from "../../cliente/index.jsx";
-import { ADVANCE_DAYS, uid, minToStr, strToMin, pd, todayStr, parseDate, addDays, WDAY_SHORT, MONTHS, fmtDate, eur, fileToCoverDataURL, qualifiedStaff, staffOff, salonClosure, upsertClient, loyaltyConfig, clientBalance, matchPackage, STATUS, useMods, FieldIcon, Row } from "./comuni.jsx";
+import { ADVANCE_DAYS, uid, minToStr, strToMin, pd, todayStr, parseDate, addDays, WDAY_SHORT, MONTHS, fmtDate, fmtDateTime, eur, fileToCoverDataURL, qualifiedStaff, staffOff, salonClosure, upsertClient, loyaltyConfig, clientBalance, matchPackage, STATUS, useMods, FieldIcon, Row } from "./comuni.jsx";
+import { GoogleCard, GoogleEventoModal, EmailModal, emailDi } from "./google.jsx";
 
 export function SlotPicker({ config, serviceIds, staffFilter, bookings, value, onChange, startDate }) {
   const [weekStart, setWeekStart] = useState(startDate);
@@ -284,7 +285,7 @@ export function ApptItem({ b, staff, services, onCal, onCancel, onEdit, canCance
   );
 }
 
-export function AgendaPage({ config, bookings, setBookings, clients, setClients, sales, catalog, hidePartial, canAddBooking, canAddClient, onlineBk, onImportOnline, onCancelOnline, canManageOnline, eventi, setEventi, impegniEventi, aziendaId }) {
+export function AgendaPage({ config, bookings, setBookings, clients, setClients, sales, catalog, hidePartial, canAddBooking, canAddClient, onlineBk, onImportOnline, onCancelOnline, canManageOnline, eventi, setEventi, impegniEventi, aziendaId, google = null }) {
   const [adding, setAdding] = useState(false);
   const [addingEv, setAddingEv] = useState(false);
   const [editingEv, setEditingEv] = useState(null);
@@ -304,7 +305,7 @@ export function AgendaPage({ config, bookings, setBookings, clients, setClients,
       {adding ? <ManualBooking config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} canAddBooking={canAddBooking} canAddClient={canAddClient} impegniEventi={impegniEventi} onDone={() => setAdding(false)} /> : null}
       {addingEv ? <EventForm config={config} eventi={eventi} setEventi={setEventi} onDone={() => setAddingEv(false)} /> : null}
       {editingEv ? <EventForm config={config} eventi={eventi} setEventi={setEventi} editing={editingEv} onDone={() => setEditingEv(null)} /> : null}
-      <AgendaView config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={hidePartial} onlineBk={onlineBk || []} onImportOnline={onImportOnline} onCancelOnline={onCancelOnline} canManageOnline={canManageOnline} eventi={eventi} setEventi={setEventi} impegniEventi={impegniEventi} aziendaId={aziendaId} onEditEvento={(ev) => { setEditingEv(ev); setAddingEv(false); setAdding(false); }} />
+      <AgendaView config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={hidePartial} onlineBk={onlineBk || []} onImportOnline={onImportOnline} onCancelOnline={onCancelOnline} canManageOnline={canManageOnline} eventi={eventi} setEventi={setEventi} impegniEventi={impegniEventi} aziendaId={aziendaId} google={google} onEditEvento={(ev) => { setEditingEv(ev); setAddingEv(false); setAdding(false); }} />
     </div>
   );
 }
@@ -312,7 +313,7 @@ export function AgendaPage({ config, bookings, setBookings, clients, setClients,
 export const VIEW_MODES = [["day", "Giorno", CalendarDays], ["3day", "3 giorni", CalendarRange], ["week", "Settimana", Calendar]];
 export function mondayOf(dateStr) { const d = parseDate(dateStr); const wd = (d.getDay() + 6) % 7; return addDays(dateStr, -wd); }
 
-export function AgendaView({ config, bookings, setBookings, clients, setClients, sales, catalog, hidePartial, onlineBk, onImportOnline, onCancelOnline, canManageOnline, eventi, setEventi, impegniEventi, aziendaId, onEditEvento }) {
+export function AgendaView({ config, bookings, setBookings, clients, setClients, sales, catalog, hidePartial, onlineBk, onImportOnline, onCancelOnline, canManageOnline, eventi, setEventi, impegniEventi, aziendaId, onEditEvento, google = null }) {
   const staff = config.staff, services = config.services;
   const [anchor, setAnchor] = useState(todayStr());
   const [mode, setMode] = useState("day");
@@ -320,7 +321,11 @@ export function AgendaView({ config, bookings, setBookings, clients, setClients,
   const [sel, setSel] = useState(null);
   const [selOnline, setSelOnline] = useState(null);
   const [selEvento, setSelEvento] = useState(null);
+  const [selGoogle, setSelGoogle] = useState(null); // evento nato su Google Calendar
   const [resch, setResch] = useState(null);
+  // Gli eventi creati direttamente su Google (modulo "google"): si vedono in
+  // agenda ma non stanno in `bookings`, che resta solo roba del gestionale.
+  const esterni = (google && google.esterni) || [];
   // "elenco" è la lista di sempre; "studio" è la linea del tempo, che mostra
   // quante persone sono in salone contemporaneamente.
   const [vista, setVista] = useState("elenco");
@@ -330,8 +335,10 @@ export function AgendaView({ config, bookings, setBookings, clients, setClients,
   // Un appuntamento può impegnare più operatori: il filtro guarda tutte le
   // risorse coinvolte, non solo l'operatore principale.
   const coinvolge = (b, id) => id === "all" || impegniBooking(b).some((i) => i.risorsaId === id);
-  const byDay = useMemo(() => { const m = {}; days.forEach((ds) => { const reg = bookings.filter((b) => b.date === ds && coinvolge(b, filter) && !(hidePartial && b.status === "partial")); const onl = (onlineBk || []).filter((b) => b.date === ds && coinvolge(b, filter)); const evs = (eventi || []).filter((ev) => ev.date === ds && (filter === "all" || (ev.staffIds || []).includes(filter))).map((ev) => ({ ...ev, _evento: true })); m[ds] = [...reg, ...onl, ...evs].sort((a, b) => a.startMin - b.startMin); }); return m; }, [bookings, onlineBk, eventi, days, filter, hidePartial]);
-  const totalCount = days.reduce((a, ds) => a + byDay[ds].filter((x) => !x._evento).length, 0);
+  const byDay = useMemo(() => { const m = {}; days.forEach((ds) => { const reg = bookings.filter((b) => b.date === ds && coinvolge(b, filter) && !(hidePartial && b.status === "partial")); const onl = (onlineBk || []).filter((b) => b.date === ds && coinvolge(b, filter)); const evs = (eventi || []).filter((ev) => ev.date === ds && (filter === "all" || (ev.staffIds || []).includes(filter))).map((ev) => ({ ...ev, _evento: true })); const gg = esterni.filter((e) => e.date === ds && (filter === "all" || e.staffId === filter)); m[ds] = [...reg, ...onl, ...evs, ...gg].sort((a, b) => a.startMin - b.startMin); }); return m; }, [bookings, onlineBk, eventi, esterni, days, filter, hidePartial]);
+  // Google legge i calendari attorno ai giorni guardati: gli si dice dove si è.
+  useEffect(() => { if (google && google.vedi) google.vedi(days[0]); }, [days[0]]);
+  const totalCount = days.reduce((a, ds) => a + byDay[ds].filter((x) => !x._evento && !x._google).length, 0);
   const eventCount = days.reduce((a, ds) => a + byDay[ds].filter((x) => x._evento).length, 0);
 
   const shift = (dir) => setAnchor((a) => addDays(mode === "week" ? mondayOf(a) : a, dir * span));
@@ -411,8 +418,8 @@ export function AgendaView({ config, bookings, setBookings, clients, setClients,
             </div>
           ) : vista === "studio" ? (
             <VistaStudio giorno={days[0]} items={byDay[days[0]]} staff={staff} cabine={config.cabine} filtro={filter}
-              onApri={(b) => (b._evento ? setSelEvento(b) : b.online ? setSelOnline(b) : setSel(b))} />
-          ) : byDay[days[0]].map((b, i) => (b._evento ? <EventCard key={b.id} ev={b} staff={staff} big onClick={() => setSelEvento(b)} /> : <ApptCard key={b.id} b={b} staff={staff} services={services} cabine={config.cabine} big index={i} onClick={() => (b.online ? setSelOnline(b) : setSel(b))} />))}
+              onApri={(b) => (b._evento ? setSelEvento(b) : b._google ? setSelGoogle(b) : b.online ? setSelOnline(b) : setSel(b))} />
+          ) : byDay[days[0]].map((b, i) => (b._evento ? <EventCard key={b.id} ev={b} staff={staff} big onClick={() => setSelEvento(b)} /> : b._google ? <GoogleCard key={b.id} ev={b} big index={i} onClick={() => setSelGoogle(b)} /> : <ApptCard key={b.id} b={b} staff={staff} services={services} cabine={config.cabine} big index={i} onClick={() => (b.online ? setSelOnline(b) : setSel(b))} />))}
         </div>
       ) : (
         <div className="overflow-x-auto -mx-1 px-1 pb-1">
@@ -424,7 +431,7 @@ export function AgendaView({ config, bookings, setBookings, clients, setClients,
                   <div className={`text-sm font-semibold leading-none mt-0.5 ${isToday ? "" : "text-stone-700"}`}>{d.getDate()}<span className="text-stone-400 font-normal">/{d.getMonth() + 1}</span></div>
                 </div>
                 <div className="space-y-1.5">
-                  {list.length === 0 ? <div className="text-center text-xs text-stone-300 py-4 rounded-lg border border-dashed border-stone-200/70">—</div> : list.map((b, i) => (b._evento ? <EventCard key={b.id} ev={b} staff={staff} onClick={() => setSelEvento(b)} /> : <ApptCard key={b.id} b={b} staff={staff} services={services} cabine={config.cabine} index={i} onClick={() => (b.online ? setSelOnline(b) : setSel(b))} />))}
+                  {list.length === 0 ? <div className="text-center text-xs text-stone-300 py-4 rounded-lg border border-dashed border-stone-200/70">—</div> : list.map((b, i) => (b._evento ? <EventCard key={b.id} ev={b} staff={staff} onClick={() => setSelEvento(b)} /> : b._google ? <GoogleCard key={b.id} ev={b} index={i} onClick={() => setSelGoogle(b)} /> : <ApptCard key={b.id} b={b} staff={staff} services={services} cabine={config.cabine} index={i} onClick={() => (b.online ? setSelOnline(b) : setSel(b))} />))}
                 </div>
               </div>
             ); })}
@@ -434,7 +441,8 @@ export function AgendaView({ config, bookings, setBookings, clients, setClients,
 
       {totalCount + eventCount > 0 ? <p className="text-xs text-stone-400 text-center pt-1">{totalCount} appuntament{totalCount === 1 ? "o" : "i"}{eventCount ? ` e ${eventCount} event${eventCount === 1 ? "o" : "i"}` : ""} nel periodo · tocca una card per gestirla</p> : null}
 
-      {sel ? <ApptActions booking={sel} config={config} clients={clients} setClients={setClients} bookings={bookings} sales={sales} catalog={catalog} hidePartial={hidePartial} onStatus={setStatus} onResch={(bk) => { setResch(bk); setSel(null); }} onClose={() => setSel(null)} /> : null}
+      {sel ? <ApptActions booking={sel} config={config} clients={clients} setClients={setClients} bookings={bookings} sales={sales} catalog={catalog} hidePartial={hidePartial} onStatus={setStatus} onResch={(bk) => { setResch(bk); setSel(null); }} onClose={() => setSel(null)} onEmailInviata={(id, voce) => setBookings(bookings.map((x) => (x.id === id ? { ...x, emailInviate: [voce, ...(x.emailInviate || [])].slice(0, 10) } : x)))} /> : null}
+      {selGoogle && google ? <GoogleEventoModal ev={selGoogle} staff={staff} onClose={() => setSelGoogle(null)} onElimina={google.eliminaEsterno} /> : null}
       {selOnline ? <OnlineApptModal booking={selOnline} config={config} canManage={canManageOnline} onImport={(bk) => { onImportOnline && onImportOnline(bk); setSelOnline(null); }} onCancel={(bk) => { onCancelOnline && onCancelOnline(bk); setSelOnline(null); }} onClose={() => setSelOnline(null)} /> : null}
       {resch ? <RescheduleModal booking={resch} config={config} bookings={bookings} impegniEventi={impegniEventi} onClose={() => setResch(null)} onSave={(d2, startMin, slot) => applyResch(resch, d2, startMin, slot)} /> : null}
       {selEvento ? <EventModal ev={selEvento} staff={staff} aziendaId={aziendaId} onEdit={() => { onEditEvento && onEditEvento(eventi.find((e) => e.id === selEvento.id)); setSelEvento(null); }} onDelete={() => { setEventi(eventi.filter((e) => e.id !== selEvento.id)); setSelEvento(null); }} onClose={() => setSelEvento(null)} /> : null}
@@ -647,7 +655,7 @@ export function VistaStudio({ giorno, items, staff, cabine, filtro, onApri }) {
                         title={`${nomeCliente} · ${minToStr(s.from)}–${minToStr(s.to)} · ${col.name}`}
                         className={`absolute rounded-md px-1.5 py-0.5 text-left overflow-hidden transition hover:brightness-95 hover:shadow-[var(--lc-shadow-xs)] ${annullato ? "opacity-45 line-through" : ""}`}
                         style={{ top: y(s.from), height: alt, left: `calc(${s._corsia * larg}% + 2px)`, width: `calc(${larg}% - 4px)`,
-                          background: col.cabina ? "#e7e5e4" : "var(--brand)", color: col.cabina ? "#44403c" : "#fff" }}>
+                          background: b._google ? "#a8a29e" : col.cabina ? "#e7e5e4" : "var(--brand)", color: col.cabina ? "#44403c" : "#fff", outline: b._google ? "1px dashed #57534e" : "none" }}>
                         <div className="text-[11px] font-medium leading-tight truncate">{nomeCliente}</div>
                         {alt >= 30 ? <div className={`text-[10px] leading-tight truncate ${col.cabina ? "text-stone-500" : "opacity-80"}`}>{minToStr(s.from)}–{minToStr(s.to)}</div> : null}
                       </button>
@@ -822,9 +830,11 @@ export function DettaglioAppuntamento({ b, config }) {
   );
 }
 
-export function ApptActions({ booking, config, clients, setClients, bookings, sales, catalog, hidePartial, onStatus, onResch, onClose }) {
+export function ApptActions({ booking, config, clients, setClients, bookings, sales, catalog, hidePartial, onStatus, onResch, onClose, onEmailInviata }) {
   const F = useMods();
   const b = booking;
+  const [email, setEmail] = useState(false);
+  const ultimaEmail = Array.isArray(b.emailInviate) && b.emailInviate[0];
   const st = config.staff.find((s) => s.id === b.staffId);
   const ris = risorseDi(b, config.staff, config.cabine);
   const cl = (clients || []).find((x) => x.code === b.clientCode);
@@ -867,6 +877,13 @@ export function ApptActions({ booking, config, clients, setClients, bookings, sa
           {meta ? <div className="flex items-center gap-2"><meta.Icon size={14} className="text-stone-400" /> {meta.label}</div> : null}
         </div>
         <DettaglioAppuntamento b={b} config={config} />
+        {F.has("google") && b.status !== "cancelled" && onEmailInviata ? (
+          <div className="flex items-center justify-between gap-2 mb-4 rounded-xl border border-stone-200 p-3">
+            <div className="text-xs text-stone-500 min-w-0 leading-relaxed">{ultimaEmail ? <>Ultima email: <b>{ultimaEmail.tipo === "promemoria" ? "promemoria" : "conferma"}</b> il {fmtDateTime(ultimaEmail.il)}</> : emailDi(b, clients) ? <>Scrivi a <b className="text-stone-700">{emailDi(b, clients)}</b></> : "Il cliente non ha un'email salvata: potrai scriverla nel messaggio."}</div>
+            <button onClick={() => setEmail(true)} className="shrink-0 text-sm font-medium border brand-border brand-accent bg-white px-3 py-2 rounded-lg hover:brand-soft inline-flex items-center gap-1.5"><Mail size={14} /> Email</button>
+          </div>
+        ) : null}
+        {email ? <EmailModal booking={b} config={config} clients={clients} onClose={() => setEmail(false)} onInviato={(v) => onEmailInviata(b.id, v)} /> : null}
         {F.allergeni && hasHealth ? (
           <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4">
             <div className="flex items-center gap-1.5 text-sm font-medium text-red-800 mb-1"><AlertTriangle size={15} /> Note cliente</div>

@@ -6,6 +6,7 @@ import { RESELLER_CODE, uid, minToStr, strToMin, todayStr, DAYS, fmtDate, fmtFul
 import { printPriceList } from "./stampa.jsx";
 import { exportBackup } from "./backup.js";
 import { ESTENSIONI } from "../../cliente/index.jsx";
+import { GoogleImpostazioni } from "./google.jsx";
 
 export function LicensePanel({ license, onSave }) {
   const st = licenseState(license);
@@ -222,11 +223,11 @@ export function SitoWebCard({ config, saveConfig, cliente = false }) {
   );
 }
 
-export function SettingsView({ config, saveConfig, bookings, setBookings, clients, setClients, catalog, setCatalog, sales, setSales, eventi, setEventi, session, online, aziendaId, license, onSaveLicense, backupDirName, onPickBackupDir, onClearBackupDir, onBackupNow, lastBackup, licenza, modalita = "hub", installazione = null, azienda = null }) {
+export function SettingsView({ config, saveConfig, bookings, setBookings, clients, setClients, catalog, setCatalog, sales, setSales, eventi, setEventi, session, online, aziendaId, license, onSaveLicense, backupDirName, onPickBackupDir, onClearBackupDir, onBackupNow, lastBackup, licenza, modalita = "hub", installazione = null, azienda = null, sezioneIniziale = "attivita", esitoGoogle = "", onEsitoGoogleVisto }) {
   const cliente = modalita === "cliente";
+  const F = useMods();
   // Sezioni su misura del cliente (src/cliente/index.jsx), filtrate sui moduli accesi.
   const sezioniExtra = (ESTENSIONI.impostazioni || []).filter((s) => s && s.id && s.componente && (!s.modulo || F.has(s.modulo)));
-  const F = useMods();
   const services = config.services, staff = config.staff, branding = config.branding;
   const isReseller = session && session.role === "reseller";
   const [seqAperta, setSeqAperta] = useState(null);
@@ -239,11 +240,13 @@ export function SettingsView({ config, saveConfig, bookings, setBookings, client
     // Su un'installazione cliente il sito esiste sempre (è il suo dominio):
     // la sezione resta, con le prenotazioni online solo se il modulo è acceso.
     ...(cliente && aziendaId ? [{ id: "online", label: "Sito e prenotazioni", icon: Globe }] : (online && aziendaId ? [{ id: "online", label: "Prenotazioni online", icon: CalendarPlus }] : [])),
+    // Gmail e Google Calendar: solo col modulo acceso e su un salone vero.
+    ...(F.has("google") && aziendaId ? [{ id: "google", label: "Google", icon: Mail }] : []),
     ...sezioniExtra.map((s) => ({ id: s.id, label: s.label || s.id, icon: s.icon || Sparkles })),
     { id: "dati", label: "Dati e backup", icon: Download },
     { id: "licenza", label: "Licenza", icon: BadgeCheck },
   ];
-  const [sezione, setSezione] = useState("attivita");
+  const [sezione, setSezione] = useState(() => (SEZIONI.some((s) => s.id === sezioneIniziale) ? sezioneIniziale : "attivita"));
   const menuRef = useRef(null);
   // Cambiando sezione si resterebbe a metà pagina, con davanti uno spazio
   // vuoto: la vista torna in cima al menù. Sul desktop la colonna è fissa e
@@ -468,6 +471,8 @@ export function SettingsView({ config, saveConfig, bookings, setBookings, client
 
         {(online || cliente) && aziendaId ? <SitoWebCard config={config} saveConfig={saveConfig} cliente={cliente} /> : null}
           </> : null}
+
+          {sezione === "google" && F.has("google") && aziendaId ? <GoogleImpostazioni config={config} saveConfig={saveConfig} esito={esitoGoogle} onEsitoVisto={onEsitoGoogleVisto} /> : null}
 
           {sezioniExtra.map((s) => (sezione === s.id ? <s.componente key={s.id} config={config} saveConfig={saveConfig} azienda={azienda} /> : null))}
 
@@ -1040,7 +1045,7 @@ export function LicenzaClienteCard({ licenza, installazione, azienda, moduli }) 
     setBusy(false);
   };
   const quando = esito && esito.verificata_il ? new Date(esito.verificata_il) : null;
-  const ETICHETTE = { fidelity: "Fidelity & premi", vendite: "Vendite & magazzino", statistiche: "Statistiche", marketing: "Marketing", allergeni: "Allergeni e patologie", pacchetti: "Pacchetti sedute", online: "Prenotazioni online", op3: "Fino a 3 operatori", opinf: "Operatori illimitati" };
+  const ETICHETTE = { fidelity: "Fidelity & premi", vendite: "Vendite & magazzino", statistiche: "Statistiche", marketing: "Marketing", allergeni: "Allergeni e patologie", pacchetti: "Pacchetti sedute", online: "Prenotazioni online", google: "Gmail e Google Calendar", op3: "Fino a 3 operatori", opinf: "Operatori illimitati" };
   const attivi = Array.isArray(moduli) ? moduli : [];
   const portale = installazione && installazione.portale;
   return (

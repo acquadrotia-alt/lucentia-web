@@ -11,6 +11,7 @@ import { StatsView } from "./statistiche.jsx";
 import { MarketingView } from "./marketing.jsx";
 import { SettingsView } from "./impostazioni.jsx";
 import { ESTENSIONI } from "../../cliente/index.jsx";
+import { useGcal } from "./google.jsx";
 
 // `modalita` è "hub" (salone ospitato sul portale: demo o prova) oppure
 // "cliente" (installazione dedicata sul dominio del salone); `installazione`
@@ -31,10 +32,26 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
   const loadedRef = useRef(false);
   const [license, setLicense] = useState(() => loadLicense()); // licenza: resta in locale, invariata
   const [session, setSession] = useState({ role: "operator", hidePartial: false }); // login gestito dal contenitore (server)
-  const [view, setView] = useState("agenda");
+  // Si torna da Google con ?gmail=<esito>: si toglie dall'indirizzo e si apre
+  // Impostazioni → Google per mostrare com'è andata.
+  const [esitoGoogle, setEsitoGoogle] = useState(() => {
+    try { const u = new URL(window.location.href); const e = u.searchParams.get("gmail") || ""; if (e) { u.searchParams.delete("gmail"); window.history.replaceState({}, "", u.pathname + u.search + u.hash); } return e; } catch (e) { return ""; }
+  });
+  const [view, setView] = useState(esitoGoogle ? "settings" : "agenda");
   const enabledSections = ["agenda", "clienti", "buoni", ...(flags.vendite ? ["shop"] : []), ...(flags.statistiche ? ["stats"] : []), ...(flags.marketing ? ["marketing"] : []), ...visteExtra.map((v) => v.id), "settings"];
   useEffect(() => { if (!enabledSections.includes(view)) setView("agenda"); }, [moduli, view]);
-  const impegni = useMemo(() => eventiImpegni(eventi), [eventi]);
+  // Google Calendar a due vie (modulo "google"): legge e scrive gli
+  // appuntamenti tramite questi riferimenti, così la lista è sempre quella
+  // attuale. Gli eventi nati su Google occupano l'operatore come un evento.
+  const bookingsRef = useRef([]); bookingsRef.current = bookings;
+  const prevBookingsRef = useRef(null);
+  const google = useGcal({ attiva: flags.has("google") && !demo && !loading, leggi: () => bookingsRef.current, salva: (l) => setBookings(l), config, clients });
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    const prima = prevBookingsRef.current; prevBookingsRef.current = bookings;
+    if (prima && prima !== bookings) google.dopoSalvataggio(prima, bookings);
+  }, [bookings]);
+  const impegni = useMemo(() => [...eventiImpegni(eventi), ...google.occupanti], [eventi, google.occupanti]);
   const [demoBanner, setDemoBanner] = useState(!!demo);
   const isDemo = !!demo;
   const demoRef = useRef(false); demoRef.current = false;
@@ -207,7 +224,7 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
       </header>
 
       <main key={view} className="max-w-5xl w-full mx-auto px-4 py-6 flex-1 lc-fade-up">
-        {view === "agenda" && <AgendaPage config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={session.hidePartial} canAddBooking={canAddBooking} canAddClient={canAddClient} onlineBk={flags.online ? onlineBk : []} onImportOnline={importOnline} onCancelOnline={cancelOnline} canManageOnline={session.role !== "operator"} eventi={eventi} setEventi={setEventi} impegniEventi={impegni} aziendaId={azienda && azienda.id} />}
+        {view === "agenda" && <AgendaPage config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={session.hidePartial} canAddBooking={canAddBooking} canAddClient={canAddClient} onlineBk={flags.online ? onlineBk : []} onImportOnline={importOnline} onCancelOnline={cancelOnline} canManageOnline={session.role !== "operator"} eventi={eventi} setEventi={setEventi} impegniEventi={impegni} aziendaId={azienda && azienda.id} google={google} />}
         {view === "clienti" && <ClientsView config={config} bookings={bookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} vouchers={vouchers} setVouchers={setVouchers} />}
         {view === "buoni" && <GiftCardsView config={config} vouchers={vouchers} setVouchers={setVouchers} clients={clients} canAddVoucher={canAddVoucher} />}
         {view === "shop" && <ShopView catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} clients={clients} setClients={setClients} branding={b} loyalty={config.loyalty} hidePartial={session.hidePartial} canAddClient={canAddClient} demo={isDemo} />}
@@ -218,11 +235,11 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
           <div>
             <div className="mb-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2"><AlertCircle size={16} className="shrink-0 mt-0.5" /> In versione demo le impostazioni sono <b>visibili ma non modificabili</b>.</div>
             <fieldset disabled style={{ border: 0, margin: 0, padding: 0, minInlineSize: "auto" }}>
-              <SettingsView config={config} saveConfig={saveConfig} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} eventi={eventi} setEventi={setEventi} session={session} online={flags.online} aziendaId={azienda && azienda.id} license={license} onSaveLicense={updateLicense} backupDirName={backupDirName} onPickBackupDir={pickBackupDir} onClearBackupDir={clearBackupDir} onBackupNow={backupNow} lastBackup={lastBackup} licenza={{ plan: planName(moduli), scadenza: azienda && azienda.licenza_scadenza }} modalita={modalita} installazione={installazione} azienda={azienda} />
+              <SettingsView config={config} saveConfig={saveConfig} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} eventi={eventi} setEventi={setEventi} session={session} online={flags.online} aziendaId={azienda && azienda.id} license={license} onSaveLicense={updateLicense} backupDirName={backupDirName} onPickBackupDir={pickBackupDir} onClearBackupDir={clearBackupDir} onBackupNow={backupNow} lastBackup={lastBackup} licenza={{ plan: planName(moduli), scadenza: azienda && azienda.licenza_scadenza }} modalita={modalita} installazione={installazione} azienda={azienda} sezioneIniziale={esitoGoogle ? "google" : "attivita"} esitoGoogle={esitoGoogle} onEsitoGoogleVisto={() => setEsitoGoogle("")} />
             </fieldset>
           </div>
         ) : (
-          <SettingsView config={config} saveConfig={saveConfig} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} eventi={eventi} setEventi={setEventi} session={session} online={flags.online} aziendaId={azienda && azienda.id} license={license} onSaveLicense={updateLicense} backupDirName={backupDirName} onPickBackupDir={pickBackupDir} onClearBackupDir={clearBackupDir} onBackupNow={backupNow} lastBackup={lastBackup} licenza={{ plan: planName(moduli), scadenza: azienda && azienda.licenza_scadenza }} modalita={modalita} installazione={installazione} azienda={azienda} />
+          <SettingsView config={config} saveConfig={saveConfig} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} eventi={eventi} setEventi={setEventi} session={session} online={flags.online} aziendaId={azienda && azienda.id} license={license} onSaveLicense={updateLicense} backupDirName={backupDirName} onPickBackupDir={pickBackupDir} onClearBackupDir={clearBackupDir} onBackupNow={backupNow} lastBackup={lastBackup} licenza={{ plan: planName(moduli), scadenza: azienda && azienda.licenza_scadenza }} modalita={modalita} installazione={installazione} azienda={azienda} sezioneIniziale={esitoGoogle ? "google" : "attivita"} esitoGoogle={esitoGoogle} onEsitoGoogleVisto={() => setEsitoGoogle("")} />
         ))}
       </main>
 
