@@ -5,8 +5,8 @@ import { FUNZIONALITA_HOME, FIDUCIA, PASSI, PERCHE, LICENZA_SINTESI } from "./da
 // Le tre anteprime in evidenza nel blocco funzionalità della home.
 const VETRINA = [
   { img: "/anteprime/agenda-desktop.webp", alt: "Agenda del gestionale Lucentia", chip: "Agenda", sotto: "Operatori, cabine e fasi" },
-  { img: "/anteprime/clienti-desktop.webp", alt: "Scheda clienti del gestionale Lucentia", chip: "Clienti", sotto: "Storico, fidelity, pacchetti" },
-  { img: "/anteprime/minisito-desktop.webp", alt: "Sito vetrina di un salone realizzato con Lucentia", chip: "Il tuo sito", sotto: "Prenotazioni ed eventi" },
+  { img: "/anteprime/cassa-desktop.webp", alt: "La cassa fiscale del gestionale Lucentia col registratore telematico", chip: "Cassa fiscale", sotto: "Scontrini, acconti, magazzino" },
+  { img: "/anteprime/statistiche-desktop.webp", alt: "Il cruscotto settimanale del gestionale Lucentia", chip: "Cruscotto", sotto: "Incasso, occupazione, clienti" },
 ];
 
 // Home: la prima cosa che si vede aprendo il sito. Racconta il concetto
@@ -67,7 +67,7 @@ export default function HomePage() {
           <div className="grid sm:grid-cols-2 gap-4">
             {[
               [Globe, "tuodominio.it", "Il sito vetrina", "Personalizzato con le tue foto, i tuoi colori e i tuoi testi. Prenotazioni online, eventi e catalogo prodotti si aggiornano dal gestionale.", false],
-              [LayoutTemplate, "tuodominio.it/gestionale", "Il gestionale", "Agenda intelligente, scheda cliente, fidelity, cassa e magazzino, statistiche, marketing: i moduli che ti servono, su misura.", true],
+              [LayoutTemplate, "tuodominio.it/gestionale", "Il gestionale", "Agenda intelligente, clienti, cassa fiscale, fatture, statistiche, gestione personale e l'app per il telefono delle operatrici: i moduli che ti servono, su misura.", true],
             ].map(([Icon, url, t, d, dark], i) => (
               <Reveal key={i} delay={i * 100} className={`rounded-3xl p-6 lc-lift ${dark ? "text-white" : "bg-stone-50 border border-stone-200"}`} style={dark ? { background: INK } : undefined}>
                 <div className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full ${dark ? "bg-white/10 text-stone-200" : "bg-white border border-stone-200 text-stone-600"}`}><Icon size={12} style={{ color: GOLD }} /> {url}</div>
