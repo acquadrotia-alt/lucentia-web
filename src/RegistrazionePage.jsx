@@ -8,6 +8,10 @@ import { useState, useEffect } from "react";
 import { User, Phone, Mail, Lock, Check, AlertCircle, ArrowRight } from "lucide-react";
 import { setBrandTab } from "./favicon.js";
 
+// Fuori dal componente: definita dentro, React la ricreerebbe a ogni lettera
+// scritta e il campo perderebbe il fuoco (sul telefono si chiude la tastiera).
+const Riga = ({ icon: Icon, children }) => <div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2.5 transition-colors focus-within:border-stone-400"><Icon size={16} className="text-stone-400 shrink-0" />{children}</div>;
+
 export default function RegistrazionePage({ aid }) {
   const [info, setInfo] = useState(null);
   const [stato, setStato] = useState("loading");
@@ -47,7 +51,6 @@ export default function RegistrazionePage({ aid }) {
   if (stato === "error") return <div className="min-h-screen bg-stone-50 flex items-center justify-center p-4"><div className="lc-card p-8 text-center max-w-sm"><AlertCircle size={22} className="mx-auto text-amber-500 mb-3" /><h2 className="font-display text-xl font-semibold text-stone-900">Registrazione non disponibile</h2><p className="text-sm text-stone-500 mt-2">Le prenotazioni online non sono attive per questo salone. Contatta direttamente l'attività.</p></div></div>;
   const b = info.salone;
   const inp = "flex-1 text-sm focus:outline-none bg-transparent";
-  const Riga = ({ icon: Icon, children }) => <div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2.5 transition-colors focus-within:border-stone-400"><Icon size={16} className="text-stone-400 shrink-0" />{children}</div>;
   return (
     <div className="min-h-screen bg-stone-50" style={{ "--brand": primary }}>
       <div className="max-w-md mx-auto px-4 py-10">
