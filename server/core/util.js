@@ -5,7 +5,7 @@
 // La versione viene da server/core/versione.js, generato dal build a partire da package.json.
 export { APP_VERSION } from "./versione.js";
 
-export const COLLEZIONI = ["config", "bookings", "clients", "catalog", "sales", "vouchers", "eventi", "fatture", "acquisti"];
+export const COLLEZIONI = ["config", "bookings", "clients", "catalog", "sales", "vouchers", "eventi", "fatture", "acquisti", "personale"];
 // I moduli del core, quelli che il gestionale conosce di suo. Un'installazione
 // cliente può dichiararne altri (vedi src/cliente/moduli.js).
 export const MODULI = ["fidelity", "vendite", "statistiche", "marketing", "allergeni", "pacchetti", "online", "google", "fatture", "op3", "opinf"];

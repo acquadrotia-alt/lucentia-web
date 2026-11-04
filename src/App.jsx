@@ -3,6 +3,7 @@ import { Lock, Mail, LogOut, AlertTriangle, Phone, MessageCircle, Globe, Sparkle
 import SalonApp from "./core/salone/SalonApp.jsx";
 import PannelloHub from "./hub/PannelloHub.jsx";
 import OperatorApp from "./OperatorApp.jsx";
+import UtentiApp from "./UtentiApp.jsx";
 import Site from "./site/Site.jsx";
 import BookingPage from "./BookingPage.jsx";
 import EventoPage from "./EventoPage.jsx";
@@ -202,6 +203,14 @@ function AppCliente({ inst, me, stato, refresh, logout }) {
     if (!az || az.stato !== "active") return <Blocked stato={az ? az.stato : "none"} denominazione={az ? az.denominazione : ""} onLogout={logout} />;
     return <SalonApp onLogout={logout} moduli={az.moduli} azienda={az} demo={false} modalita="cliente" installazione={me.installazione || null} />;
   }
+  // /utenti: l'estensione per il telefono degli operatori, col login del salone
+  if (p === "/utenti" || p.startsWith("/utenti/")) {
+    if (stato === "loading") return <Caricamento />;
+    if (!me) return <Login onLogged={refresh} onBack={() => vai("/")} brand={inst.salone} />;
+    const azu = me.azienda;
+    if (!azu || azu.stato !== "active" || me.user.ruolo === "reseller") return <Blocked stato={azu ? azu.stato : "none"} denominazione={azu ? azu.denominazione : ""} onLogout={logout} />;
+    return <UtentiApp user={me.user} azienda={azu} onLogout={logout} />;
+  }
   if (p === "/prenota") return <BookingPage aid={inst.salone.id} />;
   if (p.startsWith("/evento/")) return <EventoPage token={`${inst.salone.id}:${p.slice("/evento/".length)}`} />;
   return <SitoSalone inst={inst} path={p} vai={vai} />;
@@ -250,6 +259,14 @@ export default function App() {
 
   // ---- Portale Lucentia ----
   if (stato === "loading") return <Caricamento />;
+  // /utenti anche sul portale, per i saloni ospitati qui
+  const percorso = typeof window !== "undefined" ? window.location.pathname.replace(/\/+$/, "") : "";
+  if (percorso === "/utenti") {
+    if (!me) return <Login onLogged={refresh} onBack={() => { window.history.replaceState(null, "", "/"); setShowLogin(false); }} />;
+    const azu = me.azienda;
+    if (!azu || azu.stato !== "active" || me.user.ruolo === "reseller") return <Blocked stato={azu ? azu.stato : "none"} denominazione={azu ? azu.denominazione : ""} onLogout={logout} />;
+    return <UtentiApp user={me.user} azienda={azu} onLogout={logout} />;
+  }
   if (stato === "login" || !me) {
     if (showLogin) return <Login onLogged={refresh} onBack={closeLogin} />;
     return <Site onLogin={openLogin} />;

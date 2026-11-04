@@ -83,5 +83,6 @@ export function saloneVuoto(denominazione) {
     eventi: [],
     fatture: [],
     acquisti: [],
+    personale: { dipendenti: [], ore: {}, invii: [] },
   };
 }

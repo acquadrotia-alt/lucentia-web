@@ -236,6 +236,15 @@ un modulo del core, non nella cartella del cliente.
   acceso «Invia allo SDI» fa UNA sola `sendXML`. L'esito dello SDI si aggiorna da solo ogni 2 ore,
   le fatture dei fornitori (mese corrente e precedente) ogni ora, senza doppioni. Credenziali in
   `integrazioni` (`effatta:cfg`), mai nel browser. Collezioni nuove: `fatture`, `acquisti`.
+- **Aree di lavoro**: all'accesso il gestionale mostra i riquadri Banco (agenda, clienti, buoni,
+  vendita = cassa + storico, fatture), Articoli (catalogo, documenti di carico con fornitore e
+  riferimento bolla/fattura, magazzino con scorta minima e rettifiche), Marketing (messaggi e
+  statistiche), Gestione personale (fogli ore mensili per dipendente, riepilogo, invio al
+  consulente paghe via Gmail) e Impostazioni.
+- **/utenti** (sul dominio del cliente e sul portale): l'app per il telefono degli operatori, con
+  l'accesso del salone. Chiede chi è l'operatore e offre la sua agenda, la scheda
+  dell'appuntamento in corso e un nuovo appuntamento con chiunque. Gli appuntamenti presi dal
+  telefono compaiono da soli nel gestionale aperto al banco.
 - **Zona ripristino** (Impostazioni → Dati e backup): azzera punti, azzera vendite e
   appuntamenti, ripristino totale, protetti da password.
 - **Svuota dati** (pannello, saloni di prova): riporta un salone a licenza vuota lasciando
