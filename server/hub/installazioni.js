@@ -11,7 +11,12 @@
 //   Nella stessa chiamata dichiara versione, dominio e i moduli su misura che
 //   il suo codice supporta, così il portale sa quali interruttori mostrare.
 // ============================================================================
-import { json, isAdmin, addMonthsISO, licStatus, randomToken, sha256Hex, cleanModuliInstallazione, parseModuli, MODULI, pad2 } from "../core/util.js";
+import { json, isAdmin, addMonthsISO, licStatus, randomToken, sha256Hex, cleanModuliInstallazione, parseModuli, MODULI, pad2, APP_VERSION } from "../core/util.js";
+import { leggiInt } from "../core/integrazioni.js";
+
+const SISTEMA = "_sistema";
+// Il repository GitHub dove sta il ceppo (per far partire l'aggiornamento dei clienti).
+const REPO_CEPPO = (env) => String((env && env.AGGIORNA_REPO) || "acquadrotia-alt/lucentia-web");
 
 function parseDichiarati(raw) {
   try { const a = JSON.parse(raw || "[]"); return Array.isArray(a) ? a.filter((m) => m && typeof m.key === "string") : []; } catch (e) { return []; }
@@ -24,8 +29,36 @@ function pubblica(r) {
     moduli: parseModuli(r.moduli, dichiarati.map((m) => m.key)),
     moduli_disponibili: dichiarati,
     versione: r.versione || null, dominio_rilevato: r.dominio_rilevato || null, ultimo_contatto: r.ultimo_contatto || null,
+    repo: r.repo || "",
     creata_il: r.creata_il, ha_chiave: !!r.chiave_hash,
   };
+}
+// La salute di un'installazione, per gli avvisi del pannello: silenzio, licenza,
+// giro delle email fallito, versione indietro rispetto al portale.
+export function avvisiDi(a, giro, oraMs) {
+  const out = [];
+  const adesso = oraMs || Date.now();
+  if (a.attiva) {
+    if (!a.ultimo_contatto) out.push({ tipo: "contatto", testo: "non si è mai collegata al portale" });
+    else { const ore = (adesso - new Date(String(a.ultimo_contatto).replace(" ", "T")).getTime()) / 3600000; if (ore > 36) out.push({ tipo: "contatto", testo: `nessun contatto da ${Math.round(ore / 24)} giorn${Math.round(ore / 24) === 1 ? "o" : "i"}` }); }
+  }
+  if (a.stato === "expired") out.push({ tipo: "licenza", testo: "licenza scaduta: il sito è in manutenzione" });
+  else if (a.stato === "active" && a.licenza_scadenza) { const gg = Math.ceil((new Date(a.licenza_scadenza + "T23:59:59").getTime() - adesso) / 86400000); if (gg <= 30) out.push({ tipo: "licenza", testo: `la licenza scade tra ${gg} giorn${gg === 1 ? "o" : "i"}` }); }
+  if (giro && giro.il && !giro.ok && a.attiva) out.push({ tipo: "giro", testo: `l'ultimo giro delle email non è riuscito${giro.errore ? ` (${String(giro.errore).slice(0, 80)})` : giro.http ? ` (HTTP ${giro.http})` : ""}` });
+  if (giro && giro.ok && Array.isArray(giro.saloni) && giro.saloni.some((sx) => sx.errori > 0)) out.push({ tipo: "giro", testo: `email automatiche con errori nell'ultimo giro` });
+  if (a.versione && APP_VERSION && a.versione !== APP_VERSION && a.versione !== "dev" && APP_VERSION !== "dev") out.push({ tipo: "versione", testo: `versione ${a.versione}, il portale è alla ${APP_VERSION}: da aggiornare` });
+  return out;
+}
+// Fa partire su GitHub il workflow che aggiorna i repository dei clienti (merge del ceppo, test, push).
+async function avviaAggiornamento(env, repo) {
+  const token = env && env.AGGIORNA_TOKEN;
+  if (!token) return { ok: false, errore: "Manca la variabile AGGIORNA_TOKEN sul portale (un token GitHub con permesso sui repository): vedi LEGGIMI.md." };
+  try {
+    const r = await fetch(`https://api.github.com/repos/${REPO_CEPPO(env)}/actions/workflows/aggiorna-clienti.yml/dispatches`, { method: "POST", headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "User-Agent": "lucentia-hub", "Content-Type": "application/json" }, body: JSON.stringify({ ref: "main", inputs: { repo: repo || "" } }) });
+    if (r.status === 204) return { ok: true, pagina: `https://github.com/${REPO_CEPPO(env)}/actions/workflows/aggiorna-clienti.yml` };
+    const t = await r.text().catch(() => "");
+    return { ok: false, errore: `GitHub ha risposto ${r.status}${t ? ": " + t.slice(0, 200) : ""}` };
+  } catch (e) { return { ok: false, errore: "GitHub non raggiungibile: " + String((e && e.message) || e) }; }
 }
 async function nuovaChiave() {
   const chiave = randomToken(32); // 64 caratteri esadecimali
@@ -42,7 +75,10 @@ export async function installazioni(ctx, segs, sess) {
   if (!segs[1]) {
     if (method === "GET") {
       const res = await env.DB.prepare("SELECT * FROM installazioni ORDER BY creata_il DESC").all();
-      return json({ items: (res.results || []).map(pubblica) });
+      const items = [];
+      for (const r of res.results || []) { const a = pubblica(r); const giro = await leggiInt(env, SISTEMA, "giro:" + r.id); items.push({ ...a, giro, avvisi: avvisiDi(a, giro) }); }
+      const ultimoGiro = await leggiInt(env, SISTEMA, "giro:ultimo");
+      return json({ items, ultimoGiro, versionePortale: APP_VERSION, aggiornamento: { configurato: !!env.AGGIORNA_TOKEN, repo: REPO_CEPPO(env) } });
     }
     if (method === "POST") {
       const b = await request.json().catch(() => ({}));
@@ -60,6 +96,12 @@ export async function installazioni(ctx, segs, sess) {
     return json({ error: "metodo non consentito" }, 405);
   }
 
+  // POST /api/installazioni/aggiorna {repo?}: aggiorna tutte le installazioni (o una) dal ceppo, via GitHub
+  if (segs[1] === "aggiorna" && method === "POST") {
+    const b = await request.json().catch(() => ({}));
+    const r = await avviaAggiornamento(env, String(b.repo || "").trim());
+    return json(r, r.ok ? 200 : 503);
+  }
   const iid = segs[1];
   const riga = await env.DB.prepare("SELECT * FROM installazioni WHERE id = ?").bind(iid).first();
   if (!riga) return json({ error: "installazione non trovata" }, 404);
@@ -70,6 +112,7 @@ export async function installazioni(ctx, segs, sess) {
     if (b.nome != null) await env.DB.prepare("UPDATE installazioni SET nome = ? WHERE id = ?").bind(String(b.nome).trim() || riga.nome, iid).run();
     if (b.dominio != null) await env.DB.prepare("UPDATE installazioni SET dominio = ? WHERE id = ?").bind(pulisciDominio(b.dominio), iid).run();
     if (b.note != null) await env.DB.prepare("UPDATE installazioni SET note = ? WHERE id = ?").bind(String(b.note), iid).run();
+    if (b.repo != null) { try { await env.DB.prepare("UPDATE installazioni SET repo = ? WHERE id = ?").bind(String(b.repo).trim().replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, ""), iid).run(); } catch (e) { return json({ error: "Colonna `repo` assente: esegui migrazione-installazioni-repo.sql sul database del portale." }, 500); } }
     if (b.attiva != null) await env.DB.prepare("UPDATE installazioni SET attiva = ? WHERE id = ?").bind(b.attiva ? 1 : 0, iid).run();
     if (b.rinnovaMesi != null) { const m = Number(b.rinnovaMesi); await env.DB.prepare("UPDATE installazioni SET licenza_scadenza = ? WHERE id = ?").bind(m > 0 ? addMonthsISO(m) : null, iid).run(); }
     if (b.scadenza !== undefined) await env.DB.prepare("UPDATE installazioni SET licenza_scadenza = ? WHERE id = ?").bind(b.scadenza || null, iid).run();

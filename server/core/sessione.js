@@ -2,6 +2,7 @@
 // Sessioni e account: cookie HttpOnly, lettura della sessione, login/logout.
 // ============================================================================
 import { json, getCookie, randomToken, verifyPassword } from "./util.js";
+import { registra } from "./registro.js";
 
 export const SESSION_DAYS = 30;
 
@@ -36,6 +37,7 @@ export async function login(ctx) {
   const token = randomToken();
   const scad = new Date(Date.now() + SESSION_DAYS * 24 * 3600 * 1000).toISOString();
   await env.DB.prepare("INSERT INTO sessioni (token, utente_id, scadenza) VALUES (?, ?, ?)").bind(token, u.id, scad).run();
+  if (u.azienda_id) await registra(env, u.azienda_id, { chi: u.email, origine: String(body.origine || "gestionale"), tipo: "accesso", testo: u.ruolo === "operatore" ? "Accesso come operatore" : "Accesso al gestionale", dettagli: { ua: String(request.headers.get("User-Agent") || "").slice(0, 120) } });
   return json({ ok: true, ruolo: u.ruolo }, 200, { "Set-Cookie": sessionCookie(token) });
 }
 

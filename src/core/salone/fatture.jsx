@@ -12,9 +12,10 @@
 //   fornitori (mese corrente e precedente) ogni ora, senza doppioni.
 // ============================================================================
 import { useState, useEffect, useRef, useMemo } from "react";
-import { FileText, Plus, X, Check, AlertTriangle, Download, Send, RefreshCw, ChevronRight, Trash2, Receipt, Building2, Ban, Search, Inbox } from "lucide-react";
+import { FileText, Plus, X, Check, AlertTriangle, Download, Send, RefreshCw, ChevronRight, Trash2, Receipt, Building2, Ban, Search, Inbox, Percent } from "lucide-react";
 import { uid, eur, todayStr, fmtDateTime, Field, useMods } from "./comuni.jsx";
-import { TIPI_DOCUMENTO, MODALITA_PAGAMENTO, REGIMI_FISCALI, NATURE_IVA, n2, nettoDaLordo, rigaTotale, totali, controlla, fatturaXml, nomeFile, leggiEsitoSdi, ESITO_DEFINITIVO, chiaveAcquisto, pivaPulita, cfPulito } from "../fatture/fatturapa.js";
+import { registraAttivita } from "./comuni.jsx";
+import { riepilogoIva, periodoIva, TIPI_DOCUMENTO, MODALITA_PAGAMENTO, REGIMI_FISCALI, NATURE_IVA, n2, nettoDaLordo, rigaTotale, totali, controlla, fatturaXml, nomeFile, leggiEsitoSdi, ESITO_DEFINITIVO, chiaveAcquisto, pivaPulita, cfPulito } from "../fatture/fatturapa.js";
 
 export async function effattaApi(action, { query = "", body } = {}) {
   try {
@@ -98,6 +99,7 @@ export function FattureView({ config, saveConfig, fatture, setFatture, acquisti,
       const { anno, n } = prossimoNumero(cfgF, nuova.data);
       if (nuova.numero === prossimoNumero(cfgF, nuova.data).numero) saveConfig({ ...config, fatture: { ...cfgF, numerazione: { ...cfgF.numerazione, prossimo: { ...(cfgF.numerazione.prossimo || {}), [anno]: n + 1 } } } });
       onEmessa && onEmessa(nuova);
+      registraAttivita("fatture", `${nuova.tipo === "TD04" ? "Nota di credito" : "Fattura"} n. ${nuova.numero} emessa · ${nuova.cliente && nuova.cliente.denominazione ? nuova.cliente.denominazione : ""}`, { fattura: nuova.id });
     }
     setForm(null); setOpenId(nuova.id);
   };
@@ -116,6 +118,7 @@ export function FattureView({ config, saveConfig, fatture, setFatture, acquisti,
     const d = r.invio || {};
     const effattaId = String(d.idDocumento || d.IdDocumento || d.id || d.IdentificativoSdI || "").slice(0, 80);
     patch(f.id, { xmlProgressivo: prog, xmlNome: nome, effattaId: effattaId || "inviata", sdiInviatoIl: new Date().toISOString(), sdiEsito: "", sdiEsitoTipo: "", sdiEsitoIl: "" });
+    registraAttivita("fatture", `Fattura n. ${f.numero} mandata allo SDI tramite Effatta`, { fattura: f.id });
     if (!f.xmlProgressivo) saveConfig({ ...config, fatture: { ...cfgF, progressivoInvio: prog + 1 } });
     setMsg({ ok: true, testo: `Fattura n. ${f.numero} mandata allo SDI. L'esito arriva da solo entro qualche ora.` });
   };
@@ -139,8 +142,8 @@ export function FattureView({ config, saveConfig, fatture, setFatture, acquisti,
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div><h2 className="text-xl font-semibold tracking-tight text-stone-900 leading-none">Fatture</h2><p className="text-[13px] text-stone-400 mt-1">Fatture elettroniche emesse e ricevute{attivo ? <span className="text-green-700 font-medium"> · Effatta collegato</span> : <span> · Effatta spento: le fatture si scaricano in XML</span>}</p></div>
         <div className="flex items-center gap-2">
-          <div className="flex gap-1 bg-stone-100/80 rounded-xl p-1">{[["emesse", "Emesse", FileText], ["acquisti", "Fornitori", Inbox]].map(([k, l, Icon]) => <button key={k} onClick={() => setTab(k)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition ${tab === k ? "bg-white shadow-[var(--lc-shadow-xs)] text-stone-900" : "text-stone-500 hover:text-stone-700"}`}><Icon size={15} /><span className="hidden sm:inline">{l}</span></button>)}</div>
-          {tab === "emesse" ? <button onClick={() => setForm(form ? null : { tipo: "TD01" })} className="flex items-center gap-1.5 text-sm font-medium brand-bg px-3.5 py-2 rounded-lg shadow-[var(--lc-shadow-xs)]">{form ? <X size={15} /> : <Plus size={15} />} {form ? "Chiudi" : "Nuova fattura"}</button>
+          <div className="flex gap-1 bg-stone-100/80 rounded-xl p-1">{[["emesse", "Emesse", FileText], ["acquisti", "Fornitori", Inbox], ["iva", "Riepilogo IVA", Percent]].map(([k, l, Icon]) => <button key={k} onClick={() => setTab(k)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition ${tab === k ? "bg-white shadow-[var(--lc-shadow-xs)] text-stone-900" : "text-stone-500 hover:text-stone-700"}`}><Icon size={15} /><span className="hidden sm:inline">{l}</span></button>)}</div>
+          {tab === "iva" ? null : tab === "emesse" ? <button onClick={() => setForm(form ? null : { tipo: "TD01" })} className="flex items-center gap-1.5 text-sm font-medium brand-bg px-3.5 py-2 rounded-lg shadow-[var(--lc-shadow-xs)]">{form ? <X size={15} /> : <Plus size={15} />} {form ? "Chiudi" : "Nuova fattura"}</button>
             : <button onClick={scaricaAcquisti} disabled={!attivo || busy === "acquisti"} title={attivo ? "" : "Collega Effatta in Impostazioni → Fatture"} className="flex items-center gap-1.5 text-sm font-medium brand-bg px-3.5 py-2 rounded-lg shadow-[var(--lc-shadow-xs)] disabled:opacity-50"><RefreshCw size={15} className={busy === "acquisti" ? "animate-spin" : ""} /> Scarica da Effatta</button>}
         </div>
       </div>
@@ -182,9 +185,66 @@ export function FattureView({ config, saveConfig, fatture, setFatture, acquisti,
             </div>
           ); })}</div>
         )}
-      </> : (
+      </> : tab === "iva" ? (
+        <RiepilogoIvaTab fatture={fatture} acquisti={acquisti} ditta={cfgF.ditta} />
+      ) : (
         <AcquistiTab acquisti={acquisti} setAcquisti={setAcquisti} />
       )}
+    </div>
+  );
+}
+
+// ---- Riepilogo IVA del periodo: a debito (emesse), a credito (ricevute), saldo ----
+function RiepilogoIvaTab({ fatture, acquisti, ditta }) {
+  const oggi = new Date();
+  const [tipo, setTipo] = useState("mese");
+  const [anno, setAnno] = useState(oggi.getFullYear());
+  const [n, setN] = useState(oggi.getMonth() + 1);
+  const per = periodoIva(tipo, anno, tipo === "trimestre" ? Math.min(4, Math.max(1, Math.ceil(n / 3))) : n);
+  const r = useMemo(() => riepilogoIva(fatture, acquisti, ditta, per.da, per.a), [fatture, acquisti, ditta, per.da, per.a]);
+  const nat = (g) => (g.natura ? ` ${g.natura}` : "");
+  const csv = () => {
+    const righe = [["Sezione", "Aliquota", "Natura", "Imponibile", "Imposta"].join(";")];
+    r.emesse.gruppi.forEach((g) => righe.push(["Emesse", g.aliquota, g.natura, g.imponibile.toFixed(2).replace(".", ","), g.imposta.toFixed(2).replace(".", ",")].join(";")));
+    righe.push(["Emesse totale", "", "", r.emesse.imponibile.toFixed(2).replace(".", ","), r.emesse.imposta.toFixed(2).replace(".", ",")].join(";"));
+    r.ricevute.gruppi.forEach((g) => righe.push(["Ricevute", g.aliquota, g.natura, g.imponibile.toFixed(2).replace(".", ","), g.imposta.toFixed(2).replace(".", ",")].join(";")));
+    righe.push(["Ricevute totale", "", "", r.ricevute.imponibile.toFixed(2).replace(".", ","), r.ricevute.imposta.toFixed(2).replace(".", ",")].join(";"));
+    righe.push(["IVA a debito", "", "", "", r.ivaDebito.toFixed(2).replace(".", ",")].join(";")); righe.push(["IVA a credito", "", "", "", r.ivaCredito.toFixed(2).replace(".", ",")].join(";")); righe.push(["Saldo", "", "", "", r.saldo.toFixed(2).replace(".", ",")].join(";"));
+    scarica(`riepilogo-iva-${per.da}-${per.a}.csv`, "\ufeff" + righe.join("\n"), "text/csv;charset=utf-8");
+  };
+  const inp = "px-3 py-2 rounded-lg border border-stone-300 text-sm bg-white brand-ring";
+  const Tabella = ({ titolo, s, nota }) => (
+    <div className="lc-card p-4">
+      <div className="flex items-center justify-between gap-2 mb-2"><h4 className="font-semibold text-stone-900 text-sm">{titolo} <span className="text-xs font-normal text-stone-400">· {s.n} document{s.n === 1 ? "o" : "i"}{s.noteCredito ? `, di cui ${s.noteCredito} not${s.noteCredito === 1 ? "a" : "e"} di credito` : ""}</span></h4></div>
+      {s.gruppi.length === 0 ? <p className="text-sm text-stone-400">Nessun documento nel periodo.</p> : (
+        <table className="w-full text-sm"><thead><tr className="text-[11px] uppercase tracking-wide text-stone-400 border-b border-stone-100"><th className="text-left font-medium py-1.5">Aliquota</th><th className="text-right font-medium py-1.5">Imponibile</th><th className="text-right font-medium py-1.5">Imposta</th></tr></thead>
+          <tbody>{s.gruppi.map((g, i) => <tr key={i} className="border-b border-stone-50"><td className="py-1.5">{g.aliquota}%{nat(g)}</td><td className="py-1.5 text-right tabular-nums">{eur(g.imponibile)}</td><td className="py-1.5 text-right tabular-nums">{eur(g.imposta)}</td></tr>)}</tbody>
+          <tfoot><tr className="font-semibold border-t border-stone-200"><td className="py-1.5">Totale</td><td className="py-1.5 text-right tabular-nums">{eur(s.imponibile)}</td><td className="py-1.5 text-right tabular-nums">{eur(s.imposta)}</td></tr></tfoot></table>
+      )}
+      {nota ? <p className="text-[11px] text-stone-400 mt-2">{nota}</p> : null}
+    </div>
+  );
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <select value={tipo} onChange={(e) => setTipo(e.target.value)} className={inp}><option value="mese">Mese</option><option value="trimestre">Trimestre</option><option value="anno">Anno</option></select>
+        {tipo === "mese" ? <select value={n} onChange={(e) => setN(Number(e.target.value))} className={inp}>{Array.from({ length: 12 }, (_, i) => <option key={i + 1} value={i + 1}>{periodoIva("mese", anno, i + 1).etichetta.split(" ")[0]}</option>)}</select> : null}
+        {tipo === "trimestre" ? <select value={Math.ceil(n / 3)} onChange={(e) => setN(Number(e.target.value) * 3)} className={inp}>{[1, 2, 3, 4].map((t) => <option key={t} value={t}>{t}º trimestre</option>)}</select> : null}
+        <select value={anno} onChange={(e) => setAnno(Number(e.target.value))} className={inp}>{Array.from({ length: 6 }, (_, i) => oggi.getFullYear() - i).map((y) => <option key={y} value={y}>{y}</option>)}</select>
+        <span className="text-sm text-stone-500">{per.etichetta}</span>
+        <div className="flex-1" />
+        <button onClick={csv} className="text-sm font-medium border border-stone-300 text-stone-600 px-3 py-2 rounded-lg hover:bg-stone-50 inline-flex items-center gap-1.5"><Download size={14} /> CSV per il commercialista</button>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <div className="lc-card p-4"><div className="text-[11px] text-stone-400 uppercase tracking-wide">IVA a debito</div><div className="text-xl font-semibold tabular-nums">{eur(r.ivaDebito)}</div><div className="text-xs text-stone-400">sulle fatture emesse</div></div>
+        <div className="lc-card p-4"><div className="text-[11px] text-stone-400 uppercase tracking-wide">IVA a credito</div><div className="text-xl font-semibold tabular-nums">{eur(r.ivaCredito)}</div><div className="text-xs text-stone-400">sulle fatture ricevute</div></div>
+        <div className="lc-card p-4"><div className="text-[11px] text-stone-400 uppercase tracking-wide">{r.saldo >= 0 ? "Da versare" : "A credito"}</div><div className={`text-xl font-semibold tabular-nums ${r.saldo >= 0 ? "brand-accent" : "text-green-700"}`}>{eur(Math.abs(r.saldo))}</div><div className="text-xs text-stone-400">debito meno credito</div></div>
+      </div>
+      <div className="grid lg:grid-cols-2 gap-4">
+        <Tabella titolo="Fatture emesse" s={r.emesse} />
+        <Tabella titolo="Fatture ricevute" s={r.ricevute} nota={r.ricevute.stimate ? `${r.ricevute.stimate} fattur${r.ricevute.stimate === 1 ? "a" : "e"} senza riepilogo per aliquota (importate prima): aliquota stimata dai totali.` : null} />
+      </div>
+      <p className="text-[11px] text-stone-400 leading-relaxed">Conteggio di comodo, sulle fatture elettroniche registrate qui (per data del documento, note di credito in negativo). Gli scontrini del registratore e gli acquisti senza fattura elettronica non entrano: la liquidazione vera la fa il commercialista.</p>
     </div>
   );
 }

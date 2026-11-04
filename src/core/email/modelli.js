@@ -10,9 +10,11 @@ export const MODELLI_EMAIL = {
   conferma: { oggetto: "Conferma appuntamento {data} alle {ora} · {salone}", testo: "Gentile {cliente},\n\nle confermiamo l'appuntamento di {data} alle {ora} per {servizi}{conOperatore}.\n\nSe avesse un imprevisto la preghiamo di avvisarci con anticipo{telefonoFrase}.\n\nA presto,\n{salone}" },
   promemoria: { oggetto: "Promemoria: domani alle {ora} da {salone}", testo: "Gentile {cliente},\n\nle ricordiamo l'appuntamento di domani, {data} alle {ora}, per {servizi}{conOperatore}.\n\nLa aspettiamo{indirizzoFrase}.\n\n{salone}" },
   oraPrima: { oggetto: "Tra un'ora: il suo appuntamento da {salone}", testo: "Gentile {cliente},\n\nle ricordiamo che l'appuntamento per {servizi} è alle {ora}{conOperatore}.\n\nA tra poco,\n{salone}{indirizzoFrase}" },
+  recensione: { oggetto: "Com'è andata da {salone}?", testo: "Gentile {cliente},\n\ngrazie per essere venuta da noi per {servizi}. Ci farebbe piacere sapere com'è andata: una recensione aiuta il nostro lavoro e chi deve ancora conoscerci.\n\nLasciarla richiede un minuto:\n{linkRecensione}\n\nGrazie di cuore,\n{salone}" },
+  recuperoPassword: { oggetto: "Reimposta la tua password · {salone}", testo: "Gentile {nome},\n\nabbiamo ricevuto la richiesta di reimpostare la password del tuo account per prenotare da {salone}. Scegli la nuova password da qui (il link vale un'ora):\n{linkReset}\n\nSe non sei stata tu, ignora questa email: la password resta quella di sempre.\n\n{salone}" },
 };
-export const TIPI_EMAIL = [["conferma", "Conferma appuntamento"], ["promemoria", "Promemoria alle 19 del giorno prima"], ["oraPrima", "Promemoria un'ora prima"], ["benvenuto", "Benvenuto alla registrazione"]];
-export const SEGNAPOSTO_EMAIL = "{cliente} {nome} {cognome} {data} {ora} {fine} {servizi} {operatore} {conOperatore} {salone} {telefono} {telefonoFrase} {indirizzo} {indirizzoFrase} {linkPrenota} · solo nel benvenuto: {email} {password}";
+export const TIPI_EMAIL = [["conferma", "Conferma appuntamento"], ["promemoria", "Promemoria alle 19 del giorno prima"], ["oraPrima", "Promemoria un'ora prima"], ["recensione", "Richiesta di recensione (dopo il primo appuntamento svolto)"], ["benvenuto", "Benvenuto alla registrazione"], ["recuperoPassword", "Recupero della password"]];
+export const SEGNAPOSTO_EMAIL = "{cliente} {nome} {cognome} {data} {ora} {fine} {servizi} {operatore} {conOperatore} {salone} {telefono} {telefonoFrase} {indirizzo} {indirizzoFrase} {linkPrenota} · nella recensione: {linkRecensione} · nel benvenuto: {email} {password} · nel recupero: {linkReset}";
 
 export const compila = (t, v) => String(t || "").replace(/\{(\w+)\}/g, (m, k) => (v[k] != null ? String(v[k]) : m));
 export function modelloEmail(config, tipo) {

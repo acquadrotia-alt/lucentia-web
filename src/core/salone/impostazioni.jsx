@@ -4,7 +4,8 @@ import { operatoriDelServizio } from "../../orari.js";
 import { AvatarSvg, AVATAR_IDS, avatarIdFor } from "../../avatars.jsx";
 import { RESELLER_CODE, uid, minToStr, strToMin, todayStr, DAYS, fmtDate, fmtFullDate, DEFAULT_LOYALTY, DEFAULT_CONFIG, BLANK_BRANDING, PRESETS, DEFAULT_CATALOG, makeLicense, licenseState, fileToResizedDataURL, fileToCoverDataURL, loyaltyConfig, clientPoints, buildSampleData, useMods, LUCENTIA_LOGO, MAKER_LOGO, Field } from "./comuni.jsx";
 import { printPriceList } from "./stampa.jsx";
-import { exportBackup } from "./backup.js";
+import { exportBackup, computerDaBackup } from "./backup.js";
+import { RegistroAttivita } from "./registro.jsx";
 import { ESTENSIONI } from "../../cliente/index.jsx";
 import { GoogleImpostazioni } from "./google.jsx";
 import { FattureImpostazioni } from "./fatture.jsx";
@@ -509,7 +510,12 @@ export function SettingsView({ config, saveConfig, bookings, setBookings, client
             {lastBackup ? <span className="text-xs text-stone-400">Ultimo backup: {fmtFullDate(lastBackup.at)}</span> : <span className="text-xs text-stone-400">Nessun backup ancora.</span>}
           </div>
           <p className="text-xs text-stone-400 mt-3">Scegli una volta la cartella sul PC: l'app vi salverà il file <code className="bg-stone-100 px-1 rounded">lucentia-backup-AAAA-MM-GG.json</code> all'orario impostato (occorre che l'app sia aperta a quell'ora). Funziona su Windows; su Android usa "Esporta backup".</p>
+          <div className="mt-4 pt-4 border-t border-stone-100">
+            <label className="flex items-start gap-2 text-sm cursor-pointer"><input type="checkbox" checked={!config.backup || config.backup.scaricaAlPrimoAvvio !== false} onChange={(e) => saveConfig({ ...config, backup: { ...(config.backup || {}), scaricaAlPrimoAvvio: e.target.checked } })} className="w-4 h-4 mt-0.5" /><span><b>Scarica un backup completo al primo avvio del giorno</b> dal computer (versione web): il file finisce nella cartella Download del PC, una volta al giorno. Non parte dal telefono né dal programma della cassa.{!computerDaBackup() ? <span className="block text-xs text-stone-400 mt-0.5">Da questo dispositivo non parte (non è un computer).</span> : null}</span></label>
+          </div>
         </section>
+
+        <RegistroAttivita />
 
   {F.vendite && (
         <section className="lc-card p-5">

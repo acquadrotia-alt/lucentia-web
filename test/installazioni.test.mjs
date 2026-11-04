@@ -123,3 +123,31 @@ test("sul portale /api/installazione risponde hub e le rotte cliente non esiston
   assert.equal(r.body.modalita, "hub");
   assert.equal((await chiama(st, "/api/sito", { auth: false })).status, 401);
 });
+
+test("avvisi del portale: silenzio, licenza in scadenza, giro fallito, versione indietro; e l'aggiornamento parte via GitHub", async () => {
+  const { avvisiDi } = await import("../server/hub/installazioni.js");
+  const ora = new Date("2026-11-04T12:00:00").getTime();
+  const base = { attiva: true, stato: "active", licenza_scadenza: "2027-06-01", ultimo_contatto: "2026-11-04 10:00", versione: "dev" };
+  assert.deepEqual(avvisiDi(base, { il: "x", ok: true, saloni: [] }, ora), []);
+  assert.match(avvisiDi({ ...base, ultimo_contatto: "2026-10-30 10:00" }, null, ora)[0].testo, /nessun contatto da 5 giorni/);
+  assert.match(avvisiDi({ ...base, ultimo_contatto: null }, null, ora)[0].testo, /mai collegata/);
+  assert.match(avvisiDi({ ...base, licenza_scadenza: "2026-11-20" }, null, ora)[0].testo, /scade tra 17 giorni/);
+  assert.match(avvisiDi({ ...base, stato: "expired" }, null, ora)[0].testo, /scaduta/);
+  assert.match(avvisiDi(base, { il: "x", ok: false, http: 522 }, ora)[0].testo, /giro delle email non è riuscito \(HTTP 522\)/);
+  assert.match(avvisiDi(base, { il: "x", ok: true, saloni: [{ errori: 2 }] }, ora)[0].testo, /con errori/);
+  assert.deepEqual(avvisiDi({ ...base, attiva: false, ultimo_contatto: null }, { il: "x", ok: false }, ora), [], "sospesa: niente avvisi di contatto o giro");
+
+  const st = scenario();
+  const fetchVero = globalThis.fetch; const chiamate = [];
+  globalThis.fetch = async (url, init) => { chiamate.push({ url: String(url), body: JSON.parse(init.body), auth: init.headers.Authorization }); return new Response(null, { status: 204 }); };
+  try {
+    const senza = await onRequest({ request: new Request("https://portale.test/api/installazioni/aggiorna", { method: "POST", headers: { "Content-Type": "application/json", Cookie: "sid=tok" }, body: "{}" }), env: { DB: db(st), SETUP_TOKEN: "x" }, params: { path: ["installazioni", "aggiorna"] } });
+    assert.equal(senza.status, 503, "senza AGGIORNA_TOKEN si spiega cosa manca");
+    const con = await onRequest({ request: new Request("https://portale.test/api/installazioni/aggiorna", { method: "POST", headers: { "Content-Type": "application/json", Cookie: "sid=tok" }, body: JSON.stringify({ repo: "acquadrotia-alt/LUCENTIA-ESTETICA-AURA" }) }), env: { DB: db(st), SETUP_TOKEN: "x", AGGIORNA_TOKEN: "ghp_x" }, params: { path: ["installazioni", "aggiorna"] } });
+    assert.equal(con.status, 200); const j = await con.json(); assert.match(j.pagina, /actions\/workflows\/aggiorna-clienti\.yml/);
+    assert.equal(chiamate.length, 1); assert.match(chiamate[0].url, /repos\/acquadrotia-alt\/lucentia-web\/actions\/workflows\/aggiorna-clienti\.yml\/dispatches/); assert.equal(chiamate[0].body.inputs.repo, "acquadrotia-alt/LUCENTIA-ESTETICA-AURA"); assert.equal(chiamate[0].auth, "Bearer ghp_x");
+    // non da chiunque
+    const no = await onRequest({ request: new Request("https://portale.test/api/installazioni/aggiorna", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }), env: { DB: db(st), SETUP_TOKEN: "x", AGGIORNA_TOKEN: "ghp_x" }, params: { path: ["installazioni", "aggiorna"] } });
+    assert.equal(no.status, 401);
+  } finally { globalThis.fetch = fetchVero; }
+});

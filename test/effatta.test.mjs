@@ -342,3 +342,31 @@ test("senza idMittente l'errore spiega che cosa manca invece di parlare di passw
   assert.match(r.body.error, /idMittente/);
   assert.match(r.body.error, /Effatta/);
 });
+
+test("riepilogo IVA del periodo: emesse per aliquota, ricevute dal riepilogo o dalle righe, note di credito in negativo", async () => {
+  const { riepilogoIva, periodoIva } = await import("../src/core/fatture/fatturapa.js");
+  const ditta = { regime: "RF01" };
+  const fatture = [
+    { id: "f1", tipo: "TD01", numero: "1", data: "2026-10-05", righe: [{ descrizione: "Taglio", qta: 1, prezzo: 100, aliquota: 22 }, { descrizione: "Libro", qta: 1, prezzo: 10, aliquota: 4 }] },
+    { id: "f2", tipo: "TD04", numero: "2", data: "2026-10-20", righe: [{ descrizione: "Storno", qta: 1, prezzo: 50, aliquota: 22 }] },
+    { id: "f3", tipo: "TD01", numero: "3", data: "2026-11-02", righe: [{ descrizione: "Fuori periodo", qta: 1, prezzo: 999, aliquota: 22 }] },
+    { id: "f4", tipo: "TD01", numero: "4", data: "2026-10-21", annullata: true, righe: [{ descrizione: "Annullata", qta: 1, prezzo: 999, aliquota: 22 }] },
+  ];
+  const acquisti = [
+    { id: "a1", tipo: "TD01", numero: "A1", data: "2026-10-10", imponibile: 200, imposta: 44, totale: 244, riepilogo: [{ aliquota: 22, natura: "", imponibile: 200, imposta: 44 }] },
+    { id: "a2", tipo: "TD01", numero: "A2", data: "2026-10-12", imponibile: 100, imposta: 10, totale: 110, righe: [{ descrizione: "x", qta: 1, totale: 100, aliquota: 10 }] },
+    { id: "a3", tipo: "TD01", numero: "A3", data: "2026-10-15", imponibile: 50, imposta: 11, totale: 61 },
+  ];
+  const p = periodoIva("mese", 2026, 10);
+  assert.equal(p.da, "2026-10-01"); assert.equal(p.a, "2026-10-31"); assert.equal(p.etichetta, "Ottobre 2026");
+  assert.deepEqual(periodoIva("trimestre", 2026, 4), { da: "2026-10-01", a: "2026-12-31", etichetta: "4º trimestre 2026" });
+  const r = riepilogoIva(fatture, acquisti, ditta, p.da, p.a);
+  assert.equal(r.emesse.n, 2); assert.equal(r.emesse.noteCredito, 1);
+  const e22 = r.emesse.gruppi.find((g) => g.aliquota === 22); assert.equal(e22.imponibile, 50); assert.equal(e22.imposta, 11);
+  assert.equal(r.emesse.gruppi.find((g) => g.aliquota === 4).imposta, 0.4);
+  assert.equal(r.ivaDebito, 11.4);
+  assert.equal(r.ricevute.n, 3); assert.equal(r.ricevute.stimate, 1);
+  assert.equal(r.ricevute.gruppi.find((g) => g.aliquota === 22).imponibile, 250, "200 dal riepilogo + 50 stimati");
+  assert.equal(r.ricevute.gruppi.find((g) => g.aliquota === 10).imposta, 10);
+  assert.equal(r.ivaCredito, 65); assert.equal(r.saldo, -53.6);
+});

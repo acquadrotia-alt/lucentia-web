@@ -4,7 +4,7 @@
 // per quelli presi online), i punti fedeltà e i suoi dati.
 // ============================================================================
 import { useState, useEffect } from "react";
-import { Mail, Lock, Calendar, Clock, User, Star, Phone, AlertCircle, LogOut, CalendarClock, Trash2, Check, X, ChevronRight, Gift, Plus } from "lucide-react";
+import { Mail, Lock, Calendar, Clock, User, Star, Phone, AlertCircle, LogOut, CalendarClock, Trash2, Check, X, ChevronRight, Gift, Plus, Repeat, KeyRound } from "lucide-react";
 
 const pad2 = (n) => String(n).padStart(2, "0");
 const parseDate = (s) => { const [y, m, d] = String(s).split("-").map(Number); return new Date(y, m - 1, d); };
@@ -21,6 +21,26 @@ export function AccessoCliente({ aid, primary, salone, onEntrato }) {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [recupero, setRecupero] = useState(false);
+  const [esitoRec, setEsitoRec] = useState(null);
+  const recupera = async () => {
+    if (!email.trim()) { setErr("Scrivi l'email del tuo account."); return; }
+    setBusy(true); setErr(""); setEsitoRec(null);
+    const r = await post(`/api/clienti/${aid}/recupera`, { email: email.trim() });
+    setBusy(false);
+    setEsitoRec(r.ok ? { ok: true, testo: r.data.testo || "Controlla la tua email." } : { ok: false, testo: r.data.error || "Non riuscito." });
+  };
+  if (recupero) return (
+    <section className="lc-card lc-fade-up p-5">
+      <h2 className="font-semibold text-stone-900 tracking-tight flex items-center gap-2"><KeyRound size={16} style={{ color: primary }} /> Password dimenticata</h2>
+      <p className="text-sm text-stone-500 mt-1 mb-4">Scrivi l'email del tuo account: ti mandiamo un link per scegliere una nuova password.</p>
+      <div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2.5 focus-within:border-stone-400"><Mail size={16} className="text-stone-400 shrink-0" /><input value={email} onChange={(e) => { setEmail(e.target.value); setErr(""); }} onKeyDown={(e) => e.key === "Enter" && recupera()} type="email" placeholder="Email" autoComplete="email" className="flex-1 text-sm focus:outline-none bg-transparent" /></div>
+      {err ? <p className="text-xs text-red-500 mt-3 flex items-center gap-1.5"><AlertCircle size={13} /> {err}</p> : null}
+      {esitoRec ? <p className={`text-sm mt-3 flex items-start gap-1.5 ${esitoRec.ok ? "text-green-700" : "text-red-600"}`}>{esitoRec.ok ? <Check size={15} className="shrink-0 mt-0.5" /> : <AlertCircle size={15} className="shrink-0 mt-0.5" />} {esitoRec.testo}</p> : null}
+      {!esitoRec || !esitoRec.ok ? <button onClick={recupera} disabled={busy} className="mt-4 w-full text-white font-semibold py-3 rounded-xl disabled:opacity-50" style={{ background: primary }}>{busy ? "Invio…" : "Mandami il link"}</button> : null}
+      <button onClick={() => { setRecupero(false); setEsitoRec(null); setErr(""); }} className="mt-3 w-full text-sm text-stone-500 py-1">← Torna all'accesso</button>
+    </section>
+  );
   const entra = async () => {
     if (!email.trim() || !password) { setErr("Inserisci email e password."); return; }
     setBusy(true); setErr("");
@@ -39,6 +59,7 @@ export function AccessoCliente({ aid, primary, salone, onEntrato }) {
       </div>
       {err ? <p className="text-xs text-red-500 mt-3 flex items-center gap-1.5"><AlertCircle size={13} /> {err}</p> : null}
       <button onClick={entra} disabled={busy} className="mt-4 w-full text-white font-semibold py-3 rounded-xl disabled:opacity-50 lc-shine" style={{ background: primary }}>{busy ? "Entro…" : "Accedi"}</button>
+      <button onClick={() => { setRecupero(true); setErr(""); }} className="mt-2 w-full text-xs text-stone-500 py-1 hover:text-stone-700">Password dimenticata?</button>
       <div className="mt-4 rounded-xl bg-stone-50 border border-stone-100 p-3 text-xs text-stone-600 leading-relaxed">
         <b className="text-stone-800">Prima prenotazione online?</b> Per ricevere le credenziali contatta il salone{salone && (salone.phone || salone.email) ? ":" : "."}
         {salone && salone.phone ? <a href={`tel:+39${String(salone.phone).replace(/\D/g, "")}`} className="block mt-1.5 font-medium" style={{ color: primary }}><Phone size={12} className="inline mr-1" />{salone.phone}</a> : null}
@@ -55,13 +76,18 @@ export function AreaCliente({ aid, primary, account, ricarica, salone, onEsci, o
   const c = account.cliente;
   const days = Array.from({ length: 30 }, (_, i) => addDays(todayStr(), i));
   const api = async (path) => { const r = await fetch("/api/prenota/" + path, { credentials: "include" }); return { ok: r.ok, data: await r.json().catch(() => ({})) }; };
-  const annulla = async (b) => { if (!confirm("Annullare questa prenotazione?")) return; await post(`/api/prenota/${aid}/annulla`, { id: b.id }); ricarica(); };
+  const annulla = async (b) => {
+    if (!confirm("Annullare questa prenotazione?")) return;
+    const r = b.origine === "agenda" ? await post(`/api/clienti/${aid}/annulla-agenda`, { id: b.id }) : await post(`/api/prenota/${aid}/annulla`, { id: b.id });
+    if (!r.ok) alert(r.data.error || "Non riuscito.");
+    ricarica();
+  };
   const loadMoveSlots = async (b, date) => { setMove((m) => (m && m.booking.id === b.id ? { ...m, date, slots: null, slot: null } : m)); const r = await api(`${aid}/slots?date=${date}&service=${b.serviceId}&staff=${b.staffId || ""}&exclude=${b.id}`); setMove((m) => (m && m.booking.id === b.id ? { ...m, slots: r.ok && Array.isArray(r.data.slots) ? r.data.slots : [] } : m)); };
   const openMove = (b) => { setMove({ booking: b, date: b.date, slots: null, slot: null, busy: false }); loadMoveSlots(b, b.date); };
   const confirmMove = async () => {
     if (!move || !move.slot) return;
     setMove((m) => ({ ...m, busy: true }));
-    const r = await post(`/api/prenota/${aid}/sposta`, { id: move.booking.id, date: move.date, start: move.slot.start });
+    const r = move.booking.origine === "agenda" ? await post(`/api/clienti/${aid}/sposta-agenda`, { id: move.booking.id, date: move.date, start: move.slot.start }) : await post(`/api/prenota/${aid}/sposta`, { id: move.booking.id, date: move.date, start: move.slot.start });
     if (!r.ok) { setMove((m) => ({ ...m, busy: false })); alert(r.data.error || "Errore."); if (r.status === 409) loadMoveSlots(move.booking, move.date); return; }
     setMove(null); ricarica();
   };
@@ -70,8 +96,9 @@ export function AreaCliente({ aid, primary, account, ricarica, salone, onEsci, o
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
       <section className="lc-card p-4 lc-fade-up flex items-center justify-between gap-3 flex-wrap">
         <div className="min-w-0"><div className="font-semibold text-stone-900">{c.nome} {c.cognome}</div><div className="text-xs text-stone-400 truncate">{c.email} · {c.telefono}</div></div>
-        <div className="flex gap-2">
-          <button onClick={onNuovo} className="text-sm font-medium text-white px-3.5 py-2 rounded-lg inline-flex items-center gap-1.5" style={{ background: primary }}><Plus size={15} /> Nuovo appuntamento</button>
+        <div className="flex gap-2 flex-wrap">
+          {account.ultimo ? <button onClick={() => onNuovo({ serviceId: account.ultimo.serviceId, staffId: account.ultimo.staffId })} title={`${account.ultimo.serviceName}${account.ultimo.staffName ? ` con ${account.ultimo.staffName}` : ""}, come il ${fmtLong(account.ultimo.date)}`} className="text-sm font-medium border px-3.5 py-2 rounded-lg inline-flex items-center gap-1.5 bg-white" style={{ borderColor: `${primary}66`, color: primary }}><Repeat size={15} /> Ripeti l'ultimo</button> : null}
+          <button onClick={() => onNuovo()} className="text-sm font-medium text-white px-3.5 py-2 rounded-lg inline-flex items-center gap-1.5" style={{ background: primary }}><Plus size={15} /> Nuovo appuntamento</button>
           <button onClick={onEsci} className="text-sm font-medium border border-stone-200 text-stone-500 px-3 py-2 rounded-lg inline-flex items-center gap-1.5 hover:bg-stone-50"><LogOut size={15} /> Esci</button>
         </div>
       </section>
@@ -79,7 +106,7 @@ export function AreaCliente({ aid, primary, account, ricarica, salone, onEsci, o
 
       {tab === "appuntamenti" ? (
         <div className="space-y-3">
-          {account.appuntamenti.length === 0 ? <section className="lc-card p-8 text-center lc-fade-up"><CalendarClock size={26} className="mx-auto text-stone-300 mb-2" /><p className="text-sm text-stone-500">Nessun appuntamento in programma.</p><button onClick={onNuovo} className="mt-3 text-sm font-medium" style={{ color: primary }}>Prenota ora →</button></section> : null}
+          {account.appuntamenti.length === 0 ? <section className="lc-card p-8 text-center lc-fade-up"><CalendarClock size={26} className="mx-auto text-stone-300 mb-2" /><p className="text-sm text-stone-500">Nessun appuntamento in programma.</p><button onClick={() => onNuovo()} className="mt-3 text-sm font-medium" style={{ color: primary }}>Prenota ora →</button></section> : null}
           {account.appuntamenti.map((b) => { const moving = move && move.booking.id === b.id; return (
             <section key={b.id} className="lc-card p-4 lc-fade-up">
               <div className="font-semibold text-stone-900">{b.serviceName || "Appuntamento"}</div>
@@ -89,10 +116,11 @@ export function AreaCliente({ aid, primary, account, ricarica, salone, onEsci, o
                 {b.staffName ? <span className="inline-flex items-center gap-1"><User size={13} className="text-stone-400" /> {b.staffName}</span> : null}
                 {b.origine === "online" ? <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ background: `${primary}1a`, color: primary }}>Prenotato online · in attesa di conferma del salone</span> : null}
               </div>
-              {b.origine === "online" ? (!moving ? (
+              {b.origine === "online" || b.modificabile ? (!moving ? (
                 <div className="flex gap-2 mt-3">
-                  <button onClick={() => openMove(b)} className="text-sm font-medium border rounded-lg px-3 py-1.5 inline-flex items-center gap-1.5 hover:bg-stone-50" style={{ borderColor: `${primary}66`, color: primary }}><CalendarClock size={14} /> Sposta</button>
+                  {b.origine === "online" || b.spostabile ? <button onClick={() => openMove(b)} className="text-sm font-medium border rounded-lg px-3 py-1.5 inline-flex items-center gap-1.5 hover:bg-stone-50" style={{ borderColor: `${primary}66`, color: primary }}><CalendarClock size={14} /> Sposta</button> : null}
                   <button onClick={() => annulla(b)} className="text-sm font-medium border border-stone-200 text-stone-500 rounded-lg px-3 py-1.5 inline-flex items-center gap-1.5 hover:text-red-600"><Trash2 size={14} /> Annulla</button>
+                  {b.origine === "agenda" && !b.spostabile ? <span className="text-[11px] text-stone-400 self-center">Per spostarlo contatta il salone.</span> : null}
                 </div>
               ) : (
                 <div className="mt-3 rounded-xl border border-stone-200 p-3 bg-stone-50/60">
@@ -101,7 +129,7 @@ export function AreaCliente({ aid, primary, account, ricarica, salone, onEsci, o
                   <div className="mt-3">{move.slots === null ? <div className="text-center text-sm text-stone-400 py-3">Cerco gli orari…</div> : move.slots.length === 0 ? <div className="text-center text-sm text-stone-400 py-3">Nessun orario disponibile.</div> : <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">{move.slots.map((s) => { const on = move.slot && move.slot.start === s.start; return <button key={s.start} onClick={() => setMove((m) => ({ ...m, slot: s }))} className="py-2 rounded-lg border text-sm font-medium tabular-nums" style={on ? { borderColor: "transparent", background: primary, color: "#fff" } : { borderColor: "#e7e5e4", background: "#fff" }}>{s.label}</button>; })}</div>}</div>
                   <button onClick={confirmMove} disabled={!move.slot || move.busy} className="mt-3 w-full text-white font-semibold py-2.5 rounded-xl disabled:opacity-50" style={{ background: primary }}>Conferma lo spostamento</button>
                 </div>
-              )) : <p className="text-xs text-stone-400 mt-2">Preso in salone: per spostarlo o annullarlo contatta il salone{salone && salone.phone ? ` al ${salone.phone}` : ""}.</p>}
+              )) : <p className="text-xs text-stone-400 mt-2">{b.status ? "Appuntamento già registrato dal salone." : `Si può spostare o annullare fino a ${account.preavvisoOre != null ? account.preavvisoOre : 6} ore prima: per questo contatta il salone${salone && salone.phone ? ` al ${salone.phone}` : ""}.`}</p>}
             </section>
           ); })}
           {account.storico.length ? <div className="pt-2"><div className="text-xs font-semibold uppercase tracking-wide text-stone-400 mb-2">Appuntamenti passati</div><div className="space-y-1.5">{account.storico.map((b) => <div key={b.id} className="text-sm text-stone-600 flex items-center justify-between gap-2 border-b border-stone-100 py-1.5"><span className="truncate">{b.serviceName}</span><span className="text-xs text-stone-400 shrink-0 capitalize">{fmtLong(b.date)} · {b.label}</span></div>)}</div></div> : null}
@@ -125,13 +153,16 @@ export function AreaCliente({ aid, primary, account, ricarica, salone, onEsci, o
 function DatiCliente({ aid, primary, account, ricarica }) {
   const c = account.cliente;
   const [telefono, setTelefono] = useState(c.telefono || "");
+  const [email, setEmail] = useState(c.email || "");
   const [pw, setPw] = useState({ attuale: "", nuova: "", conferma: "" });
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
   const salva = async () => {
     if (pw.nuova && pw.nuova !== pw.conferma) { setMsg({ ok: false, testo: "Le due password non coincidono." }); return; }
+    const cambiaEmail = email.trim().toLowerCase() !== (c.email || "").toLowerCase();
+    if (cambiaEmail && !pw.attuale) { setMsg({ ok: false, testo: "Per cambiare email inserisci la password attuale." }); return; }
     setBusy(true); setMsg(null);
-    const r = await post(`/api/clienti/${aid}/dati`, { telefono: telefono.trim(), nuovaPassword: pw.nuova, passwordAttuale: pw.attuale });
+    const r = await post(`/api/clienti/${aid}/dati`, { telefono: telefono.trim(), nuovaEmail: cambiaEmail ? email.trim() : "", nuovaPassword: pw.nuova, passwordAttuale: pw.attuale });
     setBusy(false);
     if (!r.ok) { setMsg({ ok: false, testo: r.data.error || "Non salvato." }); return; }
     setPw({ attuale: "", nuova: "", conferma: "" }); setMsg({ ok: true, testo: "Dati aggiornati." }); ricarica();
@@ -141,15 +172,15 @@ function DatiCliente({ aid, primary, account, ricarica }) {
     <section className="lc-card p-5 lc-fade-up space-y-3">
       <div className="grid sm:grid-cols-2 gap-3">
         <div><div className="text-[11px] uppercase tracking-wide text-stone-400 mb-1">Nome</div><div className="text-sm font-medium">{c.nome} {c.cognome}</div></div>
-        <div><div className="text-[11px] uppercase tracking-wide text-stone-400 mb-1">Email (accesso)</div><div className="text-sm font-medium break-all">{c.email}</div></div>
+        <div><div className="text-[11px] uppercase tracking-wide text-stone-400 mb-1">Telefono</div><input value={telefono} onChange={(e) => setTelefono(e.target.value)} type="tel" className={inp} /></div>
       </div>
-      <div><div className="text-[11px] uppercase tracking-wide text-stone-400 mb-1">Telefono</div><input value={telefono} onChange={(e) => setTelefono(e.target.value)} type="tel" className={inp} /></div>
-      <div className="pt-2 border-t border-stone-100"><div className="text-[11px] uppercase tracking-wide text-stone-400 mb-2">Cambia password (facoltativo)</div>
+      <div><div className="text-[11px] uppercase tracking-wide text-stone-400 mb-1">Email (serve per accedere)</div><input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className={inp} />{email.trim().toLowerCase() !== (c.email || "").toLowerCase() ? <p className="text-[11px] text-stone-400 mt-1">Per cambiare email conferma la password attuale qui sotto.</p> : null}</div>
+      <div className="pt-2 border-t border-stone-100"><div className="text-[11px] uppercase tracking-wide text-stone-400 mb-2">Password attuale (per cambiare email o password)</div>
         <div className="grid sm:grid-cols-3 gap-2"><input value={pw.attuale} onChange={(e) => setPw({ ...pw, attuale: e.target.value })} type="password" placeholder="Password attuale" className={inp} /><input value={pw.nuova} onChange={(e) => setPw({ ...pw, nuova: e.target.value })} type="password" placeholder="Nuova password" className={inp} /><input value={pw.conferma} onChange={(e) => setPw({ ...pw, conferma: e.target.value })} type="password" placeholder="Ripeti la nuova" className={inp} /></div>
       </div>
       {msg ? <p className={`text-sm flex items-center gap-1.5 ${msg.ok ? "text-green-700" : "text-red-600"}`}>{msg.ok ? <Check size={14} /> : <AlertCircle size={14} />} {msg.testo}</p> : null}
       <button onClick={salva} disabled={busy} className="w-full text-white font-semibold py-2.5 rounded-xl disabled:opacity-50" style={{ background: primary }}>{busy ? "Salvo…" : "Salva"}</button>
-      <p className="text-[11px] text-stone-400">Per cambiare nome o email contatta il salone.</p>
+      <p className="text-[11px] text-stone-400">Per cambiare il nome contatta il salone.</p>
     </section>
   );
 }

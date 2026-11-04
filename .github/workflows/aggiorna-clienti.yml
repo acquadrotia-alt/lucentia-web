@@ -1,0 +1,67 @@
+# Aggiorna le installazioni dei clienti: per ogni repository cliente porta dentro il ceppo
+# (merge di upstream/main), fa i test, compila in modalità cliente e spinge su main, da cui
+# Cloudflare Pages pubblica. Parte a mano (Actions → Run workflow) oppure dal pannello del
+# portale (Installazioni → «Aggiorna le installazioni»: POST /api/installazioni/aggiorna).
+#
+# Serve, nel repository del ceppo:
+#   · segreto CLIENTI_TOKEN  — un token GitHub (fine-grained o classic con `repo`) che può
+#                              leggere e scrivere i repository dei clienti;
+#   · segreto CLIENTI_REPOS  — l'elenco dei repository, uno per riga, es.
+#                              acquadrotia-alt/LUCENTIA-ESTETICA-AURA
+# Con l'input `repo` si aggiorna solo quel repository. Un merge con conflitti si salta e
+# compare nel riepilogo: va fatto a mano (LEGGIMI.md).
+name: Aggiorna le installazioni dei clienti
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: "Solo questo repository (owner/nome); vuoto = tutti quelli in CLIENTI_REPOS"
+        required: false
+        default: ""
+jobs:
+  aggiorna:
+    if: github.repository == 'acquadrotia-alt/lucentia-web'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: ceppo
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Aggiorna ogni installazione
+        env:
+          CLIENTI_TOKEN: ${{ secrets.CLIENTI_TOKEN }}
+          CLIENTI_REPOS: ${{ secrets.CLIENTI_REPOS }}
+          SOLO: ${{ github.event.inputs.repo }}
+        run: |
+          set -u
+          if [ -z "$CLIENTI_TOKEN" ]; then echo "::error::Manca il segreto CLIENTI_TOKEN"; exit 1; fi
+          if [ -n "$SOLO" ]; then LISTA="$SOLO"; else LISTA="$CLIENTI_REPOS"; fi
+          if [ -z "$(echo "$LISTA" | tr -d '[:space:]')" ]; then echo "::error::Nessun repository: imposta il segreto CLIENTI_REPOS o l'input repo"; exit 1; fi
+          git config --global user.name "Lucentia aggiornamenti"
+          git config --global user.email "noreply@lucentia-app.com"
+          CEPPO="$GITHUB_WORKSPACE/ceppo"
+          ESITO=""
+          FALLITI=0
+          for REPO in $LISTA; do
+            REPO="${REPO#https://github.com/}"; REPO="${REPO%.git}"
+            echo "=== $REPO ==="
+            DIR="$GITHUB_WORKSPACE/cliente-$(echo "$REPO" | tr '/' '-')"
+            if ! git clone --quiet "https://x-access-token:${CLIENTI_TOKEN}@github.com/${REPO}.git" "$DIR"; then ESITO="$ESITO\n❌ $REPO: clone non riuscito (token o nome sbagliato)"; FALLITI=$((FALLITI+1)); continue; fi
+            cd "$DIR"
+            git remote add upstream "$CEPPO"
+            git fetch --quiet upstream main
+            if git merge-base --is-ancestor upstream/main HEAD; then ESITO="$ESITO\n✅ $REPO: già aggiornato"; continue; fi
+            if ! git merge --no-edit upstream/main; then git merge --abort || true; ESITO="$ESITO\n❌ $REPO: conflitti nel merge, da fare a mano"; FALLITI=$((FALLITI+1)); continue; fi
+            if ! npm ci --no-audit --no-fund --silent; then ESITO="$ESITO\n❌ $REPO: npm ci non riuscito"; FALLITI=$((FALLITI+1)); continue; fi
+            if ! npm test --silent; then ESITO="$ESITO\n❌ $REPO: test falliti, non pubblicato"; FALLITI=$((FALLITI+1)); continue; fi
+            if ! MODALITA=cliente npm run build --silent; then ESITO="$ESITO\n❌ $REPO: build non riuscita, non pubblicato"; FALLITI=$((FALLITI+1)); continue; fi
+            if ! git push --quiet origin HEAD:main; then ESITO="$ESITO\n❌ $REPO: push non riuscito"; FALLITI=$((FALLITI+1)); continue; fi
+            ESITO="$ESITO\n✅ $REPO: aggiornato e pubblicato ($(git rev-parse --short HEAD))"
+          done
+          echo "## Aggiornamento delle installazioni" >> "$GITHUB_STEP_SUMMARY"
+          printf "$ESITO\n" | sed 's/^/- /' >> "$GITHUB_STEP_SUMMARY"
+          printf "$ESITO\n"
+          [ "$FALLITI" -eq 0 ]

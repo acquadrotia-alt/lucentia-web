@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { ShieldCheck, LogOut, Plus, KeyRound, Ban, BadgeCheck, Trash2, CalendarClock, Store, Mail, Boxes, X, Check, Users, Inbox, Phone, Sparkles, Clock, Eraser, AlertTriangle, Globe, Server, Copy, RefreshCw, Pencil, Wifi, WifiOff } from "lucide-react";
+import { ShieldCheck, LogOut, Plus, KeyRound, Ban, BadgeCheck, Trash2, CalendarClock, Store, Mail, Boxes, X, Check, Users, Inbox, Phone, Sparkles, Clock, Eraser, AlertTriangle, Globe, Server, Copy, RefreshCw, Pencil, Wifi, WifiOff, Bell, UploadCloud, ExternalLink, Github } from "lucide-react";
 
 // ============================================================================
 // Pannello di amministrazione del portale Lucentia.
@@ -135,9 +135,20 @@ function ChiaveBox({ id, chiave, dominio, onClose }) {
 
 function InstallazioniView({ apiGet, apiSend, flash }) {
   const [items, setItems] = useState([]);
+  const [meta, setMeta] = useState({});
   const [loading, setLoading] = useState(true);
-  const load = useCallback(async () => { setLoading(true); const r = await apiGet("/installazioni"); setItems(r.ok && r.data.items ? r.data.items : []); setLoading(false); }, [apiGet]);
+  const load = useCallback(async () => { setLoading(true); const r = await apiGet("/installazioni"); setItems(r.ok && r.data.items ? r.data.items : []); setMeta(r.ok ? { ultimoGiro: r.data.ultimoGiro, versionePortale: r.data.versionePortale, aggiornamento: r.data.aggiornamento } : {}); setLoading(false); }, [apiGet]);
   useEffect(() => { load(); }, [load]);
+  const [aggiornando, setAggiornando] = useState(false);
+  const [esitoAgg, setEsitoAgg] = useState(null);
+  const aggiorna = async (repo) => {
+    if (!confirm(repo ? `Aggiornare ${repo} dal ceppo? GitHub fa merge, test, build e pubblica su main.` : "Aggiornare TUTTE le installazioni dal ceppo? GitHub fa merge, test, build e pubblica su main di ogni repository in CLIENTI_REPOS.")) return;
+    setAggiornando(true); setEsitoAgg(null);
+    const r = await apiSend("/installazioni/aggiorna", "POST", { repo: repo || "" });
+    setAggiornando(false);
+    setEsitoAgg(r.ok ? { ok: true, testo: "Aggiornamento avviato su GitHub: ci vogliono alcuni minuti per ogni installazione.", pagina: r.data.pagina } : { ok: false, testo: (r.data && r.data.errore) || (r.data && r.data.error) || "Non riuscito." });
+  };
+  const conAvvisi = items.filter((a) => Array.isArray(a.avvisi) && a.avvisi.length);
 
   const [nome, setNome] = useState("");
   const [dominio, setDominio] = useState("");
@@ -159,8 +170,25 @@ function InstallazioniView({ apiGet, apiSend, flash }) {
   const patch = async (id, body, ok) => { const r = await apiSend(`/installazioni/${id}`, "PATCH", body); if (r.ok) { flash(ok || "Aggiornato."); load(); } else flash(r.data && r.data.error ? r.data.error : "Errore."); return r; };
   const elimina = async (a) => { if (!confirm(`Eliminare l'installazione "${a.nome}" dal portale? Il sito del cliente smetterà di essere riconosciuto e andrà in manutenzione. I suoi dati restano nel suo database.`)) return; const r = await apiSend(`/installazioni/${a.id}`, "DELETE"); if (r.ok) { flash("Installazione eliminata."); load(); } else flash("Errore."); };
 
+  const ultimoGiroTesto = meta.ultimoGiro && meta.ultimoGiro.il ? new Date(meta.ultimoGiro.il).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : null;
   return (
     <>
+      {!loading ? (
+        <section className={`rounded-2xl border p-4 ${conAvvisi.length ? "bg-amber-50 border-amber-200" : "bg-green-50 border-green-200"}`}>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <h2 className={`font-semibold flex items-center gap-2 ${conAvvisi.length ? "text-amber-900" : "text-green-800"}`}><Bell size={16} /> {conAvvisi.length ? `${conAvvisi.length} installazion${conAvvisi.length === 1 ? "e" : "i"} da guardare` : "Tutte le installazioni sono a posto"}</h2>
+              <p className={`text-xs mt-0.5 ${conAvvisi.length ? "text-amber-800/80" : "text-green-700/80"}`}>Contatto col portale, licenze in scadenza, giro delle email, versione in uso{ultimoGiroTesto ? ` · ultimo giro delle email ${ultimoGiroTesto}` : ""}{meta.versionePortale ? ` · portale v ${meta.versionePortale}` : ""}</p>
+              {conAvvisi.length ? <ul className="mt-2 space-y-1 text-sm text-amber-900">{conAvvisi.map((a) => <li key={a.id} className="flex gap-2"><AlertTriangle size={14} className="shrink-0 mt-0.5" /><span><b>{a.nome}</b>: {a.avvisi.map((x) => x.testo).join("; ")}</span></li>)}</ul> : null}
+            </div>
+            <div className="flex flex-col items-end gap-1.5 shrink-0">
+              <Btn tone="accent" onClick={() => aggiorna("")} disabled={aggiornando || !items.length} title={meta.aggiornamento && !meta.aggiornamento.configurato ? "Imposta AGGIORNA_TOKEN sul portale (LEGGIMI.md)" : ""}><UploadCloud size={14} /> {aggiornando ? "Avvio…" : "Aggiorna le installazioni"}</Btn>
+              {meta.aggiornamento && !meta.aggiornamento.configurato ? <span className="text-[11px] text-stone-500">manca AGGIORNA_TOKEN sul portale</span> : null}
+            </div>
+          </div>
+          {esitoAgg ? <p className={`text-sm mt-3 flex items-center gap-1.5 ${esitoAgg.ok ? "text-green-700" : "text-red-600"}`}>{esitoAgg.ok ? <Check size={15} /> : <AlertTriangle size={15} />} {esitoAgg.testo}{esitoAgg.pagina ? <a href={esitoAgg.pagina} target="_blank" rel="noreferrer" className="underline inline-flex items-center gap-1 ml-1">segui su GitHub <ExternalLink size={12} /></a> : null}</p> : null}
+        </section>
+      ) : null}
       <section className="lc-card p-5">
         <h2 className="font-semibold flex items-center gap-2 mb-1"><Plus size={16} style={{ color: "var(--lc-accent)" }} /> Nuova installazione cliente</h2>
         <p className="text-sm text-stone-500 mb-4">Crea la licenza e la chiave; poi segui LEGGIMI.md per preparare repository, progetto Cloudflare, database e dominio.</p>
@@ -178,14 +206,14 @@ function InstallazioniView({ apiGet, apiSend, flash }) {
       <section>
         <h2 className="font-semibold mb-3">Installazioni {items.length ? <span className="text-sm font-normal text-stone-400">· {items.length}</span> : null}</h2>
         {loading ? <p className="text-sm text-stone-400">Caricamento…</p> : items.length === 0 ? <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center text-stone-400">Nessuna installazione ancora. Crea la prima qui sopra.</div> : (
-          <div className="space-y-3">{items.map((a) => <InstallazioneRow key={a.id} a={a} onPatch={patch} onDelete={elimina} />)}</div>
+          <div className="space-y-3">{items.map((a) => <InstallazioneRow key={a.id} a={a} onPatch={patch} onDelete={elimina} onAggiorna={aggiorna} aggiornando={aggiornando} />)}</div>
         )}
       </section>
     </>
   );
 }
 
-function InstallazioneRow({ a, onPatch, onDelete }) {
+function InstallazioneRow({ a, onPatch, onDelete, onAggiorna, aggiornando }) {
   const badge = statoBadge(a);
   const [rinnovo, setRinnovo] = useState(12);
   const [modsOpen, setModsOpen] = useState(false);
@@ -195,7 +223,10 @@ function InstallazioneRow({ a, onPatch, onDelete }) {
   const [nome, setNome] = useState(a.nome);
   const [dominio, setDominio] = useState(a.dominio || "");
   const [note, setNote] = useState(a.note || "");
+  const [repo, setRepo] = useState(a.repo || "");
   const [chiave, setChiave] = useState(null);
+  const giro = a.giro || null;
+  const giroTesto = giro && giro.il ? `giro email ${new Date(giro.il).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}${giro.ok ? "" : " non riuscito"}` : "";
   useEffect(() => { setOpt(optFrom(a.moduli)); setTier(tierFrom(a.moduli)); }, [a.moduli]);
   const gg = giorniRimanenti(a.licenza_scadenza);
   const contatto = a.ultimo_contatto ? a.ultimo_contatto : null;
@@ -215,7 +246,10 @@ function InstallazioneRow({ a, onPatch, onDelete }) {
             {a.versione ? <span>v {a.versione}</span> : null}
             {a.dominio_rilevato && a.dominio_rilevato !== a.dominio ? <span className="text-amber-600 inline-flex items-center gap-1"><AlertTriangle size={11} /> risponde da {a.dominio_rilevato}</span> : null}
             {a.stato === "active" && gg != null && gg <= 30 ? <span className="text-amber-600">scade tra {gg} giorni</span> : null}
+            {giroTesto ? <span className={giro.ok ? "" : "text-red-600"}>{giroTesto}</span> : null}
+            {a.repo ? <span className="inline-flex items-center gap-1"><Github size={11} /> {a.repo}</span> : null}
           </div>
+          {Array.isArray(a.avvisi) && a.avvisi.length ? <div className="text-xs text-amber-700 mt-1 flex items-start gap-1"><AlertTriangle size={12} className="shrink-0 mt-0.5" /> <span>{a.avvisi.map((x) => x.testo).join(" · ")}</span></div> : null}
           {a.note ? <div className="text-xs text-stone-500 mt-1 italic truncate">{a.note}</div> : null}
         </div>
         <span className={`text-xs px-2 py-1 rounded-full shrink-0 ${badge.cls}`}>{badge.txt}</span>
@@ -228,6 +262,7 @@ function InstallazioneRow({ a, onPatch, onDelete }) {
         <Btn onClick={() => setModsOpen((o) => !o)}><Boxes size={14} /> Moduli</Btn>
         <Btn onClick={() => setEditOpen((o) => !o)}><Pencil size={14} /> Dati</Btn>
         <Btn onClick={rigenera}><RefreshCw size={14} /> Rigenera chiave</Btn>
+        {a.repo ? <Btn onClick={() => onAggiorna(a.repo)} disabled={aggiornando}><UploadCloud size={14} /> Aggiorna</Btn> : null}
         <Btn tone="danger" className="ml-auto" onClick={() => onDelete(a)}><Trash2 size={14} /> Elimina</Btn>
       </div>
 
@@ -245,7 +280,8 @@ function InstallazioneRow({ a, onPatch, onDelete }) {
           <div><Label>Nome</Label><Input value={nome} onChange={(e) => setNome(e.target.value)} /></div>
           <div><Label>Dominio</Label><Input value={dominio} onChange={(e) => setDominio(e.target.value)} placeholder="salonebellezza.it" /></div>
           <div><Label>Note</Label><Input value={note} onChange={(e) => setNote(e.target.value)} /></div>
-          <div className="sm:col-span-3"><button onClick={() => { onPatch(a.id, { nome, dominio, note }, "Dati aggiornati."); setEditOpen(false); }} className="text-sm font-medium text-white px-3 py-1.5 rounded-lg" style={{ background: "var(--lc-accent)" }}>Salva dati</button></div>
+          <div className="sm:col-span-3"><Label>Repository GitHub (per «Aggiorna»)</Label><Input value={repo} onChange={(e) => setRepo(e.target.value)} placeholder="acquadrotia-alt/LUCENTIA-ESTETICA-AURA" /></div>
+          <div className="sm:col-span-3"><button onClick={() => { onPatch(a.id, { nome, dominio, note, repo }, "Dati aggiornati."); setEditOpen(false); }} className="text-sm font-medium text-white px-3 py-1.5 rounded-lg" style={{ background: "var(--lc-accent)" }}>Salva dati</button></div>
         </div>
       ) : null}
     </div>

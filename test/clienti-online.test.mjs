@@ -44,6 +44,7 @@ function db(st) {
           if (sql.startsWith("SELECT id FROM clienti_online")) return st.accounts.find((c) => c.azienda_id === a[0] && c.email === a[1]) || null;
           if (sql.startsWith("SELECT * FROM clienti_online WHERE azienda_id")) return st.accounts.find((c) => c.azienda_id === a[0] && c.email === a[1]) || null;
           if (sql.startsWith("SELECT password_hash FROM clienti_online")) return st.accounts.find((c) => c.id === a[0]) || null;
+          if (sql.startsWith("SELECT * FROM clienti_online WHERE id")) return st.accounts.find((c) => c.id === a[0]) || null;
           if (sql.includes("FROM sessioni_clienti s JOIN clienti_online c")) { const s = st.sessioni.find((x) => x.token === a[0]); if (!s) return null; const c = st.accounts.find((x) => x.id === s.cliente_id); return c ? { token: s.token, scadenza: s.scadenza, id: c.id, azienda_id: c.azienda_id, email: c.email, nome: c.nome, cognome: c.cognome, telefono: c.telefono, client_code: c.client_code } : null; }
           if (sql.includes("FROM sessioni s JOIN utenti u")) return null;
           if (sql.startsWith("SELECT * FROM prenotazioni_online WHERE id")) return st.online.find((o) => o.id === a[0]) || null;
@@ -60,7 +61,8 @@ function db(st) {
           else if (sql.startsWith("DELETE FROM sessioni_clienti")) st.sessioni = st.sessioni.filter((s) => s.token !== a[0]);
           else if (sql.startsWith("UPDATE clienti_online SET password_hash")) { const c = st.accounts.find((x) => x.id === a[1]); if (c) c.password_hash = a[0]; }
           else if (sql.startsWith("UPDATE clienti_online SET telefono")) { const c = st.accounts.find((x) => x.id === a[1]); if (c) c.telefono = a[0]; }
-          else if (sql.startsWith("INSERT INTO dati_app")) st.dati[sql.includes("'clients'") ? "clients" : "?"] = JSON.parse(a[2]);
+          else if (sql.startsWith("UPDATE clienti_online SET email")) { const c = st.accounts.find((x) => x.id === a[1]); if (c) c.email = a[0]; }
+          else if (sql.startsWith("INSERT INTO dati_app")) st.dati[sql.includes("'clients'") ? "clients" : sql.includes("'bookings'") ? "bookings" : "?"] = JSON.parse(a[2]);
           else if (sql.startsWith("INSERT INTO integrazioni")) st.integrazioni[a[0] + "|" + a[1]] = a[2];
           else if (sql.startsWith("DELETE FROM integrazioni")) delete st.integrazioni[a[0] + "|" + a[1]];
           else if (sql.startsWith("INSERT INTO prenotazioni_online")) st.online.push({ id: a[0], azienda_id: a[1], data: a[2], start_min: a[3], end_min: a[4], service_id: a[5], staff_id: a[6], client_code: a[7], client_name: a[8], client_phone: a[9], client_email: a[10], note: a[11], stato: "attiva", creato_il: new Date().toISOString().slice(0, 19).replace("T", " ") });
@@ -192,4 +194,81 @@ test("la rotta del giro è pubblica ma non più di una volta al minuto", async (
   const r2 = await chiama(st, "/api/promemoria", { method: "POST" });
   assert.equal(r2.body.saltato, true);
   assert.equal((await chiama(st, "/api/promemoria")).status, 405);
+});
+
+test("richiesta di recensione: dopo il primo appuntamento svolto, una volta sola per cliente, solo col link", async () => {
+  const st = scenario();
+  const env = { DB: db(st) };
+  st.dati.clients.push({ code: "10002", name: "Luca Bianchi", email: "luca@esempio.it" });
+  st.dati.bookings = [
+    { id: "s1", date: fra(-1), startMin: h(10), endMin: h(10, 30), serviceIds: ["piega"], staffId: "a1", clientCode: "10001", clientName: "Anna Rossi", status: "done", createdAt: Date.now() - 5 * 86400000 },
+    { id: "s2", date: fra(-1), startMin: h(11), endMin: h(11, 30), serviceIds: ["piega"], staffId: "a1", clientCode: "10002", clientName: "Luca Bianchi", status: "partial", createdAt: Date.now() - 5 * 86400000 },
+    { id: "s3", date: fra(-1), startMin: h(12), endMin: h(12, 30), serviceIds: ["piega"], staffId: "a1", clientCode: "99999", clientName: "Senza Email", status: "done", createdAt: Date.now() - 5 * 86400000 },
+    { id: "s4", date: fra(-10), startMin: h(12), endMin: h(12, 30), serviceIds: ["piega"], staffId: "a1", clientCode: "10001", clientName: "Anna Rossi", status: "done", createdAt: Date.now() - 15 * 86400000 },
+  ];
+  const giro = async () => { const fetchVero = globalThis.fetch; globalThis.fetch = fintoGmail(st); try { return await giroPromemoria(env, AID, st.azienda, new Date()); } finally { globalThis.fetch = fetchVero; } };
+  // spenta: niente
+  let e = await giro(); assert.equal(e.recensioni, 0); assert.equal(st.email.length, 0);
+  // accesa ma senza link: niente
+  st.dati.config.google = { recensioni: { attivo: true, link: "" }, confermaAutomatica: false };
+  e = await giro(); assert.equal(e.recensioni, 0);
+  st.dati.config.google.recensioni.link = "https://g.page/r/prova/review";
+  e = await giro();
+  assert.equal(e.recensioni, 2, JSON.stringify(e));
+  assert.equal(st.email.length, 2);
+  assert.match(st.email[0].oggetto, /Com'è andata da Estetica Prova/); assert.match(st.email[0].testo, /https:\/\/g\.page\/r\/prova\/review/); assert.match(st.email[0].testo, /Piega/);
+  assert.ok(st.integrazioni[AID + "|mail:recensione:anna@esempio.it"]);
+  // un altro giro, e un altro appuntamento svolto della stessa cliente: non si richiede più
+  st.dati.bookings.push({ id: "s5", date: fra(0), startMin: h(0), endMin: h(0, 10), serviceIds: ["piega"], staffId: "a1", clientCode: "10001", clientName: "Anna Rossi", status: "done" });
+  e = await giro(); assert.equal(e.recensioni, 0); assert.equal(st.email.length, 2);
+});
+
+test("recupero password via email, cambio email, annullo e spostamento degli appuntamenti presi in salone entro il preavviso", async () => {
+  const st = scenario();
+  st.dati.config.cancelHours = 6;
+  await chiama(st, `/api/clienti/${AID}/registra`, { method: "POST", body: REG });
+  st.email.length = 0;
+  // recupero: la risposta è neutra, l'email parte solo se l'account esiste
+  const r0 = await chiama(st, `/api/clienti/${AID}/recupera`, { method: "POST", body: { email: "nessuno@esempio.it" } });
+  assert.equal(r0.status, 200); assert.equal(st.email.length, 0);
+  const r1 = await chiama(st, `/api/clienti/${AID}/recupera`, { method: "POST", body: { email: "anna@esempio.it" } });
+  assert.equal(r1.status, 200); assert.equal(st.email.length, 1); assert.match(st.email[0].oggetto, /Reimposta la tua password/);
+  const link = /https:\/\/salone\.test\/\?registrazione=az1&reset=([a-f0-9]+)/.exec(st.email[0].testo);
+  assert.ok(link, st.email[0].testo);
+  assert.equal((await chiama(st, `/api/clienti/${AID}/reimposta`, { method: "POST", body: { token: "finto", password: "nuova123" } })).status, 410);
+  const r2 = await chiama(st, `/api/clienti/${AID}/reimposta`, { method: "POST", body: { token: link[1], password: "nuova123" } });
+  assert.equal(r2.status, 200, JSON.stringify(r2.body)); assert.ok(r2.cookie.startsWith("csid="), "entra subito");
+  assert.equal((await chiama(st, `/api/clienti/${AID}/reimposta`, { method: "POST", body: { token: link[1], password: "altra123" } })).status, 410, "il link vale una volta");
+  assert.equal((await chiama(st, `/api/clienti/${AID}/login`, { method: "POST", body: { email: "anna@esempio.it", password: "nuova123" } })).status, 200);
+  const cookie = r2.cookie;
+  // cambio email: serve la password attuale, l'indirizzo deve essere libero, la scheda segue
+  assert.equal((await chiama(st, `/api/clienti/${AID}/dati`, { method: "POST", body: { nuovaEmail: "anna.nuova@esempio.it" }, cookie })).status, 400);
+  const d = await chiama(st, `/api/clienti/${AID}/dati`, { method: "POST", body: { nuovaEmail: "Anna.Nuova@esempio.it", passwordAttuale: "nuova123" }, cookie });
+  assert.equal(d.status, 200, JSON.stringify(d.body)); assert.equal(st.accounts[0].email, "anna.nuova@esempio.it"); assert.equal(st.dati.clients[0].accountEmail, "anna.nuova@esempio.it");
+  // appuntamenti presi in salone: fra 3 giorni (modificabile), fra 2 ore (no), già svolto (no)
+  const fraDueOre = new Date(Date.now() + 2 * 3600000);
+  st.dati.bookings = [
+    { id: "lontano", date: fra(3), startMin: h(11), endMin: h(11, 30), serviceIds: ["piega"], staffId: "a1", clientCode: "10001", clientName: "Anna Rossi" },
+    { id: "vicino", date: iso(fraDueOre), startMin: fraDueOre.getHours() * 60 + fraDueOre.getMinutes(), endMin: fraDueOre.getHours() * 60 + fraDueOre.getMinutes() + 30, serviceIds: ["piega"], staffId: "a1", clientCode: "10001", clientName: "Anna Rossi" },
+    { id: "altrui", date: fra(3), startMin: h(15), endMin: h(15, 30), serviceIds: ["piega"], staffId: "a1", clientCode: "10002", clientName: "Altra" },
+  ];
+  const me = await chiama(st, `/api/clienti/${AID}/me`, { cookie });
+  assert.equal(me.body.preavvisoOre, 6);
+  const lontano = me.body.appuntamenti.find((x) => x.id === "lontano"); assert.equal(lontano.modificabile, true); assert.equal(lontano.spostabile, true);
+  const vicino = me.body.appuntamenti.find((x) => x.id === "vicino"); assert.equal(!!vicino.modificabile, false);
+  assert.equal((await chiama(st, `/api/clienti/${AID}/annulla-agenda`, { method: "POST", body: { id: "vicino" }, cookie })).status, 409);
+  assert.equal((await chiama(st, `/api/clienti/${AID}/annulla-agenda`, { method: "POST", body: { id: "altrui" }, cookie })).status, 404);
+  // spostamento: gli slot escludono l'appuntamento stesso, il nuovo orario viene scritto in agenda
+  const sl = await chiama(st, `/api/prenota/${AID}/slots?date=${fra(3)}&service=piega&staff=a1&exclude=lontano`);
+  assert.ok(sl.body.slots.some((x) => x.start === h(11)), "il suo stesso orario resta libero per lui");
+  const sp = await chiama(st, `/api/clienti/${AID}/sposta-agenda`, { method: "POST", body: { id: "lontano", date: fra(3), start: h(16) }, cookie });
+  assert.equal(sp.status, 200, JSON.stringify(sp.body));
+  const spostato = st.dati.bookings.find((x) => x.id === "lontano"); assert.equal(spostato.startMin, h(16)); assert.equal(spostato.endMin, h(16, 30)); assert.equal(spostato.spostatoDa, "cliente");
+  assert.equal((await chiama(st, `/api/clienti/${AID}/sposta-agenda`, { method: "POST", body: { id: "lontano", date: fra(3), start: h(15) }, cookie })).status, 409, "orario occupato da altri");
+  const an = await chiama(st, `/api/clienti/${AID}/annulla-agenda`, { method: "POST", body: { id: "lontano" }, cookie });
+  assert.equal(an.status, 200); assert.equal(st.dati.bookings.find((x) => x.id === "lontano").status, "cancelled");
+  // «ripeti l'ultimo»: l'ultimo appuntamento passato con un servizio prenotabile
+  st.dati.bookings.push({ id: "passato", date: fra(-5), startMin: h(10), endMin: h(10, 30), serviceIds: ["piega"], staffId: "a1", clientCode: "10001", clientName: "Anna Rossi", status: "done" });
+  const me2 = await chiama(st, `/api/clienti/${AID}/me`, { cookie });
+  assert.equal(me2.body.ultimo.serviceId, "piega"); assert.equal(me2.body.ultimo.staffId, "a1");
 });

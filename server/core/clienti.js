@@ -14,16 +14,23 @@
 // Rotte pubbliche /api/clienti/:aid/…
 //   POST registra {nome, cognome, telefono, email, password, privacy}
 //   POST login {email, password} · POST logout
-//   GET  me   → { cliente, appuntamenti, storico, punti }
-//   POST dati {telefono, nuovaPassword, passwordAttuale}
+//   GET  me   → { cliente, appuntamenti (con `modificabile`), storico, punti, ultimo, preavvisoOre }
+//   POST dati {telefono, nuovaEmail, nuovaPassword, passwordAttuale}
+//   POST recupera {email} → email col link per reimpostare (token di un'ora in `integrazioni`)
+//   POST reimposta {token, password}
+//   POST annulla-agenda {id} · POST sposta-agenda {id, date, start}: anche gli
+//        appuntamenti presi in salone, entro il preavviso (config.cancelHours)
 // ============================================================================
-import { json, getCookie, randomToken, hashPassword, verifyPassword, parseModuli } from "./util.js";
+import { json, getCookie, randomToken, hashPassword, verifyPassword, parseModuli, pad2 } from "./util.js";
 import { getAzienda } from "./sessione.js";
-import { getCollezione } from "./disponibilita.js";
+import { getCollezione, eventiComeImpegni, onlineBookingsOf, computeStarts } from "./disponibilita.js";
 import { gmailInvia } from "./gmail.js";
-import { leggiInt } from "./integrazioni.js";
+import { leggiInt, scriviInt, cancellaInt, leggiIntValido } from "./integrazioni.js";
+import { registra } from "./registro.js";
 import { emailPronta, valoriAppuntamento, minutiTesto } from "../../src/core/email/modelli.js";
 import { puntiCliente } from "../../src/core/fidelity.js";
+import { durataServizio } from "../../src/orari.js";
+import { serviziPrenotabili } from "./pubbliche.js";
 
 export const SESSIONE_CLIENTE_GIORNI = 90;
 const emailOk = (s) => /^[^\s@<>(),;:"]+@[^\s@<>(),;:"]+\.[^\s@<>(),;:"]+$/.test(s);
@@ -48,6 +55,17 @@ async function apriSessione(env, clienteId) {
 }
 async function scriviClienti(env, aid, lista) {
   await env.DB.prepare("INSERT INTO dati_app (id, azienda_id, collezione, dati, aggiornato_il) VALUES (?, ?, 'clients', ?, datetime('now')) ON CONFLICT(id) DO UPDATE SET dati = excluded.dati, aggiornato_il = datetime('now')").bind(aid + ":clients", aid, JSON.stringify(lista)).run();
+}
+async function scriviBookings(env, aid, lista) {
+  await env.DB.prepare("INSERT INTO dati_app (id, azienda_id, collezione, dati, aggiornato_il) VALUES (?, ?, 'bookings', ?, datetime('now')) ON CONFLICT(id) DO UPDATE SET dati = excluded.dati, aggiornato_il = datetime('now')").bind(aid + ":bookings", aid, JSON.stringify(lista)).run();
+}
+const oggiISO = () => { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; };
+// Si può ancora spostare o annullare? Entro il preavviso del salone (ore prima dell'inizio).
+export function entroPreavviso(b, config, adesso) {
+  const ore = Number((config || {}).cancelHours); const preavviso = Number.isFinite(ore) ? ore : 6;
+  const [y, m, d] = String(b.date || "").split("-").map(Number); if (!y) return false;
+  const inizio = new Date(y, m - 1, d, Math.floor((Number(b.startMin) || 0) / 60), (Number(b.startMin) || 0) % 60).getTime();
+  return inizio - (adesso || Date.now()) >= preavviso * 3600000;
 }
 const gmailCollegato = async (env, aid, az) => parseModuli(az.moduli).includes("google") && !!(((await leggiInt(env, aid, "gmail:token")) || {}).refresh);
 
@@ -114,6 +132,39 @@ export async function clientiOnline(ctx, segs, statoDi, cliente) {
     return json({ ok: true }, 200, { "Set-Cookie": cookieCliente("", 0) });
   }
 
+  if (azione === "recupera" && method === "POST") {
+    const b = await corpo();
+    const email = String(b.email || "").trim().toLowerCase();
+    if (!emailOk(email)) return json({ error: "Inserisci l'email del tuo account." }, 400);
+    let row = null;
+    try { row = await env.DB.prepare("SELECT * FROM clienti_online WHERE azienda_id = ? AND email = ?").bind(aid, email).first(); } catch (e) {}
+    if (!(await gmailCollegato(env, aid, az))) return json({ error: "Il salone non ha l'invio email attivo: contatta il salone per una nuova password." }, 503);
+    // la risposta è la stessa che l'account esista o no
+    if (row) {
+      const token = randomToken();
+      await scriviInt(env, aid, `clienti:reset:${token}`, { clienteId: row.id, scade: Date.now() + 3600000 });
+      const linkReset = url.origin + (cliente ? "/registrazione" : `/?registrazione=${encodeURIComponent(aid)}`) + (cliente ? "?" : "&") + "reset=" + token;
+      const config = (await getCollezione(env, aid, "config")) || {};
+      const m = emailPronta(config, "recuperoPassword", valoriAppuntamento({ clientName: `${row.nome || ""} ${row.cognome || ""}`.trim() }, config, { nome: row.nome || "", cognome: row.cognome || "", linkReset, linkPrenota }));
+      await gmailInvia(env, aid, { a: [email], oggetto: m.oggetto, testo: m.testo, allegati: [] });
+      await registra(env, aid, { chi: email, origine: "cliente", tipo: "cliente", testo: `Richiesto il recupero della password` });
+    }
+    return json({ ok: true, testo: "Se l'email corrisponde a un account, ti abbiamo mandato il link per scegliere una nuova password (vale un'ora)." });
+  }
+  if (azione === "reimposta" && method === "POST") {
+    const b = await corpo();
+    const token = String(b.token || "").trim(); const password = String(b.password || "");
+    if (!token) return json({ error: "Link non valido." }, 400);
+    if (password.length < 6) return json({ error: "La password deve avere almeno 6 caratteri." }, 400);
+    const v = await leggiIntValido(env, aid, `clienti:reset:${token}`);
+    if (!v || !v.clienteId) return json({ error: "Il link non è più valido: richiedi di nuovo il recupero della password." }, 410);
+    await env.DB.prepare("UPDATE clienti_online SET password_hash = ? WHERE id = ?").bind(await hashPassword(password), v.clienteId).run();
+    await cancellaInt(env, aid, `clienti:reset:${token}`);
+    const row = await env.DB.prepare("SELECT * FROM clienti_online WHERE id = ?").bind(v.clienteId).first().catch(() => null);
+    await registra(env, aid, { chi: (row && row.email) || "", origine: "cliente", tipo: "cliente", testo: "Password reimpostata dal link di recupero" });
+    return json({ ok: true, cliente: row ? { nome: row.nome, cognome: row.cognome, email: row.email } : null }, 200, { "Set-Cookie": await apriSessione(env, v.clienteId) });
+  }
+
   const cs = await getSessioneCliente(env, request);
   if (!cs || cs.azienda_id !== aid) return json({ error: "Accedi con la tua email e password." }, 401);
 
@@ -128,7 +179,8 @@ export async function clientiOnline(ctx, segs, statoDi, cliente) {
     const svcName = (ids) => (ids || []).map((id) => { const s = (config.services || []).find((x) => x.id === id); return s ? s.name : null; }).filter(Boolean).join(", ");
     const stName = (sid) => { const s = (config.staff || []).find((x) => x.id === sid); return s ? s.name : ""; };
     const miei = (Array.isArray(bookings) ? bookings : []).filter((b) => b && b.clientCode === cs.client_code && b.status !== "cancelled");
-    const inAgenda = miei.map((b) => ({ id: b.id, origine: "agenda", date: b.date, startMin: b.startMin, endMin: b.endMin, label: minutiTesto(b.startMin), serviceIds: b.serviceIds || [], serviceName: svcName(b.serviceIds), staffId: b.staffId, staffName: stName(b.staffId), status: b.status || "", amount: b.amount != null ? b.amount : null }));
+    const prenotabili = new Set(serviziPrenotabili(config).services.map((s) => s.id));
+    const inAgenda = miei.map((b) => ({ id: b.id, origine: "agenda", date: b.date, startMin: b.startMin, endMin: b.endMin, label: minutiTesto(b.startMin), serviceIds: b.serviceIds || [], serviceId: (b.serviceIds || [])[0] || null, serviceName: svcName(b.serviceIds), staffId: b.staffId, staffName: stName(b.staffId), status: b.status || "", amount: b.amount != null ? b.amount : null, modificabile: !b.status && entroPreavviso(b, config), spostabile: !b.status && entroPreavviso(b, config) && (b.serviceIds || []).length === 1 && prenotabili.has((b.serviceIds || [])[0]) }));
     let online = [];
     try {
       const res = await env.DB.prepare("SELECT * FROM prenotazioni_online WHERE azienda_id = ? AND stato = 'attiva' AND data >= ? ORDER BY data, start_min").bind(aid, oggiISO).all();
@@ -139,7 +191,11 @@ export async function clientiOnline(ctx, segs, statoDi, cliente) {
     const storico = tutti.filter((x) => x.date < oggiISO).reverse().slice(0, 30);
     const punti = puntiCliente(scheda, bookings, sales, config, catalog);
     const L = (config.loyalty || {});
-    return json({ ok: true, cliente: { nome: cs.nome, cognome: cs.cognome, telefono: cs.telefono, email: cs.email, code: cs.client_code, dal: scheda.accountDal || "" }, appuntamenti: prossimi, storico, punti: { saldo: punti, premi: (Array.isArray(L.rewards) ? L.rewards : []).map((r) => ({ label: r.label, points: r.points, raggiunto: punti >= r.points })), riscatti: (scheda.redemptions || []).slice(0, 10) } }, 200, { "Cache-Control": "no-store" });
+    // l'ultimo appuntamento (svolto o passato) da ripetere con un tocco, se il servizio è prenotabile online
+    const passati = tutti.filter((x) => x.date < oggiISO && x.origine === "agenda" && x.status !== "noshow" && x.serviceIds.length === 1 && prenotabili.has(x.serviceIds[0]));
+    const ult = passati[0] || null;
+    const ultimo = ult ? { serviceId: ult.serviceIds[0], serviceName: ult.serviceName, staffId: ult.staffId, staffName: ult.staffName, date: ult.date, label: ult.label } : null;
+    return json({ ok: true, cliente: { nome: cs.nome, cognome: cs.cognome, telefono: cs.telefono, email: cs.email, code: cs.client_code, dal: scheda.accountDal || "" }, preavvisoOre: Number.isFinite(Number(config.cancelHours)) ? Number(config.cancelHours) : 6, ultimo, appuntamenti: prossimi, storico, punti: { saldo: punti, premi: (Array.isArray(L.rewards) ? L.rewards : []).map((r) => ({ label: r.label, points: r.points, raggiunto: punti >= r.points })), riscatti: (scheda.redemptions || []).slice(0, 10) } }, 200, { "Cache-Control": "no-store" });
   }
   if (azione === "dati" && method === "POST") {
     const b = await corpo();
@@ -157,7 +213,56 @@ export async function clientiOnline(ctx, segs, statoDi, cliente) {
       const clients = (await getCollezione(env, aid, "clients")) || [];
       if (Array.isArray(clients)) await scriviClienti(env, aid, clients.map((c) => (c.code === cs.client_code ? { ...c, phone: telefono } : c)));
     }
+    const nuovaEmail = String(b.nuovaEmail || "").trim().toLowerCase();
+    if (nuovaEmail && nuovaEmail !== cs.email) {
+      if (!emailOk(nuovaEmail)) return json({ error: "Il nuovo indirizzo email non è valido." }, 400);
+      const row = await env.DB.prepare("SELECT password_hash FROM clienti_online WHERE id = ?").bind(cs.id).first();
+      if (!row || !(await verifyPassword(String(b.passwordAttuale || ""), row.password_hash))) return json({ error: "Per cambiare email inserisci la password attuale." }, 400);
+      let dup = null; try { dup = await env.DB.prepare("SELECT id FROM clienti_online WHERE azienda_id = ? AND email = ?").bind(aid, nuovaEmail).first(); } catch (e) {}
+      if (dup) return json({ error: "Esiste già un account con questa email." }, 409);
+      await env.DB.prepare("UPDATE clienti_online SET email = ? WHERE id = ?").bind(nuovaEmail, cs.id).run();
+      const clients = (await getCollezione(env, aid, "clients")) || [];
+      if (Array.isArray(clients)) await scriviClienti(env, aid, clients.map((c) => (c.code === cs.client_code ? { ...c, email: nuovaEmail, accountEmail: nuovaEmail } : c)));
+      await registra(env, aid, { chi: nuovaEmail, origine: "cliente", tipo: "cliente", testo: `Email dell'account cambiata da ${cs.email} a ${nuovaEmail}` });
+    }
     return json({ ok: true });
+  }
+  // ---- annullare o spostare un appuntamento preso in salone, entro il preavviso ----
+  if ((azione === "annulla-agenda" || azione === "sposta-agenda") && method === "POST") {
+    const b = await corpo();
+    const config = (await getCollezione(env, aid, "config")) || {};
+    const bookings = (await getCollezione(env, aid, "bookings")) || [];
+    const lista = Array.isArray(bookings) ? bookings : [];
+    const mio = lista.find((x) => x && x.id === String(b.id || "") && x.clientCode === cs.client_code && x.status !== "cancelled");
+    if (!mio) return json({ error: "Appuntamento non trovato." }, 404);
+    if (mio.status) return json({ error: "Questo appuntamento non si può più modificare." }, 409);
+    const preavviso = Number.isFinite(Number(config.cancelHours)) ? Number(config.cancelHours) : 6;
+    if (!entroPreavviso(mio, config)) return json({ error: `Si può modificare fino a ${preavviso} ore prima: per questo appuntamento contatta il salone.` }, 409);
+    const chi = `${cs.nome || ""} ${cs.cognome || ""}`.trim() || cs.email;
+    if (azione === "annulla-agenda") {
+      await scriviBookings(env, aid, lista.map((x) => (x.id === mio.id ? { ...x, status: "cancelled", annullatoDa: "cliente", annullatoIl: new Date().toISOString() } : x)));
+      await registra(env, aid, { chi: cs.email, origine: "cliente", tipo: "cliente", testo: `${chi} ha annullato l'appuntamento del ${String(mio.date).split("-").reverse().join("/")} alle ${minutiTesto(mio.startMin)}` });
+      return json({ ok: true });
+    }
+    const ndate = String(b.date || ""); const nstart = Number(b.start);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ndate) || !Number.isFinite(nstart)) return json({ error: "Orario non valido." }, 400);
+    const serviceId = (mio.serviceIds || [])[0];
+    const { services } = serviziPrenotabili(config);
+    const svc = services.find((x) => x.id === serviceId);
+    if (!svc || (mio.serviceIds || []).length !== 1) return json({ error: "Questo appuntamento si sposta solo contattando il salone." }, 409);
+    const booking = config.onlineBooking || {};
+    const leadMin = Math.max(0, Number(booking.leadHours != null ? booking.leadHours * 60 : 120));
+    const mode = booking.mode === "griglia" ? "griglia" : booking.mode === "ottimizzata" ? "ottimizzata" : "antivuoto";
+    const online = await onlineBookingsOf(env, aid, ndate);
+    const impegniEventi = eventiComeImpegni(await getCollezione(env, aid, "eventi"), ndate);
+    const slots = computeStarts(config, [...lista.filter((x) => x.id !== mio.id), ...online, ...impegniEventi], ndate, serviceId, leadMin, mode, mio.staffId || undefined, { servizionline: services, confirm: true });
+    const nuovo = slots.find((x) => x.start === nstart);
+    if (!nuovo) return json({ error: "Questo orario non è più disponibile. Scegline un altro." }, 409);
+    const dur = durataServizio(svc) || (mio.endMin - mio.startMin);
+    const spostato = { ...mio, date: ndate, startMin: nstart, endMin: nstart + dur, staffId: nuovo.staffId || mio.staffId, impegni: nuovo.impegni || undefined, spostatoDa: "cliente", spostatoIl: new Date().toISOString(), spostatoDal: { date: mio.date, startMin: mio.startMin } };
+    await scriviBookings(env, aid, lista.map((x) => (x.id === mio.id ? spostato : x)));
+    await registra(env, aid, { chi: cs.email, origine: "cliente", tipo: "cliente", testo: `${chi} ha spostato l'appuntamento dal ${String(mio.date).split("-").reverse().join("/")} ${minutiTesto(mio.startMin)} al ${ndate.split("-").reverse().join("/")} ${minutiTesto(nstart)}` });
+    return json({ ok: true, conferma: { date: ndate, start: nstart, label: minutiTesto(nstart) } });
   }
   return json({ error: "not found" }, 404);
 }

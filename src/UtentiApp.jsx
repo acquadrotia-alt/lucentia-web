@@ -7,9 +7,9 @@
 // accesso da operatore si consulta soltanto (il server è in sola lettura).
 // ============================================================================
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { User, Calendar, ClipboardList, CalendarPlus, LogOut, ChevronLeft, ChevronRight, Phone, Mail, Check, Search, Plus, AlertTriangle, Clock, Sparkles, RefreshCw, Users, X } from "lucide-react";
+import { User, Calendar, ClipboardList, CalendarPlus, LogOut, ChevronLeft, ChevronRight, Phone, Mail, Check, Search, Plus, AlertTriangle, Clock, Sparkles, RefreshCw, Users, X, Fingerprint, LogIn } from "lucide-react";
 import { orariPossibili, impegniServizi } from "./orari.js";
-import { uid, minToStr, todayStr, addDays, fmtDate, parseDate, WDAY_SHORT, MONTHS, apiLoad, apiSaveVerificato, eventiImpegni, upsertClient, loyaltyConfig, matchPackage, STATUS, themeVars, BRAND_CSS, ModsCtx, flagsFromModuli, BRANDING, DEFAULT_CONFIG } from "./core/salone/comuni.jsx";
+import { uid, minToStr, todayStr, addDays, fmtDate, parseDate, WDAY_SHORT, MONTHS, apiLoad, apiPatchVerificato, impostaOrigine, eventiImpegni, upsertClient, loyaltyConfig, matchPackage, STATUS, themeVars, BRAND_CSS, ModsCtx, flagsFromModuli, BRANDING, DEFAULT_CONFIG } from "./core/salone/comuni.jsx";
 import { ApptCard, DettaglioAppuntamento, SlotPicker, risorseDi } from "./core/salone/agenda.jsx";
 import { AvatarSvg, avatarIdFor } from "./avatars.jsx";
 
@@ -43,20 +43,17 @@ export default function UtentiApp({ user, azienda, onLogout }) {
   const b = (config && config.branding) || BRANDING;
   const impegniEventi = useMemo(() => eventiImpegni(eventi), [eventi]);
 
-  // Salvataggio di un nuovo appuntamento: si rilegge l'elenco dal server e
-  // si aggiunge in coda, così non si pestano le modifiche fatte dal banco
-  // nel frattempo. I clienti nuovi si salvano allo stesso modo.
+  // Salvataggio di un nuovo appuntamento: parte solo il record nuovo (PATCH),
+  // così non si pestano le modifiche fatte dal banco nel frattempo. I clienti
+  // nuovi si salvano allo stesso modo.
+  useEffect(() => { impostaOrigine("telefono"); }, []);
   const salvaNuovo = async (booking, clientiNuovi) => {
-    const freschi = await apiLoad("bookings", null);
-    const lista = Array.isArray(freschi) ? freschi : bookings;
-    const r = await apiSaveVerificato("bookings", [...lista.filter((x) => x && x.id !== booking.id), booking]);
+    const r = await apiPatchVerificato("bookings", [...bookings.filter((x) => x && x.id !== booking.id), booking]);
     if (!r.ok) return { ok: false, error: r.error };
     if (clientiNuovi) {
-      const cf = await apiLoad("clients", null);
-      const base = Array.isArray(cf) ? cf : clients;
-      const codici = new Set(base.map((c) => c.code));
+      const codici = new Set(clients.map((c) => c.code));
       const aggiunti = clientiNuovi.filter((c) => !codici.has(c.code));
-      if (aggiunti.length) await apiSaveVerificato("clients", [...base, ...aggiunti]);
+      if (aggiunti.length) await apiPatchVerificato("clients", [...clients, ...aggiunti]);
     }
     await ricarica();
     return { ok: true };
@@ -102,8 +99,14 @@ export default function UtentiApp({ user, azienda, onLogout }) {
             <MenuVoce icon={Calendar} titolo="La mia agenda" testo="I tuoi appuntamenti di oggi e dei prossimi giorni." sotto={riassuntoOggi(bookings, op.id)} onClick={() => setSchermo("agenda")} />
             <MenuVoce icon={ClipboardList} titolo="Scheda appuntamento" testo="Tutti i dettagli dell'appuntamento in corso: servizi, fasi, note e allergie della cliente." sotto={inCorsoTesto(bookings, op.id)} onClick={() => setSchermo("scheda")} />
             <MenuVoce icon={CalendarPlus} titolo="Nuovo appuntamento" testo={soloLettura ? "Col tuo accesso puoi solo consultare: per prenotare serve l'accesso del salone." : "Prenota per una cliente, con te o con chi vuoi."} onClick={() => !soloLettura && setSchermo("nuovo")} disabilitato={soloLettura} />
+            <MenuVoce icon={Fingerprint} titolo="Timbra" testo="Entrata e uscita di oggi, dritte nel tuo foglio ore." onClick={() => setSchermo("timbra")} />
             {!soloLettura ? <button onClick={cambia} className="w-full text-sm text-stone-400 hover:text-stone-600 py-2 inline-flex items-center justify-center gap-1.5"><Users size={14} /> Non sei {op.name}? Cambia operatore</button> : null}
           </main>
+        </>
+      ) : schermo === "timbra" ? (
+        <>
+          <Testata titolo="Timbra" indietro={() => setSchermo("menu")} />
+          <main className="max-w-md w-full mx-auto px-4 py-5 flex-1 lc-fade-up"><Timbratura op={op} /></main>
         </>
       ) : schermo === "agenda" ? (
         <>
@@ -123,8 +126,8 @@ export default function UtentiApp({ user, azienda, onLogout }) {
       )}
       {op ? (
         <nav className="sticky bottom-0 bg-white/90 backdrop-blur-xl border-t border-stone-200/70" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
-          <div className="max-w-md mx-auto grid grid-cols-3">
-            {[["agenda", "Agenda", Calendar], ["scheda", "In corso", ClipboardList], ["nuovo", "Nuovo", CalendarPlus]].map(([k, l, Icon]) => (
+          <div className="max-w-md mx-auto grid grid-cols-4">
+            {[["agenda", "Agenda", Calendar], ["scheda", "In corso", ClipboardList], ["nuovo", "Nuovo", CalendarPlus], ["timbra", "Timbra", Fingerprint]].map(([k, l, Icon]) => (
               <button key={k} onClick={() => { if (k === "nuovo" && soloLettura) return; setSchermo(k); }} aria-current={schermo === k ? "page" : undefined} className={`flex flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition ${schermo === k ? "brand-accent" : "text-stone-400"} ${k === "nuovo" && soloLettura ? "opacity-40" : ""}`}><Icon size={20} /> {l}</button>
             ))}
           </div>
@@ -311,6 +314,45 @@ function NuovoAppuntamento({ config, bookings, clients, impegniEventi, op, onSal
         </div>
       )}
       {passo > 1 ? <button onClick={() => setPasso(passo - 1)} className="w-full text-sm text-stone-400 py-3">Indietro</button> : null}
+    </div>
+  );
+}
+
+// ---- Timbratura: entrata e uscita di oggi -----------------------------------
+function Timbratura({ op }) {
+  const [stato, setStato] = useState(null); // { data, giorno }
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const carica = useCallback(async () => { try { const r = await fetch(`/api/timbra?staffId=${encodeURIComponent(op.id)}`, { cache: "no-store" }); const j = await r.json().catch(() => ({})); if (r.ok) setStato(j); } catch (e) {} }, [op.id]);
+  useEffect(() => { carica(); }, [carica]);
+  const timbra = async (azione) => {
+    setBusy(true); setMsg(null);
+    try {
+      const r = await fetch("/api/timbra", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ staffId: op.id, azione }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { setMsg({ ok: false, testo: j.error || "Non riuscito." }); if (j.giorno) setStato((s) => ({ ...(s || {}), giorno: j.giorno })); }
+      else { setStato(j); setMsg({ ok: true, testo: azione === "entrata" ? `Entrata timbrata alle ${j.giorno.entrata}.` : `Uscita timbrata alle ${j.giorno.uscita}. Buona serata!` }); }
+    } catch (e) { setMsg({ ok: false, testo: "Rete assente: riprova." }); }
+    setBusy(false);
+  };
+  const g = (stato && stato.giorno) || {};
+  const ora = new Date();
+  return (
+    <div className="space-y-4">
+      <div className="lc-card p-5 text-center">
+        <div className="text-xs uppercase tracking-wide text-stone-400">{fmtDate(todayStr())}</div>
+        <div className="text-4xl font-semibold tabular-nums mt-1 text-stone-900">{String(ora.getHours()).padStart(2, "0")}:{String(ora.getMinutes()).padStart(2, "0")}</div>
+        <div className="text-sm text-stone-500 mt-1">{op.name}</div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className={`lc-card p-4 text-center ${g.entrata ? "border-green-200" : ""}`}><div className="text-[11px] uppercase tracking-wide text-stone-400">Entrata</div><div className="text-2xl font-semibold tabular-nums mt-1">{g.entrata || "—"}</div></div>
+        <div className={`lc-card p-4 text-center ${g.uscita ? "border-green-200" : ""}`}><div className="text-[11px] uppercase tracking-wide text-stone-400">Uscita</div><div className="text-2xl font-semibold tabular-nums mt-1">{g.uscita || "—"}</div></div>
+      </div>
+      {!g.entrata ? <button onClick={() => timbra("entrata")} disabled={busy} className="w-full brand-bg font-semibold py-4 rounded-2xl text-lg flex items-center justify-center gap-2 disabled:opacity-50"><LogIn size={20} /> Timbra l'entrata</button>
+        : !g.uscita ? <button onClick={() => timbra("uscita")} disabled={busy} className="w-full font-semibold py-4 rounded-2xl text-lg flex items-center justify-center gap-2 border-2 brand-border brand-accent bg-white disabled:opacity-50"><LogOut size={20} /> Timbra l'uscita</button>
+        : <div className="lc-card p-4 text-center text-sm text-green-700 flex items-center justify-center gap-2"><Check size={16} /> Giornata timbrata: {g.entrata} → {g.uscita}</div>}
+      {msg ? <p className={`text-sm text-center flex items-center justify-center gap-1.5 ${msg.ok ? "text-green-700" : "text-red-600"}`}>{msg.ok ? <Check size={15} /> : <AlertTriangle size={15} />} {msg.testo}</p> : null}
+      <p className="text-[11px] text-stone-400 text-center">Le timbrature finiscono nel tuo foglio ore (Gestione personale). Se sbagli, il titolare può correggere l'orario da lì.</p>
     </div>
   );
 }

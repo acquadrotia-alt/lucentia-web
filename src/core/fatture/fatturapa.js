@@ -257,11 +257,12 @@ export function leggiFatturaPa(xml) {
     const beni = prendi(body, "DatiBeniServizi");
     const righe = prendiTutti(beni, "DettaglioLinee").map((l) => ({ descrizione: valore(l, "Descrizione"), qta: Number(valore(l, "Quantita")) || 1, um: valore(l, "UnitaMisura"), prezzo: Number(valore(l, "PrezzoUnitario")) || 0, totale: Number(valore(l, "PrezzoTotale")) || 0, aliquota: Number(valore(l, "AliquotaIVA")) || 0 }));
     const riep = prendiTutti(beni, "DatiRiepilogo");
+    const riepilogo = riep.map((r) => ({ aliquota: n2(valore(r, "AliquotaIVA")), natura: valore(r, "Natura") || "", imponibile: n2(valore(r, "ImponibileImporto")), imposta: n2(valore(r, "Imposta")) }));
     const imponibile = n2(riep.reduce((a, r) => a + (Number(valore(r, "ImponibileImporto")) || 0), 0));
     const imposta = n2(riep.reduce((a, r) => a + (Number(valore(r, "Imposta")) || 0), 0));
     const totaleDoc = Number(valore(dg, "ImportoTotaleDocumento"));
     const scadenze = prendiTutti(prendi(body, "DatiPagamento"), "DettaglioPagamento").map((p) => valore(p, "DataScadenzaPagamento")).filter(Boolean).sort();
-    return { tipo: valore(dg, "TipoDocumento") || "TD01", numero: valore(dg, "Numero"), data: valore(dg, "Data").slice(0, 10), totale: totaleDoc > 0 ? n2(totaleDoc) : n2(imponibile + imposta), imponibile, imposta, righe, scadenza: scadenze[0] || "", causale: prendiTutti(dg, "Causale").map((c) => testo(c, 200)).filter(Boolean).join(" · ") };
+    return { tipo: valore(dg, "TipoDocumento") || "TD01", numero: valore(dg, "Numero"), data: valore(dg, "Data").slice(0, 10), totale: totaleDoc > 0 ? n2(totaleDoc) : n2(imponibile + imposta), imponibile, imposta, riepilogo, righe, scadenza: scadenze[0] || "", causale: prendiTutti(dg, "Causale").map((c) => testo(c, 200)).filter(Boolean).join(" · ") };
   });
   if (!documenti.length) return { errore: "Fattura senza corpo (FatturaElettronicaBody)." };
   return { cedente, cessionario, documenti };
@@ -274,7 +275,7 @@ export function eCessionario(cessionario, ditta) {
 }
 export const chiaveAcquisto = (a) => ((a && (a.fornitore && (a.fornitore.piva || a.fornitore.cf))) || "") + "|" + String((a && a.numero) || "").trim().toUpperCase();
 export function acquistoDaXml(letto, doc, origine) {
-  return { id: "acq-" + Math.random().toString(36).slice(2, 9), fornitore: { denominazione: letto.cedente.denominazione, piva: letto.cedente.piva, cf: letto.cedente.cf, comune: letto.cedente.comune }, tipo: doc.tipo, numero: doc.numero, data: doc.data, totale: doc.totale, imponibile: doc.imponibile, imposta: doc.imposta, scadenza: doc.scadenza, righe: doc.righe.slice(0, 200), causale: doc.causale, origine: origine || "effatta", importataIl: new Date().toISOString() };
+  return { id: "acq-" + Math.random().toString(36).slice(2, 9), fornitore: { denominazione: letto.cedente.denominazione, piva: letto.cedente.piva, cf: letto.cedente.cf, comune: letto.cedente.comune }, tipo: doc.tipo, numero: doc.numero, data: doc.data, totale: doc.totale, imponibile: doc.imponibile, imposta: doc.imposta, riepilogo: doc.riepilogo || [], scadenza: doc.scadenza, righe: doc.righe.slice(0, 200), causale: doc.causale, origine: origine || "effatta", importataIl: new Date().toISOString() };
 }
 
 // ───────────── che cosa ha detto lo SDI ─────────────
@@ -321,4 +322,49 @@ export function leggiEsitoSdi(d) {
   if (ident) pezzi.push("rif. SDI " + ident);
   if (nota) pezzi.push("nota: " + nota);
   return { testo: (trovato ? trovato.frase + " " : "") + "(" + pezzi.join(" · ") + ")", tipo: trovato ? trovato.tipo : "" };
+}
+
+// ---- Riepilogo IVA di un periodo: emesse e ricevute per aliquota ----------------
+// Le note di credito (TD04) vanno in negativo. Per le fatture dei fornitori si
+// usa il riepilogo letto dall'XML; per quelle importate prima (senza riepilogo)
+// si raggruppano le righe per aliquota, e se mancano anche quelle, i totali.
+function gruppiAcquisto(a) {
+  if (Array.isArray(a.riepilogo) && a.riepilogo.length) return a.riepilogo.map((g) => ({ aliquota: n2(g.aliquota), natura: g.natura || "", imponibile: n2(g.imponibile), imposta: n2(g.imposta) }));
+  const righe = Array.isArray(a.righe) ? a.righe.filter((r) => r && r.totale != null) : [];
+  if (righe.length) {
+    const per = {};
+    for (const r of righe) { const al = n2(r.aliquota); if (!per[al]) per[al] = { aliquota: al, natura: "", imponibile: 0, imposta: 0 }; per[al].imponibile = n2(per[al].imponibile + n2(r.totale)); }
+    const out = Object.values(per); out.forEach((g) => { g.imposta = n2(g.imponibile * g.aliquota / 100); });
+    const somma = n2(out.reduce((x, g) => x + g.imponibile, 0));
+    if (Math.abs(somma - n2(a.imponibile)) < 0.05) return out;
+  }
+  const al = n2(a.imponibile) ? Math.round((n2(a.imposta) / n2(a.imponibile)) * 100) : 0;
+  return [{ aliquota: al, natura: al === 0 ? "?" : "", imponibile: n2(a.imponibile), imposta: n2(a.imposta), stimata: true }];
+}
+function sommaGruppi(elenco) {
+  const per = {};
+  for (const { gruppi, segno } of elenco) for (const g of gruppi) {
+    const k = g.aliquota + "|" + (g.natura || "");
+    if (!per[k]) per[k] = { aliquota: g.aliquota, natura: g.natura || "", imponibile: 0, imposta: 0 };
+    per[k].imponibile = n2(per[k].imponibile + segno * g.imponibile); per[k].imposta = n2(per[k].imposta + segno * g.imposta);
+  }
+  const gruppi = Object.values(per).sort((x, y) => x.aliquota - y.aliquota || x.natura.localeCompare(y.natura));
+  const imponibile = n2(gruppi.reduce((x, g) => x + g.imponibile, 0)), imposta = n2(gruppi.reduce((x, g) => x + g.imposta, 0));
+  return { gruppi, imponibile, imposta, totale: n2(imponibile + imposta) };
+}
+export function riepilogoIva(fatture, acquisti, ditta, da, a) {
+  const nel = (d) => d && (!da || d >= da) && (!a || d <= a);
+  const em = (fatture || []).filter((f) => f && !f.annullata && nel(String(f.data || "").slice(0, 10)));
+  const ri = (acquisti || []).filter((x) => x && nel(String(x.data || "").slice(0, 10)));
+  const emesse = { ...sommaGruppi(em.map((f) => ({ gruppi: totali(f, ditta).gruppi, segno: f.tipo === "TD04" ? -1 : 1 }))), n: em.length, noteCredito: em.filter((f) => f.tipo === "TD04").length };
+  const ricevute = { ...sommaGruppi(ri.map((x) => ({ gruppi: gruppiAcquisto(x), segno: x.tipo === "TD04" ? -1 : 1 }))), n: ri.length, noteCredito: ri.filter((x) => x.tipo === "TD04").length, stimate: ri.filter((x) => gruppiAcquisto(x).some((g) => g.stimata)).length };
+  return { da, a, emesse, ricevute, ivaDebito: emesse.imposta, ivaCredito: ricevute.imposta, saldo: n2(emesse.imposta - ricevute.imposta) };
+}
+// I periodi comodi: mese, trimestre, anno.
+export function periodoIva(tipo, anno, n) {
+  const p2 = (x) => String(x).padStart(2, "0");
+  const fine = (y, m) => `${y}-${p2(m)}-${p2(new Date(y, m, 0).getDate())}`;
+  if (tipo === "anno") return { da: `${anno}-01-01`, a: `${anno}-12-31`, etichetta: `Anno ${anno}` };
+  if (tipo === "trimestre") { const m1 = (n - 1) * 3 + 1; return { da: `${anno}-${p2(m1)}-01`, a: fine(anno, m1 + 2), etichetta: `${n}º trimestre ${anno}` }; }
+  return { da: `${anno}-${p2(n)}-01`, a: fine(anno, n), etichetta: `${["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"][n - 1]} ${anno}` };
 }

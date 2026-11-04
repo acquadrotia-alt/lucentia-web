@@ -18,7 +18,7 @@ CREATE INDEX IF NOT EXISTS idx_prenotazioni_azienda ON prenotazioni_online(azien
 -- Installazioni cliente (solo portale): ogni cliente ha il suo sito+gestionale
 -- su Cloudflare col proprio dominio e database; qui vivono licenza annuale,
 -- moduli attivi e l'impronta della chiave con cui l'installazione si presenta.
-CREATE TABLE IF NOT EXISTS installazioni (id TEXT PRIMARY KEY, nome TEXT, dominio TEXT, chiave_hash TEXT, licenza_scadenza TEXT, attiva INTEGER DEFAULT 1, moduli TEXT, moduli_disponibili TEXT, note TEXT, versione TEXT, dominio_rilevato TEXT, ultimo_contatto TEXT, creata_il TEXT DEFAULT (datetime('now')));
+CREATE TABLE IF NOT EXISTS installazioni (id TEXT PRIMARY KEY, nome TEXT, dominio TEXT, chiave_hash TEXT, licenza_scadenza TEXT, attiva INTEGER DEFAULT 1, moduli TEXT, moduli_disponibili TEXT, note TEXT, versione TEXT, dominio_rilevato TEXT, ultimo_contatto TEXT, repo TEXT, creata_il TEXT DEFAULT (datetime('now')));
 -- Copia locale della licenza ricevuta dal portale (solo installazioni cliente).
 CREATE TABLE IF NOT EXISTS licenza_locale (id TEXT PRIMARY KEY, dati TEXT, verificata_il TEXT, tentata_il TEXT);
 -- Archivio riservato delle integrazioni (Gmail, Google Calendar, feed iCalendar):
@@ -27,3 +27,6 @@ CREATE TABLE IF NOT EXISTS integrazioni (azienda_id TEXT NOT NULL, chiave TEXT N
 -- Account dei clienti per la prenotazione online (/registrazione) e le loro sessioni (cookie csid).
 CREATE TABLE IF NOT EXISTS clienti_online (id TEXT PRIMARY KEY, azienda_id TEXT NOT NULL, email TEXT NOT NULL, password_hash TEXT NOT NULL, nome TEXT, cognome TEXT, telefono TEXT, client_code TEXT, creato_il TEXT DEFAULT (datetime('now')), UNIQUE(azienda_id, email));
 CREATE TABLE IF NOT EXISTS sessioni_clienti (token TEXT PRIMARY KEY, cliente_id TEXT NOT NULL, scadenza TEXT NOT NULL);
+-- Registro delle attività del salone (accessi, salvataggi, scontrini, fatture, backup…).
+CREATE TABLE IF NOT EXISTS registro (id TEXT PRIMARY KEY, azienda_id TEXT NOT NULL, quando TEXT DEFAULT (datetime('now')), chi TEXT, origine TEXT, tipo TEXT, testo TEXT, dettagli TEXT);
+CREATE INDEX IF NOT EXISTS idx_registro_azienda ON registro(azienda_id, quando);

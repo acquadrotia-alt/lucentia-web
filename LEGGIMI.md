@@ -177,6 +177,33 @@ Se il ceppo ha aggiunto una migrazione, eseguila anche nel D1 del cliente.
 I conflitti sono rari se le personalizzazioni restano in `src/cliente/` e
 `server/cliente/`: il ceppo non tocca quelle cartelle.
 
+### Dal portale, con un clic
+
+Nel pannello → Installazioni, «Aggiorna le installazioni» (tutte) o «Aggiorna» sulla riga
+(una sola, se ha il repository scritto in Dati) fa partire su GitHub il workflow
+`aggiorna-clienti.yml` del ceppo: per ogni repository cliente fa merge di `upstream/main`,
+`npm test`, build in modalità cliente e push su `main`, da cui Cloudflare pubblica. Un merge
+con conflitti si salta e compare nel riepilogo dell'esecuzione (va fatto a mano, vedi sopra).
+
+Una volta sola, da configurare:
+
+- nel repository del ceppo, Settings → Secrets and variables → Actions: segreto
+  `CLIENTI_TOKEN` (un token GitHub con permesso di lettura e scrittura sui repository dei
+  clienti) e segreto `CLIENTI_REPOS` (l'elenco dei repository, uno per riga, es.
+  `acquadrotia-alt/LUCENTIA-ESTETICA-AURA`);
+- sul progetto Cloudflare del portale, variabile `AGGIORNA_TOKEN` (un token GitHub con
+  permesso `actions: write` sul ceppo; può essere lo stesso) e, se il ceppo non è
+  `acquadrotia-alt/lucentia-web`, `AGGIORNA_REPO`;
+- nel pannello, nei Dati di ogni installazione, il repository GitHub.
+
+Le migrazioni nuove restano da eseguire a mano sul D1 del cliente (il workflow non tocca i database).
+
+### Avvisi del portale
+
+In cima a Installazioni il pannello segnala le installazioni da guardare: nessun contatto col
+portale da più di 36 ore (o mai), licenza scaduta o in scadenza entro 30 giorni, ultimo giro
+delle email automatiche non riuscito o con errori, versione in uso indietro rispetto al portale.
+
 ## 4 bis. Checklist di consegna di un cliente
 
 Da chiedere SEMPRE al cliente prima di andare online, e inserire in Impostazioni → Sito e prenotazioni:
@@ -218,7 +245,9 @@ un modulo del core, non nella cartella del cliente.
   (senza, una prenotazione online occupa l'operatore per tutta la durata del servizio),
   `migrazione-installazioni.sql` crea `installazioni` (portale) e `licenza_locale` (installazioni),
   `migrazione-integrazioni.sql` crea `integrazioni` (segreti di Gmail/Google Calendar, codice del feed),
-  `migrazione-clienti-online.sql` crea `clienti_online` e `sessioni_clienti` (account dei clienti).
+  `migrazione-clienti-online.sql` crea `clienti_online` e `sessioni_clienti` (account dei clienti),
+  `migrazione-registro.sql` crea `registro` (registro delle attività: va eseguita su ogni database),
+  `migrazione-installazioni-repo.sql` aggiunge `installazioni.repo` (solo portale).
 - **Gmail e Google Calendar** (modulo `google`, Impostazioni → Google): il titolare crea un
   progetto su Google Cloud, abilita Gmail API e Google Calendar API, pubblica la schermata
   consenso OAuth (Esterno) con gli ambiti `gmail.send` e `calendar`, crea un ID client
@@ -257,6 +286,32 @@ un modulo del core, non nella cartella del cliente.
   Sito e prenotazioni). Email automatiche: conferma a ogni appuntamento, promemoria alle 19 del giorno
   prima e un'ora prima; il giro lo chiama GitHub ogni 10 minuti sul portale (`promemoria.yml`), che
   lo gira alle installazioni. Migrazione: `migrazione-clienti-online.sql`.
+- **Salvataggi fra più dispositivi**: appuntamenti, clienti, vendite, buoni, eventi e fatture si
+  salvano un record alla volta e ogni minuto il gestionale porta dentro ciò che è cambiato altrove
+  (telefono, cassa, altro PC, area clienti): nessuno sovrascrive più il lavoro dell'altro. Senza rete
+  i salvataggi vanno in coda e ripartono da soli (pill rossa nell'intestazione); nel programma
+  della cassa si apre anche senza rete dalla copia locale, e gli scontrini si registrano lo stesso.
+- **Registro delle attività** (Impostazioni → Dati e backup): chi ha fatto cosa e quando — accessi,
+  salvataggi, impostazioni, scontrini, fatture, backup, timbrature, modifiche dei clienti dalla loro
+  area. 180 giorni, filtri e CSV. Richiede `migrazione-registro.sql`.
+- **Backup automatico all'avvio**: dal computer (versione web) il primo avvio del giorno scarica un
+  backup completo nella cartella Download (si spegne da Dati e backup).
+- **Statistiche**: cruscotto della settimana (incasso, appuntamenti, occupazione per operatore,
+  clienti nuovi e abituali, no-show, confronto con la settimana prima, CSV) e costo del venduto
+  con margine per prodotto (il costo si fissa sulla riga di vendita alla cassa).
+- **Fatture → Riepilogo IVA**: per mese, trimestre o anno, IVA a debito (emesse) e a credito
+  (ricevute) per aliquota, saldo e CSV per il commercialista.
+- **Articoli → Ordini**: ordini ai fornitori proposti dal sotto scorta o a mano, via email (modulo
+  Google) o stampa; «Ricevi la merce» registra il carico. In cassa «Venduto da» segna l'operatore.
+- **Gestione personale**: «Ferie e assenze» pianifica ferie, permessi e malattie (per gli operatori
+  bloccano anche l'agenda); «Timbra» in /utenti scrive entrata e uscita nel foglio ore; provvigioni
+  in % su servizi e prodotti nel riepilogo del mese.
+- **Email automatiche in più**: richiesta di recensione dopo il primo appuntamento svolto (una
+  volta per cliente, con il link scritto in Impostazioni → Google) e recupero della password
+  dell'account cliente («Password dimenticata?» in Prenota; link che vale un'ora).
+- **Area cliente**: annulla o sposta anche gli appuntamenti presi in salone, entro il preavviso
+  del salone (Impostazioni → preavviso ore); «Ripeti l'ultimo» ripropone l'ultimo servizio e
+  operatore; cambio email dai propri dati.
 - **Zona ripristino** (Impostazioni → Dati e backup): azzera punti, azzera vendite e
   appuntamenti, ripristino totale, protetti da password.
 - **Svuota dati** (pannello, saloni di prova): riporta un salone a licenza vuota lasciando

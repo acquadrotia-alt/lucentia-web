@@ -87,28 +87,17 @@ export const fmtDateTime = (ts) => { const d = new Date(ts); return `${pad(d.get
 export const loadKey = (key, fallback) => { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch (e) { return fallback; } };
 export const saveKey = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {} };
 
-// --- Strato dati: legge/salva sul server (database D1) invece che nel localStorage ---
-// Login e licenze restano in locale e invariati; qui passano solo i 5 contenitori dati.
-export async function apiLoad(coll, fallback) {
-  try { const r = await fetch(`/api/data/${coll}`); if (!r.ok) return fallback; const j = await r.json(); return (j && j.value != null) ? j.value : fallback; }
-  catch (e) { return fallback; }
-}
-// Variante con esito: usata dove un salvataggio fallito va segnalato subito
-// (es. eventi con immagini: se il payload è troppo grande l'utente deve saperlo).
-export async function apiSaveVerificato(coll, value) {
-  try {
-    const r = await fetch(`/api/data/${coll}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ value }) });
-    if (!r.ok) { const j = await r.json().catch(() => ({})); return { ok: false, error: (j && j.error) || `HTTP ${r.status}` }; }
-    return { ok: true };
-  } catch (e) { return { ok: false, error: "errore di rete" }; }
-}
-export async function apiSave(coll, value) {
-  try { await fetch(`/api/data/${coll}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ value }) }); } catch (e) {}
-}
-export const _saveTimers = {};
-export function apiSaveDebounced(coll, value, delay = 800) {
-  clearTimeout(_saveTimers[coll]);
-  _saveTimers[coll] = setTimeout(() => apiSave(coll, value), delay);
+// --- Strato dati: legge/salva sul server (database D1). Il codice è in dati.js:
+// salvataggi per singolo record, fusione con le modifiche arrivate da altri
+// dispositivi, coda offline e copia locale per la cassa. Qui si riesporta.
+export { apiLoad, apiLoadEsito, apiSave, apiSaveVerificato, apiSaveDebounced, apiPatchVerificato, apiPatchDebounced, _saveTimers, unisciDalServer, unisci, fissaBase, differenze, svuotaCoda, ascoltaRete, statoRete, impostaOrigine, scriviCopiaCassa, leggiCopiaCassa, copiaCassaOre, COLLEZIONI_A_RECORD, chiaveRecord } from "./dati.js";
+import { ascoltaRete as _ascoltaRete } from "./dati.js";
+import { useState as _useState, useEffect as _useEffect } from "react";
+// Lo stato della rete per l'intestazione: { offline, inCoda }.
+export function useStatoRete() { const [st, setSt] = _useState({ offline: false, inCoda: 0 }); _useEffect(() => _ascoltaRete(setSt), []); return st; }
+// Una voce nel registro delle attività (Impostazioni → Dati e backup). Non blocca mai.
+export async function registraAttivita(tipo, testo, dettagli, unisci) {
+  try { await fetch("/api/registro", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tipo, testo, dettagli: dettagli || {}, unisci: !!unisci, origine: typeof window !== "undefined" && window.lucentiaCassa ? "cassa" : "gestionale" }) }); } catch (e) {}
 }
 
 // --- Sistema licenza cliente (a tempo) ---

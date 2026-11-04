@@ -10,7 +10,7 @@
 // «Registratore» (X, Z, cassetto, ristampa, annulla documento aperto).
 // ============================================================================
 import { useState, useEffect, useCallback } from "react";
-import { Banknote, CreditCard, Printer, AlertTriangle, Check, Receipt, Settings } from "lucide-react";
+import { Banknote, CreditCard, Printer, AlertTriangle, Check, Receipt, Settings, WifiOff, CloudUpload } from "lucide-react";
 import { rtImpostazioniDi, rtRicevutaDaRighe, rtEmetti, rtRettifica, rtInvia, rtXmlServizio, rtAnnullaAperto, rtImporto } from "../cassa/customrt.js";
 import { ricevutaNonFiscale, inBase64 } from "../cassa/escpos.js";
 
@@ -167,4 +167,12 @@ export function RegistratorePannello({ cfg, onRicarica }) {
 export function StatoCassa({ cfg }) {
   if (!cfg) return null;
   return <span className={`hidden sm:inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg ml-1 ${cfg.simula ? "bg-amber-100 text-amber-800" : "bg-green-100 text-green-800"}`}><Receipt size={13} /> {cfg.simula ? "Cassa in simulazione" : "Cassa RT " + (cfg.host || "")}</span>;
+}
+
+// Lo stato della rete e della coda dei salvataggi (dati.js): compare solo quando
+// c'è qualcosa da dire — rete assente, o salvataggi in attesa di partire.
+export function StatoRete({ rete, onRiprova }) {
+  if (!rete || (!rete.offline && !rete.inCoda)) return null;
+  const testo = rete.offline ? `Senza rete${rete.inCoda ? ` · ${rete.inCoda} salvataggi in attesa` : ""}` : `${rete.inCoda} salvataggi in corso…`;
+  return <button onClick={onRiprova} title={rete.offline ? "Le modifiche si salvano appena torna la rete. Clicca per riprovare adesso." : "Invio in corso"} className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg ml-1 ${rete.offline ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>{rete.offline ? <WifiOff size={13} /> : <CloudUpload size={13} />} <span className="hidden sm:inline">{testo}</span></button>;
 }
