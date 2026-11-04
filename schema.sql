@@ -24,3 +24,6 @@ CREATE TABLE IF NOT EXISTS licenza_locale (id TEXT PRIMARY KEY, dati TEXT, verif
 -- Archivio riservato delle integrazioni (Gmail, Google Calendar, feed iCalendar):
 -- segreti per salone che l'API dei dati non restituisce mai al browser.
 CREATE TABLE IF NOT EXISTS integrazioni (azienda_id TEXT NOT NULL, chiave TEXT NOT NULL, dati TEXT NOT NULL, aggiornato_il TEXT DEFAULT (datetime('now')), PRIMARY KEY (azienda_id, chiave));
+-- Account dei clienti per la prenotazione online (/registrazione) e le loro sessioni (cookie csid).
+CREATE TABLE IF NOT EXISTS clienti_online (id TEXT PRIMARY KEY, azienda_id TEXT NOT NULL, email TEXT NOT NULL, password_hash TEXT NOT NULL, nome TEXT, cognome TEXT, telefono TEXT, client_code TEXT, creato_il TEXT DEFAULT (datetime('now')), UNIQUE(azienda_id, email));
+CREATE TABLE IF NOT EXISTS sessioni_clienti (token TEXT PRIMARY KEY, cliente_id TEXT NOT NULL, scadenza TEXT NOT NULL);

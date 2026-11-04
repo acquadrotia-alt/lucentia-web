@@ -30,7 +30,7 @@ function scenario(mode = "griglia", staff = ["sara", "federica"]) {
     staff: staff.map((id) => ({ id, name: id, serviceIds: IDS, availability: { [WD]: [[h(9), h(19)]] } })),
     cabine: [{ id: "cab-lampada", name: "Lampada" }, { id: "cab-spa", name: "Spa" }],
     closures: [],
-    onlineBooking: { mode, leadHours: 0, horizonDays: 30 },
+    onlineBooking: { mode, leadHours: 0, horizonDays: 30, senzaAccount: true },
   };
   return { config, aziende: { [AID]: { id: AID, denominazione: "Centro Test", attiva: 1, licenza_scadenza: "2099-01-01", moduli: JSON.stringify(["online", "opinf"]) } },
     dati: { config, bookings: [], clients: [], eventi: [] }, online: [], inserite: [] };

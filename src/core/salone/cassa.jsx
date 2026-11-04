@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { User, Plus, Trash2, Check, ChevronRight, X, Image as ImageIcon, Search, Star, Timer, Printer, ShoppingCart, Package, Tag, Minus, Boxes, Receipt, Layers, AlertCircle, PackagePlus, FileText, Undo2, Ban } from "lucide-react";
+import { User, Plus, Trash2, Check, ChevronRight, X, Image as ImageIcon, Search, Star, Timer, Printer, ShoppingCart, Package, Tag, Minus, Boxes, Receipt, Layers, AlertCircle, PackagePlus, FileText, Undo2, Ban, CalendarCheck, ChevronLeft, Sparkles } from "lucide-react";
 import { uid, eur, fmtDateTime, fileToSquareDataURL, generateCode, useMods, Field } from "./comuni.jsx";
 import { printSale } from "./stampa.jsx";
-import { cassaRtDisponibile, emettiScontrino, annullaScontrino, resoScontrino, righeDaCarrello, SceltaPagamento, RegistratorePannello, etichettaRt, rtChiedi } from "./cassaRt.jsx";
+import { cassaRtDisponibile, emettiScontrino, annullaScontrino, resoScontrino, righeDaCarrello, SceltaPagamento, RegistratorePannello, etichettaRt, rtChiedi, stampaRicevutaNonFiscale, stampanteNonFiscale } from "./cassaRt.jsx";
+import { uid as uid2, minToStr, todayStr, addDays, fmtDate, parseDate, WDAY_SHORT } from "./comuni.jsx";
 
 export const cartTotal = (cart) => cart.reduce((a, it) => a + it.price * it.qty, 0);
 // Scarica le giacenze dal catalogo in base al carrello venduto.
@@ -15,7 +16,7 @@ export function applySaleToCatalog(catalog, cart) {
   });
   return { ...catalog, products };
 }
-export function ShopView({ catalog, setCatalog, sales, setSales, clients, setClients, branding, loyalty, hidePartial, canAddClient, demo, onFattura = null, cassaRt = null }) {
+export function ShopView({ catalog, setCatalog, sales, setSales, clients, setClients, branding, loyalty, hidePartial, canAddClient, demo, onFattura = null, cassaRt = null, config = null, bookings = [], setBookings = null }) {
   const [sezione, setSezione] = useState("cassa");
   const rt = cassaRt && cassaRt.attiva ? cassaRt : null;
   const TAB = [["cassa", "Cassa", ShoppingCart], ["storico", "Storico", Receipt], ...(rt ? [["registratore", "Registratore", Printer]] : [])];
@@ -25,15 +26,30 @@ export function ShopView({ catalog, setCatalog, sales, setSales, clients, setCli
         <div><h2 className="text-xl font-semibold tracking-tight text-stone-900 leading-none">Vendita</h2><p className="text-[13px] text-stone-400 mt-1">{rt ? "Scontrini fiscali col registratore telematico e storico" : "Cassa prodotti e storico delle vendite"}</p></div>
         <div className="flex gap-1 bg-stone-100/80 rounded-xl p-1">{TAB.map(([k, l, Icon]) => <button key={k} onClick={() => setSezione(k)} aria-current={sezione === k ? "true" : undefined} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition ${sezione === k ? "bg-white shadow-[var(--lc-shadow-xs)] text-stone-900" : "text-stone-500 hover:text-stone-700"}`}><Icon size={15} /> {l}</button>)}</div>
       </div>
-      {sezione === "cassa" ? <PosTab catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} clients={clients} setClients={setClients} branding={branding} loyalty={loyalty} hidePartial={hidePartial} canAddClient={canAddClient} cassaRt={rt} /> : null}
+      {sezione === "cassa" ? <PosTab catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} clients={clients} setClients={setClients} branding={branding} loyalty={loyalty} hidePartial={hidePartial} canAddClient={canAddClient} cassaRt={rt} config={config} bookings={bookings} setBookings={setBookings} /> : null}
       {sezione === "storico" ? <SalesHistoryTab sales={sales} setSales={setSales} catalog={catalog} setCatalog={setCatalog} branding={branding} hidePartial={hidePartial} onFattura={onFattura} cassaRt={rt} /> : null}
       {sezione === "registratore" && rt ? <RegistratorePannello cfg={rt.cfg} onRicarica={rt.ricarica} /> : null}
     </div>
   );
 }
 
-export function PosTab({ catalog, setCatalog, sales, setSales, clients, setClients, branding, loyalty, hidePartial, canAddClient, cassaRt = null }) {
+export function PosTab({ catalog, setCatalog, sales, setSales, clients, setClients, branding, loyalty, hidePartial, canAddClient, cassaRt = null, config = null, bookings = [], setBookings = null }) {
   const [inStampa, setInStampa] = useState(false);
+  const [sceltaAppt, setSceltaAppt] = useState(false);
+  // «Appuntamento»: i servizi di un appuntamento entrano nel carrello come righe, con la cliente.
+  const aggiungiAppuntamento = (b) => {
+    const servizi = (b.serviceIds || []).map((id) => ((config && config.services) || []).find((s) => s.id === id)).filter(Boolean);
+    let righe = servizi.map((s) => ({ tipo: "servizio", serviceId: s.id, bookingId: b.id, name: s.name, label: "Appuntamento " + minToStr(b.startMin), price: Number(s.price) || 0, qty: 1 }));
+    const incassato = Number(b.amount);
+    if (incassato > 0) { const somma = righe.reduce((a, r) => a + r.price, 0); if (righe.length === 1) righe[0].price = incassato; else if (somma !== incassato) righe.push({ tipo: "servizio", serviceId: null, bookingId: b.id, name: "Adeguamento al prezzo concordato", label: "", price: Math.round((incassato - somma) * 100) / 100, qty: 1 }); }
+    if (!righe.length) righe = [{ tipo: "servizio", serviceId: null, bookingId: b.id, name: "Prestazione del " + fmtDate(b.date), label: "", price: incassato > 0 ? incassato : 0, qty: 1 }];
+    setLastSale(null);
+    setCart((c) => [...c.filter((x) => x.bookingId !== b.id), ...righe]);
+    const cl = (clients || []).find((x) => x.code === b.clientCode);
+    if (cl) setClient(cl);
+    setSceltaAppt(false);
+  };
+  const setPrezzoRiga = (idx, v) => setCart((c) => c.map((it, i) => (i === idx ? { ...it, price: Math.max(0, Number(v) || 0) } : it)));
   const F = useMods();
   const cats = catalog.categories;
   const [cat, setCat] = useState("all");
@@ -50,7 +66,7 @@ export function PosTab({ catalog, setCatalog, sales, setSales, clients, setClien
     setLastSale(null);
     setCart((c) => { const ex = c.find((x) => x.productId === p.id && x.formatId === f.id); if (ex) return c.map((x) => (x === ex ? { ...x, qty: x.qty + 1 } : x)); return [...c, { productId: p.id, formatId: f.id, name: p.name, label: f.label, price: Number(f.price) || 0, qty: 1 }]; });
   };
-  const changeQty = (idx, delta) => setCart((c) => c.map((it, i) => { if (i !== idx) return it; const prod = catalog.products.find((p) => p.id === it.productId); const fmt = prod && prod.formats.find((f) => f.id === it.formatId); const max = fmt ? (Number(fmt.stock) || 0) : it.qty; return { ...it, qty: Math.min(max, Math.max(0, it.qty + delta)) }; }).filter((it) => it.qty > 0));
+  const changeQty = (idx, delta) => setCart((c) => c.map((it, i) => { if (i !== idx || it.tipo === "servizio") return it; const prod = catalog.products.find((p) => p.id === it.productId); const fmt = prod && prod.formats.find((f) => f.id === it.formatId); const max = fmt ? (Number(fmt.stock) || 0) : it.qty; return { ...it, qty: Math.min(max, Math.max(0, it.qty + delta)) }; }).filter((it) => it.qty > 0));
   const removeItem = (idx) => setCart((c) => c.filter((_, i) => i !== idx));
   const total = cartTotal(cart);
   const count = cart.reduce((a, it) => a + it.qty, 0);
@@ -58,18 +74,26 @@ export function PosTab({ catalog, setCatalog, sales, setSales, clients, setClien
 
   const confirm = async (partial, metodo) => {
     if (!cart.length || inStampa) return;
-    for (const it of cart) { const prod = catalog.products.find((p) => p.id === it.productId); const fmt = prod && prod.formats.find((f) => f.id === it.formatId); if (!fmt || (Number(fmt.stock) || 0) < it.qty) { alert(`Giacenza insufficiente per ${it.name}.`); return; } }
-    const sale = { id: uid(), ts: Date.now(), type: "sale", partial: !!partial, clientCode: client ? client.code : null, clientName: client ? (client.name || "") : "", items: cart.map((it) => ({ productId: it.productId, formatId: it.formatId, name: it.name, label: it.label, price: it.price, qty: it.qty })), total };
-    // Col registratore: la vendita si registra SOLO dopo che lo scontrino è uscito. Il carrello resta com'è fino ad allora.
+    for (const it of cart) { if (it.tipo === "servizio") continue; const prod = catalog.products.find((p) => p.id === it.productId); const fmt = prod && prod.formats.find((f) => f.id === it.formatId); if (!fmt || (Number(fmt.stock) || 0) < it.qty) { alert(`Giacenza insufficiente per ${it.name}.`); return; } }
+    const sale = { id: uid(), ts: Date.now(), type: "sale", partial: !!partial, clientCode: client ? client.code : null, clientName: client ? (client.name || "") : "", items: cart.map((it) => ({ productId: it.productId, formatId: it.formatId, serviceId: it.serviceId, bookingId: it.bookingId, tipo: it.tipo, name: it.name, label: it.label, price: it.price, qty: it.qty })), total };
+    // Col registratore: la vendita si registra SOLO dopo che lo scontrino è uscito; il parziale va sulla stampante non fiscale.
     if (cassaRt && cassaRt.cfg) {
       setInStampa(true);
-      const esito = await emettiScontrino(righeDaCarrello(cart, catalog), metodo || "contanti", total, cassaRt.cfg);
+      if (partial) {
+        const r = await stampaRicevutaNonFiscale({ righe: cart.map((it) => ({ descrizione: it.name + (it.label && it.label !== "Standard" ? " " + it.label : ""), qta: it.qty, prezzo: it.price })), totale: total, cliente: client ? client.name : "", pagamento: metodo === "elettronico" ? "Carta / POS" : "Contanti", numero: sale.id.slice(0, 7).toUpperCase() }, cassaRt.cfg, branding);
+        sale.ricevutaNonFiscale = r.ok; sale.metodo = metodo || "contanti";
+      } else {
+        const esito = await emettiScontrino(righeDaCarrello(cart, catalog, config, cassaRt.cfg), metodo || "contanti", total, cassaRt.cfg);
+        if (!esito.ok) { setInStampa(false); return; }
+        sale.rt = esito.rt; sale.metodo = metodo || "contanti";
+      }
       setInStampa(false);
-      if (!esito.ok) return;
-      sale.rt = esito.rt; sale.metodo = metodo || "contanti";
     }
     setCatalog(applySaleToCatalog(catalog, cart));
     setSales([sale, ...sales]);
+    // gli appuntamenti portati in cassa risultano svolti (o parziali), con l'incasso e lo scontrino
+    const idsAppt = [...new Set(cart.filter((it) => it.bookingId).map((it) => it.bookingId))];
+    if (idsAppt.length && setBookings) setBookings((cur) => cur.map((b) => (idsAppt.includes(b.id) ? { ...b, status: partial ? "partial" : "done", amount: Math.round(cart.filter((it) => it.bookingId === b.id).reduce((a, it) => a + it.price * it.qty, 0) * 100) / 100, saleId: sale.id, ...(sale.rt ? { rt: sale.rt, metodo: sale.metodo } : {}) } : b)));
     setCart([]); setClient(null); setLastSale(sale);
   };
 
@@ -80,11 +104,15 @@ export function PosTab({ catalog, setCatalog, sales, setSales, clients, setClien
     <div className="flex flex-col lg:flex-row gap-4 items-start">
       {/* Colonna prodotti */}
       <div className="w-full lg:flex-1 lg:min-w-0 space-y-3">
-        <div className="flex items-center gap-2 border border-stone-300 rounded-xl px-3.5 py-2.5 bg-white brand-ring transition-colors hover:border-stone-400 focus-within:border-stone-400">
+        <div className="flex items-center gap-2">
+        <button onClick={() => setSceltaAppt(true)} className="shrink-0 flex items-center gap-1.5 text-sm font-medium border brand-border brand-accent bg-white px-3.5 py-2.5 rounded-xl hover:brand-soft transition" title="Porta nel carrello i servizi di un appuntamento"><CalendarCheck size={16} /> Appuntamento</button>
+        <div className="flex-1 flex items-center gap-2 border border-stone-300 rounded-xl px-3.5 py-2.5 bg-white brand-ring transition-colors hover:border-stone-400 focus-within:border-stone-400">
           <Search size={17} className="text-stone-400 shrink-0" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cerca un prodotto…" className="flex-1 text-sm focus:outline-none bg-transparent" />
           {q ? <button onClick={() => setQ("")} aria-label="Pulisci ricerca" className="text-stone-300 hover:text-stone-500 transition-colors"><X size={16} /></button> : null}
         </div>
+        </div>
+        {sceltaAppt ? <SceltaAppuntamento bookings={bookings} config={config} clients={clients} onScegli={aggiungiAppuntamento} onClose={() => setSceltaAppt(false)} /> : null}
         <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
           {CATS.map((c) => { const on = cat === c.id; return (
             <button key={c.id} onClick={() => setCat(c.id)} aria-current={on ? "true" : undefined} className={`shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium border transition whitespace-nowrap ${on ? "brand-soft brand-text border-transparent" : "bg-white border-stone-200 text-stone-500 hover:border-stone-300 hover:text-stone-700"}`}>{c.name}</button>
@@ -133,7 +161,7 @@ export function PosTab({ catalog, setCatalog, sales, setSales, clients, setClien
             <div className="px-4">
               {lastSale ? (
                 <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-sm text-green-700 my-4">
-                  <div className="flex items-center gap-1.5 font-medium"><Check size={15} /> {lastSale.rt ? `Scontrino ${etichettaRt(lastSale.rt)} emesso` : `Vendita ${lastSale.partial ? "parziale " : ""}registrata`} · {eur(lastSale.total)}</div>
+                  <div className="flex items-center gap-1.5 font-medium"><Check size={15} /> {lastSale.rt ? `Scontrino ${etichettaRt(lastSale.rt)} emesso` : lastSale.partial && lastSale.ricevutaNonFiscale ? "Acconto registrato, ricevuta stampata" : `Vendita ${lastSale.partial ? "parziale " : ""}registrata`} · {eur(lastSale.total)}</div>
                   <div className="flex gap-2 mt-2">
                     <button onClick={() => printSale(lastSale, branding)} className="text-xs font-medium border border-green-300 text-green-700 px-2.5 py-1.5 rounded-lg hover:bg-green-100 inline-flex items-center gap-1"><Printer size={13} /> Scontrino</button>
                     <button onClick={() => setLastSale(null)} className="text-xs font-medium text-green-700 px-2.5 py-1.5 hover:underline">Nuova vendita</button>
@@ -147,12 +175,13 @@ export function PosTab({ catalog, setCatalog, sales, setSales, clients, setClien
             <>
               <div className="flex-1 overflow-y-auto px-4 min-h-0">{cart.map((it, i) => (
                 <div key={i} className="flex items-center gap-2 py-2.5 border-b border-stone-100 last:border-0">
-                  <div className="flex-1 min-w-0"><div className="text-sm font-medium truncate text-stone-900">{it.name}</div><div className="text-xs text-stone-400 truncate">{it.label} · {eur(it.price)}</div></div>
+                  <div className="flex-1 min-w-0"><div className="text-sm font-medium truncate text-stone-900 flex items-center gap-1">{it.tipo === "servizio" ? <Sparkles size={12} className="brand-accent shrink-0" /> : null}{it.name}</div><div className="text-xs text-stone-400 truncate">{it.label}{it.tipo === "servizio" ? "" : ` · ${eur(it.price)}`}</div></div>
+                  {it.tipo === "servizio" ? <div className="flex items-center gap-1"><input type="number" min={0} step={0.5} value={it.price} onChange={(e) => setPrezzoRiga(i, e.target.value)} className="w-20 px-2 py-1 rounded-lg border border-stone-200 text-sm text-right brand-ring" /><span className="text-xs text-stone-400">€</span></div> : (
                   <div className="flex items-center gap-1">
                     <button onClick={() => changeQty(i, -1)} className="w-7 h-7 rounded-lg border border-stone-200 flex items-center justify-center text-stone-500 hover:bg-stone-100 hover:text-stone-800 active:scale-90 transition"><Minus size={13} /></button>
                     <span className="w-6 text-center text-sm font-semibold tabular-nums">{it.qty}</span>
                     <button onClick={() => changeQty(i, 1)} className="w-7 h-7 rounded-lg border border-stone-200 flex items-center justify-center text-stone-500 hover:bg-stone-100 hover:text-stone-800 active:scale-90 transition"><Plus size={13} /></button>
-                  </div>
+                  </div>)}
                   <div className="w-16 text-right text-sm font-semibold tabular-nums text-stone-900">{eur(it.price * it.qty)}</div>
                   <button onClick={() => removeItem(i)} aria-label="Rimuovi" className="text-stone-300 hover:text-red-500 transition-colors"><X size={15} /></button>
                 </div>
@@ -161,7 +190,7 @@ export function PosTab({ catalog, setCatalog, sales, setSales, clients, setClien
                 <ClientAssign clients={clients} setClients={setClients} client={client} setClient={setClient} canAddClient={canAddClient} />
                 {F.fidelity && loyalty && loyalty.fromSales ? <div className="flex items-center justify-between text-sm"><span className="flex items-center gap-1.5 text-stone-500"><Star size={14} className="brand-accent" /> Punti generati</span><span className="font-medium brand-accent">+{salePoints}{client ? "" : " (assegna un cliente)"}</span></div> : null}
                 <div className="flex items-baseline justify-between pt-1"><span className="text-sm font-medium text-stone-500">Totale</span><span className="text-2xl font-semibold tracking-tight tabular-nums text-stone-900">{eur(total)}</span></div>
-                {cassaRt ? <SceltaPagamento totale={total} disabled={inStampa} onScegli={(m) => confirm(false, m)} /> : (
+                {cassaRt ? <div className="space-y-2"><SceltaPagamento totale={total} disabled={inStampa} onScegli={(m) => confirm(false, m)} />{!hidePartial ? <button onClick={async () => { const m = await rtChiedi("Pagamento parziale", `Registro un acconto di ${eur(total)} con ricevuta non fiscale${stampanteNonFiscale(cassaRt.cfg) ? "" : " (stampante non configurata: solo registrazione)"}. Come paga la cliente?`, [{ label: "Contanti", value: "contanti" }, { label: "Carta / POS", value: "elettronico", soft: true }, { label: "Annulla", value: "no", soft: true }], "busy"); if (m === "contanti" || m === "elettronico") confirm(true, m); }} disabled={inStampa} className="w-full font-medium py-2 rounded-xl flex items-center justify-center gap-1.5 border border-amber-300 text-amber-700 hover:bg-amber-50 transition text-sm disabled:opacity-50"><Timer size={15} /> Parziale · ricevuta non fiscale</button> : null}</div> : (
                 <div className={hidePartial ? "" : "grid grid-cols-2 gap-2"}>
                   <button onClick={() => confirm(false)} className="w-full brand-bg font-semibold py-2.5 rounded-xl flex items-center justify-center gap-1.5 shadow-[var(--lc-shadow-xs)] hover:shadow-[var(--lc-shadow-sm)]"><Check size={16} /> {hidePartial ? "Conferma vendita" : "Totale"}</button>
                   {!hidePartial ? <button onClick={() => confirm(true)} className="font-medium py-2.5 rounded-xl flex items-center justify-center gap-1.5 border border-amber-300 text-amber-700 hover:bg-amber-50 transition"><Timer size={16} /> Parziale</button> : null}
@@ -282,6 +311,7 @@ export function SalesHistoryTab({ sales, setSales, catalog, setCatalog, branding
                 <div className="space-y-1 text-sm">{s.items.map((it, i) => (<div key={i} className="flex justify-between gap-2"><span className="text-stone-600">{load ? `+${it.qty}` : `${it.qty}×`} {it.name}{it.label ? ` (${it.label})` : ""}</span>{load ? <span className="text-emerald-600 shrink-0">+{it.qty} pz</span> : <span className="text-stone-500 shrink-0">{eur(it.price * it.qty)}</span>}</div>))}</div>
                 {!load ? <div className="mt-3 flex flex-wrap gap-2 items-center"><button onClick={() => printSale(s, branding)} className="text-xs font-medium border border-stone-300 text-stone-600 px-3 py-1.5 rounded-lg hover:bg-stone-50 inline-flex items-center gap-1.5"><Printer size={14} /> Stampa scontrino</button>
                   {onFattura ? (s.fatturaId ? <span className="text-xs text-stone-500 inline-flex items-center gap-1"><FileText size={13} /> Fattura n. {s.fatturaNumero}</span> : <button onClick={() => onFattura(s)} className="text-xs font-medium border brand-border brand-accent bg-white px-3 py-1.5 rounded-lg hover:brand-soft inline-flex items-center gap-1.5"><FileText size={14} /> Fattura</button>) : null}
+                  {cassaRt && s.partial && s.type === "sale" ? <button onClick={() => stampaRicevutaNonFiscale({ righe: s.items.map((it) => ({ descrizione: it.name + (it.label && it.label !== "Standard" ? " " + it.label : ""), qta: it.qty, prezzo: it.price })), totale: s.total, cliente: s.clientName, pagamento: s.metodo === "elettronico" ? "Carta / POS" : "Contanti", numero: s.id.slice(0, 7).toUpperCase() }, cassaRt.cfg, branding)} className="text-xs font-medium border border-stone-300 text-stone-600 px-3 py-1.5 rounded-lg hover:bg-stone-50 inline-flex items-center gap-1.5"><Printer size={14} /> Ricevuta non fiscale</button> : null}
                   {cassaRt && s.rt && s.type === "sale" && !s.annullato ? <>
                     <button onClick={() => rettifica(s, "reso")} disabled={!!busyRt} className="text-xs font-medium border border-amber-300 text-amber-700 px-3 py-1.5 rounded-lg hover:bg-amber-50 inline-flex items-center gap-1.5 disabled:opacity-50"><Undo2 size={14} /> Reso</button>
                     <button onClick={() => rettifica(s, "annullo")} disabled={!!busyRt} className="text-xs font-medium border border-red-300 text-red-700 px-3 py-1.5 rounded-lg hover:bg-red-50 inline-flex items-center gap-1.5 disabled:opacity-50"><Ban size={14} /> Annulla scontrino</button>
@@ -291,6 +321,37 @@ export function SalesHistoryTab({ sales, setSales, catalog, setCatalog, branding
           </div>
         ); })}</div>
       )}
+    </div>
+  );
+}
+
+// Gli appuntamenti di un giorno da portare in cassa: quelli non ancora svolti, con ricerca per cliente.
+export function SceltaAppuntamento({ bookings, config, clients, onScegli, onClose }) {
+  const [giorno, setGiorno] = useState(todayStr());
+  const [q, setQ] = useState("");
+  const lista = (bookings || []).filter((b) => b && b.date === giorno && b.status !== "cancelled" && b.status !== "done" && (!q || String(b.clientName || "").toLowerCase().includes(q.toLowerCase()))).sort((a, b) => a.startMin - b.startMin);
+  const nomi = (b) => (b.serviceIds || []).map((id) => (((config && config.services) || []).find((s) => s.id === id) || {}).name).filter(Boolean).join(", ");
+  const prezzo = (b) => { if (Number(b.amount) > 0) return Number(b.amount); return (b.serviceIds || []).reduce((a, id) => a + (Number((((config && config.services) || []).find((s) => s.id === id) || {}).price) || 0), 0); };
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 lc-fade-in" onClick={onClose}>
+      <div className="lc-card lc-scale-in w-full max-w-md p-5 overflow-auto" style={{ maxHeight: "90vh" }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-2 mb-3"><div><h3 className="font-semibold text-lg text-stone-900 tracking-tight flex items-center gap-2"><CalendarCheck size={18} className="brand-accent" /> Appuntamento in cassa</h3><p className="text-xs text-stone-400 mt-0.5">I servizi entrano nel carrello; alla conferma l'appuntamento risulta svolto.</p></div><button onClick={onClose} className="text-stone-400 hover:text-stone-600"><X size={20} /></button></div>
+        <div className="flex items-center gap-2 mb-3">
+          <button onClick={() => setGiorno(addDays(giorno, -1))} className="w-8 h-8 rounded-lg border border-stone-200 flex items-center justify-center text-stone-500"><ChevronLeft size={16} /></button>
+          <div className="flex-1 text-center text-sm font-medium capitalize">{fmtDate(giorno)}{giorno === todayStr() ? " · oggi" : ""}</div>
+          <button onClick={() => setGiorno(addDays(giorno, 1))} className="w-8 h-8 rounded-lg border border-stone-200 flex items-center justify-center text-stone-500"><ChevronRight size={16} /></button>
+        </div>
+        <div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2 bg-white brand-ring mb-3"><Search size={15} className="text-stone-400" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cerca la cliente" className="flex-1 text-sm focus:outline-none" autoFocus /></div>
+        {lista.length === 0 ? <p className="text-sm text-stone-400 text-center py-6">Nessun appuntamento da incassare in questo giorno.</p> : (
+          <div className="space-y-1.5">{lista.map((b) => (
+            <button key={b.id} onClick={() => onScegli(b)} className="w-full text-left rounded-xl border border-stone-200 p-3 hover:border-stone-300 hover:bg-stone-50 transition flex items-center gap-3">
+              <span className="text-sm font-semibold tabular-nums brand-accent w-12 shrink-0">{minToStr(b.startMin)}</span>
+              <span className="flex-1 min-w-0"><span className="block font-medium truncate">{b.clientName}{b.status === "partial" ? <span className="text-[10px] ml-1.5 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">parziale</span> : null}</span><span className="block text-xs text-stone-400 truncate">{nomi(b) || "—"}</span></span>
+              <span className="text-sm font-medium text-stone-700 shrink-0">{eur(prezzo(b))}</span>
+            </button>
+          ))}</div>
+        )}
+      </div>
     </div>
   );
 }

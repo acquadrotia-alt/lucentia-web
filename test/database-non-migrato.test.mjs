@@ -24,7 +24,7 @@ function scenario({ migrato }) {
     services: SERVIZI,
     staff: [{ id: "sara", name: "Sara", serviceIds: ["piega", "colore"], availability: { [WD]: [[h(9), h(19)]] } }],
     cabine: [], closures: [],
-    onlineBooking: { mode: "antivuoto", leadHours: 0, horizonDays: 30 },
+    onlineBooking: { mode: "antivuoto", leadHours: 0, horizonDays: 30, senzaAccount: true },
   };
   return { migrato, config, righe: [],
     aziende: { [AID]: { id: AID, denominazione: "Centro Test", attiva: 1, licenza_scadenza: "2099-01-01", moduli: JSON.stringify(["online", "opinf"]) } },

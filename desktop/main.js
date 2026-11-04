@@ -18,7 +18,8 @@
 const { app, BrowserWindow, ipcMain, shell, Menu, dialog } = require("electron");
 const path = require("path");
 const fs = require("fs");
-const { rtRequest } = require("./rt-request");
+const { rtRequest, isLocalHost } = require("./rt-request");
+const net = require("net");
 
 const PASSWORD_TECNICO = "0724";
 const FILE_IMPOSTAZIONI = () => path.join(app.getPath("userData"), "impostazioni.json");
@@ -28,6 +29,7 @@ const PREDEFINITE = {
   reparti: [{ numero: "1", nome: "IVA 22%", aliquota: "22" }], categorieReparto: {},
   pagamenti: { contanti: { tipo: "1", nome: "CONTANTI" }, elettronico: { tipo: "2", nome: "ELETTRONICO" } },
   messaggio: "Grazie e arrivederci", cassetto: true, rigaReso: "printRecItem",
+  escpos: { attiva: false, host: "", port: 9100, larghezza: 42 },
 };
 function leggiImpostazioni() {
   try { return { ...PREDEFINITE, ...JSON.parse(fs.readFileSync(FILE_IMPOSTAZIONI(), "utf8")) }; } catch (e) { return { ...PREDEFINITE }; }
@@ -53,6 +55,23 @@ ipcMain.handle("rt:request", async (evento, args) => {
 });
 // le impostazioni: il gestionale le legge, la finestra del tecnico le scrive
 ipcMain.handle("cassa:config", () => leggiImpostazioni());
+// la stampante non fiscale ESC/POS (ricevute dei movimenti parziali): byte grezzi sulla porta 9100, solo in rete locale
+ipcMain.handle("escpos:print", (evento, base64) => {
+  const da = (evento.senderFrame && evento.senderFrame.url) || "";
+  if (!daGestionale(da) && !daImpostazioni(da)) throw new Error("richiesta non ammessa da " + da);
+  const cfg = leggiImpostazioni();
+  const e = cfg.escpos || {};
+  if (!e.attiva || !e.host) throw new Error("La stampante non fiscale non è configurata (Impostazioni della cassa → Stampante non fiscale).");
+  if (!isLocalHost(e.host)) throw new Error("La stampante deve trovarsi sulla rete locale.");
+  const dati = Buffer.from(String(base64 || ""), "base64");
+  return new Promise((resolve, reject) => {
+    const sock = net.createConnection({ host: e.host, port: Number(e.port) || 9100 });
+    const t = setTimeout(() => { sock.destroy(); reject(new Error("la stampante non risponde (timeout)")); }, 8000);
+    sock.on("connect", () => { sock.write(dati, () => { sock.end(); }); });
+    sock.on("close", () => { clearTimeout(t); resolve({ ok: true, byte: dati.length }); });
+    sock.on("error", (err) => { clearTimeout(t); reject(new Error("stampante non raggiungibile: " + err.message)); });
+  });
+});
 ipcMain.handle("cassa:apri-impostazioni", () => { apriImpostazioni(); return true; });
 ipcMain.handle("cassa:verifica-password", (e, pw) => String(pw || "") === PASSWORD_TECNICO);
 ipcMain.handle("cassa:salva", (evento, nuove, pw) => {

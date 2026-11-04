@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld("lucentiaCassa", {
   programma: true,
   rtRequest: (args) => ipcRenderer.invoke("rt:request", args),
   config: () => ipcRenderer.invoke("cassa:config"),
+  escposPrint: (base64) => ipcRenderer.invoke("escpos:print", base64),
   apriImpostazioni: () => ipcRenderer.invoke("cassa:apri-impostazioni"),
   // solo la finestra delle impostazioni (il processo principale controlla da dove arriva)
   verificaPassword: (pw) => ipcRenderer.invoke("cassa:verifica-password", pw),

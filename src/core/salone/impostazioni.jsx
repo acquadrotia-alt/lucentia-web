@@ -74,6 +74,13 @@ export function BookingLinkCard({ aziendaId, config, saveConfig, cliente = false
           ); })}
         </div>
       </div>
+      <div className="mt-4 rounded-xl border border-stone-200 p-3">
+        <label className="flex items-start gap-2.5 text-sm text-stone-700 cursor-pointer"><input type="checkbox" checked={ob.senzaAccount !== true} onChange={(e) => save({ senzaAccount: !e.target.checked })} className="mt-0.5" /><span><span className="font-medium block">Per prenotare serve l'account del cliente</span><span className="text-xs text-stone-400">Il cliente si registra una volta (nome, cognome, telefono, email e password), riceve l'email di benvenuto e poi entra in «Prenota» con email e password: vede appuntamenti, punti e dati, e prenota. La registrazione è a questo indirizzo, da dare ai clienti (non è sul sito):</span></span></label>
+        <div className="flex items-center gap-2 border border-stone-200 rounded-lg px-3 py-2 bg-stone-50 mt-2">
+          <input readOnly value={`${typeof window !== "undefined" ? window.location.origin : ""}${cliente ? "/registrazione" : `/?registrazione=${aziendaId}`}`} onFocus={(e) => e.target.select()} className="flex-1 text-sm bg-transparent focus:outline-none text-stone-600 truncate" />
+          <button onClick={async () => { try { await navigator.clipboard.writeText(`${window.location.origin}${cliente ? "/registrazione" : `/?registrazione=${aziendaId}`}`); } catch (e) {} }} className="text-xs font-medium border border-stone-300 text-stone-600 px-2.5 py-1.5 rounded-lg hover:bg-white shrink-0">Copia</button>
+        </div>
+      </div>
       <div className="grid sm:grid-cols-2 gap-3 mt-4">
         <label className="text-sm block"><span className="text-xs font-medium text-stone-400 uppercase tracking-wide block mb-1">Preavviso minimo</span>
           <select value={ob.leadHours != null ? ob.leadHours : 2} onChange={(e) => save({ leadHours: Number(e.target.value) })} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm bg-white brand-ring">{[0, 1, 2, 4, 12, 24, 48].map((h) => <option key={h} value={h}>{h === 0 ? "Nessuno" : `${h} or${h === 1 ? "a" : "e"}`}</option>)}</select>

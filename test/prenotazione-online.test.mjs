@@ -14,7 +14,7 @@ function scenario(mode) {
     services: [{ id: "piega", name: "Piega", durationMin: 30 }, { id: "taglio", name: "Taglio", durationMin: 45 }],
     staff: [{ id: "a1", name: "Giulia", serviceIds: ["piega", "taglio"], availability: { 3: [[h(9), h(12)]] } }],
     closures: [],
-    onlineBooking: { mode, leadHours: 0, horizonDays: 30 },
+    onlineBooking: { mode, leadHours: 0, horizonDays: 30, senzaAccount: true },
   };
   return {
     config,

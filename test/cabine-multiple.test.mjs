@@ -83,7 +83,7 @@ test("assegnaRisorse conferma la seconda cabina anche con la prima occupata", ()
 
 // ---- online: le tre modalità -----------------------------------------------
 function scenario(mode, quantita) {
-  const config = { ...salone(quantita), onlineBooking: { mode, leadHours: 0, horizonDays: 30 } };
+  const config = { ...salone(quantita), onlineBooking: { mode, leadHours: 0, horizonDays: 30, senzaAccount: true } };
   return { config, aziende: { [AID]: { id: AID, denominazione: "Centro Test", attiva: 1, licenza_scadenza: "2099-01-01", moduli: JSON.stringify(["online", "opinf"]) } },
     dati: { config, bookings: [], clients: [], eventi: [] }, online: [], inserite: [] };
 }

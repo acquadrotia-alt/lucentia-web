@@ -36,6 +36,12 @@ nelle impostazioni. Per provarlo da un PC con Node: `cd desktop && npm install &
 Le impostazioni stanno in `%APPDATA%\Lucentia Cassa\impostazioni.json` sul PC della cassa e non
 passano mai dal gestionale online.
 
+## Stampante non fiscale (ricevute dei parziali)
+
+In Impostazioni della cassa → «Stampante non fiscale» si indica l'IP di una stampante termica
+ESC/POS da 80 mm collegata in rete (porta 9100). Il tasto **Parziale** (in cassa e sull'appuntamento)
+registra un acconto senza scontrino e stampa una **ricevuta non fiscale**; dallo storico si ristampa.
+
 ## Ogni giorno
 
 - Vendita → **Cassa**: carrello, poi «Contanti» o «Carta / POS» → scontrino. Lo storico mostra il

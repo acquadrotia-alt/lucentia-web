@@ -4,7 +4,7 @@ import { orariPossibili, durataServizio, impegniServizio, senzaOperatore, impegn
 import { ESTENSIONI } from "../../cliente/index.jsx";
 import { ADVANCE_DAYS, uid, minToStr, strToMin, pd, todayStr, parseDate, addDays, WDAY_SHORT, MONTHS, fmtDate, fmtDateTime, eur, fileToCoverDataURL, qualifiedStaff, staffOff, salonClosure, upsertClient, loyaltyConfig, clientBalance, matchPackage, STATUS, useMods, FieldIcon, Row } from "./comuni.jsx";
 import { GoogleCard, GoogleEventoModal, EmailModal, emailDi } from "./google.jsx";
-import { emettiScontrino, righeDaAppuntamento, SceltaPagamento, etichettaRt } from "./cassaRt.jsx";
+import { emettiScontrino, righeDaAppuntamento, SceltaPagamento, etichettaRt, stampaRicevutaNonFiscale, stampanteNonFiscale } from "./cassaRt.jsx";
 
 export function SlotPicker({ config, serviceIds, staffFilter, bookings, value, onChange, startDate }) {
   const [weekStart, setWeekStart] = useState(startDate);
@@ -844,6 +844,17 @@ export function ApptActions({ booking, config, clients, setClients, bookings, sa
     if (!esito.ok) return;
     onStatus(booking.id, status, price, { rt: esito.rt, metodo });
   };
+  // «Parziale» col programma della cassa: acconto con ricevuta NON fiscale sulla stampante ESC/POS
+  const parzialeConRicevuta = async (metodo) => {
+    const importo = Number(price) || 0;
+    if (importo <= 0) { alert("Inserisci l'importo dell'acconto."); return; }
+    setInStampa(true);
+    const righe = righeDaAppuntamento(booking, config, importo, cassaRt.cfg).map((r) => ({ descrizione: r.descrizione, qta: r.qta, prezzo: r.prezzo }));
+    const dovuto = (booking.serviceIds || []).reduce((a, id) => a + (Number(((config.services || []).find((s) => s.id === id) || {}).price) || 0), 0);
+    const r = await stampaRicevutaNonFiscale({ righe, totale: importo, totaleDovuto: dovuto > importo ? dovuto : null, cliente: booking.clientName, pagamento: metodo === "elettronico" ? "Carta / POS" : "Contanti", numero: String(booking.id).slice(0, 7).toUpperCase() }, cassaRt.cfg, config.branding);
+    setInStampa(false);
+    onStatus(booking.id, "partial", price, { metodo, ricevutaNonFiscale: !!r.ok });
+  };
   const F = useMods();
   const b = booking;
   const [email, setEmail] = useState(false);
@@ -934,7 +945,7 @@ export function ApptActions({ booking, config, clients, setClients, bookings, sa
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1 flex-1"><input type="number" min={0} step={0.5} value={price} onChange={(e) => setPrice(e.target.value)} autoFocus className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring" /><span className="text-sm text-stone-400">€</span></div>
             </div>
-            {cassaRt ? <div className="mt-3"><SceltaPagamento totale={price} disabled={inStampa} etichetta="Scontrino" onScegli={(m) => incassaConScontrino(askPrice, m)} /></div> : null}
+            {cassaRt ? <div className="mt-3">{askPrice === "partial" ? <><p className="text-xs text-amber-700 mb-2 flex items-center gap-1.5"><Timer size={13} /> Acconto: niente scontrino, ricevuta non fiscale{stampanteNonFiscale(cassaRt.cfg) ? "" : " (stampante non configurata: solo registrazione)"}.</p><SceltaPagamento totale={price} disabled={inStampa} etichetta="Ricevuta" onScegli={parzialeConRicevuta} /></> : <SceltaPagamento totale={price} disabled={inStampa} etichetta="Scontrino" onScegli={(m) => incassaConScontrino(askPrice, m)} />}</div> : null}
             <div className="grid grid-cols-2 gap-2 mt-3">
               {cassaRt ? null : <button onClick={() => onStatus(b.id, askPrice, price)} className="flex items-center justify-center gap-1.5 text-sm font-medium bg-green-600 text-white px-3 py-2.5 rounded-lg hover:bg-green-700"><Check size={15} /> Conferma {askPrice === "partial" ? "parziale" : "svolto"}</button>}
               <button onClick={() => setAskPrice(null)} className={`${cassaRt ? "col-span-2 " : ""}flex items-center justify-center gap-1.5 text-sm font-medium border border-stone-300 text-stone-600 px-3 py-2.5 rounded-lg hover:bg-stone-50`}>Indietro</button>
