@@ -109,5 +109,5 @@ export function sitemap(origin, d) {
 }
 
 export function robots(origin) {
-  return `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /gestionale\nDisallow: /utenti\n\nSitemap: ${origin}/sitemap.xml\n`;
+  return `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /gestionale\nDisallow: /utenti\nDisallow: /registrazione\n\nSitemap: ${origin}/sitemap.xml\n`;
 }

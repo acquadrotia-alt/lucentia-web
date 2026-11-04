@@ -61,10 +61,12 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
   const cassaRt = useCassaRt();
   const soloBanco = cassaRt.attiva;
   const [area, setArea] = useState(esitoGoogle ? "impostazioni" : (soloBanco ? "banco" : null));
-  const [view, setView] = useState(esitoGoogle ? "settings" : "agenda");
+  // Nel Banco si entra dalla Vendita (quando il modulo vendite è acceso), altrimenti dall'agenda.
+  const primaSezione = (a) => (a.id === "banco" && a.sezioni.some((sz) => sz[0] === "vendita") ? "vendita" : a.sezioni[0][0]);
+  const [view, setView] = useState(esitoGoogle ? "settings" : (soloBanco && flags.vendite ? "vendita" : "agenda"));
   const areaCorrente = AREE.find((a) => a.id === area) || null;
-  useEffect(() => { if (soloBanco && area !== "banco") { setArea("banco"); setView("agenda"); } }, [soloBanco, area]);
-  const vaiA = (areaId, viewId) => { const a = AREE.find((x) => x.id === areaId); if (!a) { setArea(null); return; } setArea(a.id); setView(viewId && a.sezioni.some((sz) => sz[0] === viewId) ? viewId : a.sezioni[0][0]); try { window.scrollTo({ top: 0 }); } catch (e) {} };
+  useEffect(() => { if (soloBanco && area !== "banco") { setArea("banco"); setView(flags.vendite ? "vendita" : "agenda"); } }, [soloBanco, area]);
+  const vaiA = (areaId, viewId) => { const a = AREE.find((x) => x.id === areaId); if (!a) { setArea(null); return; } setArea(a.id); setView(viewId && a.sezioni.some((sz) => sz[0] === viewId) ? viewId : primaSezione(a)); try { window.scrollTo({ top: 0 }); } catch (e) {} };
   useEffect(() => { if (area && !areaCorrente) setArea(null); else if (areaCorrente && !areaCorrente.sezioni.some((sz) => sz[0] === view)) setView(areaCorrente.sezioni[0][0]); }, [moduli, area, view]);
   // Google Calendar a due vie (modulo "google"): legge e scrive gli
   // appuntamenti tramite questi riferimenti, così la lista è sempre quella
@@ -301,7 +303,7 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
         {area === "banco" && view === "agenda" && <AgendaPage config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={session.hidePartial} canAddBooking={canAddBooking} canAddClient={canAddClient} onlineBk={flags.online ? onlineBk : []} onImportOnline={importOnline} onCancelOnline={cancelOnline} canManageOnline={session.role !== "operator"} eventi={eventi} setEventi={setEventi} impegniEventi={impegni} aziendaId={azienda && azienda.id} google={google} onFattura={flags.fatture && !isDemo ? (b) => fatturaDa("appuntamento", b) : null} cassaRt={soloBanco && !isDemo ? cassaRt : null} />}
         {area === "banco" && view === "clienti" && <ClientsView config={config} bookings={bookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} vouchers={vouchers} setVouchers={setVouchers} />}
         {area === "banco" && view === "buoni" && <GiftCardsView config={config} vouchers={vouchers} setVouchers={setVouchers} clients={clients} canAddVoucher={canAddVoucher} />}
-        {area === "banco" && view === "vendita" && <ShopView catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} clients={clients} setClients={setClients} branding={b} loyalty={config.loyalty} hidePartial={session.hidePartial} canAddClient={canAddClient} demo={isDemo} onFattura={flags.fatture && !isDemo ? (s) => fatturaDa("vendita", s) : null} cassaRt={soloBanco && !isDemo ? cassaRt : null} />}
+        {area === "banco" && view === "vendita" && <ShopView catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} clients={clients} setClients={setClients} branding={b} loyalty={config.loyalty} hidePartial={session.hidePartial} canAddClient={canAddClient} demo={isDemo} onFattura={flags.fatture && !isDemo ? (s) => fatturaDa("vendita", s) : null} cassaRt={soloBanco && !isDemo ? cassaRt : null} config={config} bookings={bookings} setBookings={setBookings} />}
         {area === "banco" && view === "fatture" && <FattureView config={config} saveConfig={saveConfig} fatture={fatture} setFatture={setFatture} acquisti={acquisti} setAcquisti={setAcquisti} clients={clients} setClients={setClients} bozza={bozzaFattura} onBozzaUsata={() => setBozzaFattura(null)} onEmessa={fatturaEmessa} effatta={effatta} />}
         {area === "banco" && vistaExtra ? <vistaExtra.componente {...propsEstensione} /> : null}
         {area === "articoli" && areaCorrente ? (

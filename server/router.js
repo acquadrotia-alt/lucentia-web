@@ -25,6 +25,8 @@ import { rotteCliente } from "./cliente/rotte.js";
 import { gmail, gmailRitorno } from "./core/gmail.js";
 import { gcal } from "./core/gcal.js";
 import { effatta } from "./core/effatta.js";
+import { clientiOnline } from "./core/clienti.js";
+import { promemoriaRoute } from "./core/promemoria.js";
 import { icsGestione, icsFeed } from "./core/ics.js";
 import { getAzienda } from "./core/sessione.js";
 import { parseModuli } from "./core/util.js";
@@ -90,6 +92,8 @@ async function gestisci(context) {
 
   // ---- /api/prenota/:aid  e  /api/evento/:aid/:eid (pubbliche) ----
   if (segs[0] === "prenota" && segs[1]) return await prenota(context, segs, statoDi);
+  if (segs[0] === "clienti" && segs[1]) return await clientiOnline(context, segs, statoDi, cliente);
+  if (segs[0] === "promemoria") return await promemoriaRoute(context, segs, cliente, statoDi);
   if (segs[0] === "evento" && segs[1] && segs[2] && method === "GET") return await evento(context, segs, statoDi);
 
   // ---- da qui in poi serve la sessione (tranne le rotte su misura, che decidono da sé) ----

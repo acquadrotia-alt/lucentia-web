@@ -1,6 +1,7 @@
 import { createContext, useContext } from "react";
 import { Check, Gift, Star, Ban, UserX, Timer } from "lucide-react";
 import { operatoriDelServizio } from "../../orari.js";
+import { loyaltyConfig, clientPoints, clientBalance } from "../fidelity.js";
 
 // Versione dell'app (da package.json, iniettata da Vite) mostrata nel login.
 export const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
@@ -217,18 +218,9 @@ export function clientStats(code, bookings) {
   const servicesUsed = done.reduce((a, b) => a + b.serviceIds.length, 0);
   return { all: cb, past, upcoming, done, servicesUsed, rewards: Math.floor(servicesUsed / LOYALTY_GOAL), progress: servicesUsed % LOYALTY_GOAL };
 }
-export function loyaltyConfig(config) { const L = (config && config.loyalty) || {}; return { mode: L.mode || "flat", fromSales: !!L.fromSales, rewards: Array.isArray(L.rewards) ? L.rewards : [] }; }
+export { loyaltyConfig, clientPoints, clientBalance };
 export function marketingConfig(config) { const m = (config && config.marketing) || {}; return { msgInactive: m.msgInactive != null ? m.msgInactive : DEFAULT_MARKETING.msgInactive, msgServices: m.msgServices != null ? m.msgServices : DEFAULT_MARKETING.msgServices, msgProducts: m.msgProducts != null ? m.msgProducts : DEFAULT_MARKETING.msgProducts }; }
 export function waNumber(phone) { let d = String(phone || "").replace(/\D/g, ""); if (!d) return ""; if (d.startsWith("00")) d = d.slice(2); if (!d.startsWith("39") && d.length <= 11) d = "39" + d; return d; }
-export function clientPoints(code, bookings, sales, config, catalog) {
-  const L = loyaltyConfig(config);
-  const svcPts = (id) => { if (L.mode === "perService") { const s = (config.services || []).find((x) => x.id === id); return s && s.points != null ? Number(s.points) || 0 : 0; } return 1; };
-  let pts = 0;
-  (bookings || []).forEach((b) => { if ((b.status === "done" || b.status === "partial") && b.clientCode === code) pts += (b.serviceIds || []).reduce((a, id) => a + svcPts(id), 0); });
-  if (L.fromSales && Array.isArray(sales) && catalog) { const prodPts = (pid) => { const p = (catalog.products || []).find((x) => x.id === pid); return p && p.points != null ? Number(p.points) || 0 : 0; }; sales.forEach((s) => { if (s.type === "sale" && s.clientCode === code) (s.items || []).forEach((it) => { pts += prodPts(it.productId) * it.qty; }); }); }
-  return pts;
-}
-export function clientBalance(c, bookings, sales, config, catalog) { return clientPoints(c.code, bookings, sales, config, catalog) + (Number(c.bonusPoints) || 0) - (Number(c.redeemedPoints) || 0); }
 export function matchPackage(client, serviceIds) { if (!client || !Array.isArray(client.packages)) return null; for (const sid of (serviceIds || [])) { const pkg = client.packages.find((p) => p.serviceId === sid && (Number(p.used) || 0) < p.total); if (pkg) return pkg; } return null; }
 
 // --- Dati DEMO FREE (in memoria, mai salvati su disco) ---

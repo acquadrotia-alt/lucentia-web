@@ -6,6 +6,9 @@ import { impegniServizio, durataServizio, senzaOperatore, operatoriDelServizio }
 import { json, pad2, todayISO, parseModuli } from "./util.js";
 import { getAzienda } from "./sessione.js";
 import { getCollezione, eventiComeImpegni, onlineBookingsOf, senzaColonnaImpegni, computeStarts } from "./disponibilita.js";
+import { getSessioneCliente } from "./clienti.js";
+import { inviaEmailAppuntamento } from "./promemoria.js";
+import { leggiInt } from "./integrazioni.js";
 
 // I servizi prenotabili online = hanno una durata e c'è una risorsa capace di
 // farli. Un servizio a sola cabina (la lampada) non richiede nessun operatore.
@@ -100,7 +103,7 @@ export async function prenota(ctx, segs, statoDi) {
 
   // info attività + servizi prenotabili + contenuti del mini-sito
   if (segs[2] == null && method === "GET") {
-    return json(await payloadPubblico(env, aid, az, config, services, abilitatiDi));
+    return json({ ...(await payloadPubblico(env, aid, az, config, services, abilitatiDi)), accountRichiesto: booking.senzaAccount !== true });
   }
 
   // slot disponibili per data + servizio (+ operatore opzionale)
@@ -120,12 +123,16 @@ export async function prenota(ctx, segs, statoDi) {
   // crea prenotazione
   if (segs[2] == null && method === "POST") {
     const body = await request.json().catch(() => ({}));
+    // Serve l'account del cliente (registrazione da /registrazione), salvo che il salone lo escluda.
+    const cs = await getSessioneCliente(env, request);
+    const conAccount = cs && cs.azienda_id === aid ? cs : null;
+    if (booking.senzaAccount !== true && !conAccount) return json({ error: "Per prenotare accedi con la tua email e password." }, 401);
     const date = String(body.date || "");
     const serviceId = String(body.service || "");
     const start = Number(body.start);
-    const name = String(body.name || "").trim();
-    const phone = String(body.phone || "").trim();
-    const email = String(body.email || "").trim().toLowerCase();
+    const name = conAccount ? `${conAccount.nome || ""} ${conAccount.cognome || ""}`.trim() : String(body.name || "").trim();
+    const phone = conAccount ? String(conAccount.telefono || "") : String(body.phone || "").trim();
+    const email = conAccount ? String(conAccount.email || "").toLowerCase() : String(body.email || "").trim().toLowerCase();
     const note = String(body.note || "").trim().slice(0, 500);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !serviceId || !Number.isFinite(start) || !name || phone.replace(/\D/g, "").length < 6) {
       return json({ error: "Compila nome, telefono e scegli un orario valido." }, 400);
@@ -145,7 +152,7 @@ export async function prenota(ctx, segs, statoDi) {
     // associazione cliente: per telefono (normalizzato) sui clienti del salone
     const clients = (await getCollezione(env, aid, "clients")) || [];
     const norm = (p) => String(p || "").replace(/\D/g, "");
-    const existing = (Array.isArray(clients) ? clients : []).find((c) => norm(c.phone) && norm(c.phone) === norm(phone));
+    const existing = (conAccount && conAccount.client_code ? (Array.isArray(clients) ? clients : []).find((c) => c.code === conAccount.client_code) : null) || (Array.isArray(clients) ? clients : []).find((c) => norm(c.phone) && norm(c.phone) === norm(phone));
     let clientCode = existing ? existing.code : null;
     if (!existing) {
       const codes = (Array.isArray(clients) ? clients : []).map((c) => parseInt(c.code, 10)).filter((n) => !isNaN(n));
@@ -162,7 +169,12 @@ export async function prenota(ctx, segs, statoDi) {
         .bind(id, aid, date, start, end, serviceId, slot.staffId || null, clientCode, name, phone, email, note, JSON.stringify(slot.impegni || [])).run(),
       () => env.DB.prepare("INSERT INTO prenotazioni_online (id, azienda_id, data, start_min, end_min, service_id, staff_id, client_code, client_name, client_phone, client_email, note, stato) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'attiva')")
         .bind(id, aid, date, start, end, serviceId, slot.staffId || null, clientCode, name, phone, email, note).run());
-    return json({ ok: true, conferma: { date, start, end, label: `${pad2(Math.floor(start / 60))}:${pad2(start % 60)}`, service: svc.name, salone: az.denominazione } });
+    // la conferma via email, subito (modulo google con Gmail collegato)
+    let emailInviata = false;
+    if (email && parseModuli(az.moduli).includes("google") && ((await leggiInt(env, aid, "gmail:token")) || {}).refresh) {
+      try { emailInviata = (await inviaEmailAppuntamento(env, aid, config, { id, date, startMin: start, endMin: end, serviceIds: [serviceId], staffId: slot.staffId || null, clientName: name, clientEmail: email }, "conferma")).ok; } catch (e) {}
+    }
+    return json({ ok: true, emailInviata, conferma: { date, start, end, label: `${pad2(Math.floor(start / 60))}:${pad2(start % 60)}`, service: svc.name, salone: az.denominazione } });
   }
 
   // "Le mie prenotazioni": ricerca per numero di telefono (gestione self-service)
@@ -170,18 +182,22 @@ export async function prenota(ctx, segs, statoDi) {
   const svcName = (sid) => { const s = (config.services || []).find((x) => x.id === sid); return s ? s.name : "Servizio"; };
   const stName = (sid) => { const s = (config.staff || []).find((x) => x.id === sid); return s ? s.name : ""; };
   const normP = (p) => String(p || "").replace(/\D/g, "");
+  // col cookie dell'account si vedono le proprie; altrimenti per telefono
+  const csg = await getSessioneCliente(env, request);
+  const mioAccount = csg && csg.azienda_id === aid ? csg : null;
+  const mia = (r) => (mioAccount ? (r.client_code && r.client_code === mioAccount.client_code) || (r.client_email && String(r.client_email).toLowerCase() === mioAccount.email) : false);
   if (segs[2] === "mie" && method === "GET") {
     const phone = normP(url.searchParams.get("phone"));
-    if (phone.length < 6) return json({ items: [] });
+    if (phone.length < 6 && !mioAccount) return json({ items: [] });
     const res = await env.DB.prepare("SELECT * FROM prenotazioni_online WHERE azienda_id = ? AND stato = 'attiva' AND data >= ? ORDER BY data, start_min").bind(aid, todayISO()).all();
-    const items = (res.results || []).filter((r) => normP(r.client_phone) === phone).map((r) => ({ id: r.id, date: r.data, startMin: r.start_min, endMin: r.end_min, label: lbl(r.start_min), serviceId: r.service_id, serviceName: svcName(r.service_id), staffId: r.staff_id, staffName: stName(r.staff_id) }));
+    const items = (res.results || []).filter((r) => (phone.length >= 6 && normP(r.client_phone) === phone) || mia(r)).map((r) => ({ id: r.id, date: r.data, startMin: r.start_min, endMin: r.end_min, label: lbl(r.start_min), serviceId: r.service_id, serviceName: svcName(r.service_id), staffId: r.staff_id, staffName: stName(r.staff_id) }));
     return json({ items });
   }
   if (segs[2] === "annulla" && method === "POST") {
     const body = await request.json().catch(() => ({}));
     const phone = normP(body.phone);
     const row = await env.DB.prepare("SELECT * FROM prenotazioni_online WHERE id = ? AND azienda_id = ?").bind(String(body.id || ""), aid).first();
-    if (!row || row.stato !== "attiva" || normP(row.client_phone) !== phone) return json({ error: "Prenotazione non trovata." }, 404);
+    if (!row || row.stato !== "attiva" || !((phone.length >= 6 && normP(row.client_phone) === phone) || mia(row))) return json({ error: "Prenotazione non trovata." }, 404);
     await env.DB.prepare("UPDATE prenotazioni_online SET stato = 'annullata' WHERE id = ?").bind(row.id).run();
     return json({ ok: true });
   }
@@ -191,7 +207,7 @@ export async function prenota(ctx, segs, statoDi) {
     const ndate = String(body.date || "");
     const nstart = Number(body.start);
     const row = await env.DB.prepare("SELECT * FROM prenotazioni_online WHERE id = ? AND azienda_id = ?").bind(String(body.id || ""), aid).first();
-    if (!row || row.stato !== "attiva" || normP(row.client_phone) !== phone) return json({ error: "Prenotazione non trovata." }, 404);
+    if (!row || row.stato !== "attiva" || !((phone.length >= 6 && normP(row.client_phone) === phone) || mia(row))) return json({ error: "Prenotazione non trovata." }, 404);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(ndate) || !Number.isFinite(nstart)) return json({ error: "Orario non valido." }, 400);
     const svc = (config.services || []).find((s) => s.id === row.service_id);
     const dur = svc ? (durataServizio(svc) || (row.end_min - row.start_min)) : (row.end_min - row.start_min);

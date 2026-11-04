@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Calendar, Clock, Check, ChevronRight, ChevronLeft, User, Users, Phone, Mail, Sparkles, MapPin, ArrowRight, Scissors, AlertCircle, CalendarClock, Trash2, X, PartyPopper, Info, MessageCircle, Instagram, Facebook, Globe, ShoppingBag } from "lucide-react";
 import { AvatarSvg, avatarIdFor } from "./avatars.jsx";
 import { setBrandTab } from "./favicon.js";
+import { AreaCliente, AccessoCliente } from "./AreaCliente.jsx";
 import { gruppiServizi } from "./core/sito/contenuti.js";
 export { gruppiServizi };
 
@@ -46,6 +47,9 @@ export default function BookingPage({ aid }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [done, setDone] = useState(null);
+  const [account, setAccount] = useState(null); // null = controllo in corso, false = non collegato, {…} = cliente collegato
+  const ricaricaAccount = useCallback(async () => { try { const r = await fetch(`/api/clienti/${aid}/me`, { credentials: "include" }); const j = await r.json().catch(() => ({})); setAccount(r.ok && j.ok ? j : false); } catch (e) { setAccount(false); } }, [aid]);
+  useEffect(() => { ricaricaAccount(); }, [ricaricaAccount]);
 
   useEffect(() => {
     (async () => {
@@ -84,6 +88,8 @@ export default function BookingPage({ aid }) {
 
   const submit = async () => {
     if (!service || !slot) { setErr("Scegli servizio e orario."); return; }
+    // con l'account i dati vengono dall'account stesso (il server li prende da lì)
+    if (account && account.cliente) { f.name = `${account.cliente.nome} ${account.cliente.cognome}`; f.phone = account.cliente.telefono || "0000000"; f.email = account.cliente.email || ""; }
     if (!f.name.trim() || f.phone.replace(/\D/g, "").length < 6) { setErr("Inserisci nome e un numero di telefono valido."); return; }
     if (!privacy) { setErr("Per prenotare devi accettare l'informativa sulla privacy."); return; }
     setBusy(true); setErr("");
@@ -92,7 +98,7 @@ export default function BookingPage({ aid }) {
       const j = await r.json().catch(() => ({}));
       setBusy(false);
       if (!r.ok) { setErr(j.error || "Si è verificato un errore. Riprova."); if (r.status === 409) loadSlots(service.id, date, staffSel); return; }
-      setDone(j.conferma || {});
+      setDone({ ...(j.conferma || {}), emailInviata: !!j.emailInviata });
     } catch (e) { setBusy(false); setErr("Errore di rete. Riprova."); }
   };
 
@@ -127,7 +133,8 @@ export default function BookingPage({ aid }) {
             <div className="mt-5">
               <a href={googleCalUrl(done, b)} target="_blank" rel="noreferrer" className="w-full flex items-center justify-center gap-1.5 text-sm font-medium border border-stone-200 rounded-xl py-2.5 hover:bg-stone-50 transition"><Calendar size={15} className="text-stone-500" /> Aggiungi a Google Calendar</a>
             </div>
-            <p className="text-xs text-stone-400 mt-4">Puoi consultare o spostare la prenotazione da «Le mie prenotazioni».</p>
+            {done.emailInviata ? <p className="text-xs text-stone-500 mt-4 flex items-center justify-center gap-1.5"><Mail size={13} /> Ti abbiamo mandato un'email di conferma.</p> : null}
+            <p className="text-xs text-stone-400 mt-2">Puoi consultare o spostare la prenotazione da «Le mie prenotazioni».</p>
             <button onClick={() => { setDone(null); setView("manage"); }} className="mt-1 text-sm font-medium" style={{ color: primary }}>Le mie prenotazioni →</button>
             <div className="mt-3 pt-3 border-t border-stone-100"><a href={window.location.pathname + window.location.search} className="inline-flex items-center gap-1.5 text-sm font-medium text-stone-500 hover:text-stone-700">Prenota un altro appuntamento <ArrowRight size={15} /></a></div>
           </div>
@@ -171,7 +178,8 @@ export default function BookingPage({ aid }) {
           {view === "book" || view === "manage" ? (
             <div className="mt-3">
               {view === "book"
-                ? <button onClick={() => setView("manage")} className="text-sm font-medium hover:underline" style={{ color: primary }}>Hai già prenotato? Gestisci le tue prenotazioni →</button>
+                ? (account && account.cliente ? <button onClick={() => setView("manage")} className="text-sm font-medium hover:underline" style={{ color: primary }}>Ciao {account.cliente.nome}: la tua area (appuntamenti, punti, dati) →</button>
+                  : info.accountRichiesto ? null : <button onClick={() => setView("manage")} className="text-sm font-medium hover:underline" style={{ color: primary }}>Hai già prenotato? Gestisci le tue prenotazioni →</button>)
                 : <button onClick={() => setView("book")} className="text-sm font-medium text-stone-500 hover:text-stone-700 inline-flex items-center gap-1"><ChevronLeft size={15} /> Nuova prenotazione</button>}
             </div>
           ) : null}
@@ -181,7 +189,9 @@ export default function BookingPage({ aid }) {
       {view === "eventi" ? <EventiSection aid={aid} eventi={eventiPub} primary={primary} /> :
        view === "prodotti" ? <ProdottiSection catalogo={catalogo} primary={primary} /> :
        view === "info" ? <InfoSection salone={b} sito={sito} primary={primary} /> :
-       view === "manage" ? <ManageBookings aid={aid} primary={primary} /> : (
+       view === "manage" ? (account && account.cliente ? <AreaCliente aid={aid} primary={primary} account={account} ricarica={ricaricaAccount} salone={b} onEsci={async () => { await fetch(`/api/clienti/${aid}/logout`, { method: "POST", credentials: "include" }).catch(() => {}); setAccount(false); setView("book"); }} onNuovo={() => setView("book")} /> : info.accountRichiesto ? <div className="max-w-md mx-auto px-4 py-6"><AccessoCliente aid={aid} primary={primary} salone={b} onEntrato={ricaricaAccount} /></div> : <ManageBookings aid={aid} primary={primary} />) :
+       view === "book" && info.accountRichiesto && account === null ? <div className="flex justify-center py-12"><div className="lc-spinner" /></div> :
+       view === "book" && info.accountRichiesto && !account ? <div className="max-w-md mx-auto px-4 py-6"><AccessoCliente aid={aid} primary={primary} salone={b} onEntrato={ricaricaAccount} /></div> : (
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
         {/* 1. Servizio */}
@@ -253,10 +263,15 @@ export default function BookingPage({ aid }) {
         {service && slot ? (
           <section className="lc-card p-4 lc-fade-up">
             <div className="flex items-center gap-2 mb-3"><span className="w-6 h-6 rounded-full text-xs font-semibold flex items-center justify-center" style={accent}>{stepData}</span><h2 className="font-semibold text-stone-900 tracking-tight">I tuoi dati</h2></div>
+            {account && account.cliente ? (
+              <div className="rounded-xl bg-stone-50 border border-stone-100 p-3 text-sm mb-2.5"><div className="font-medium text-stone-800">{account.cliente.nome} {account.cliente.cognome}</div><div className="text-stone-500 text-xs mt-0.5">{account.cliente.telefono} · {account.cliente.email}</div></div>
+            ) : null}
             <div className="space-y-2.5">
+              {account && account.cliente ? null : <>
               <Field icon={User}><input value={f.name} onChange={(e) => { setF({ ...f, name: e.target.value }); setErr(""); }} placeholder="Nome e cognome *" className="flex-1 text-sm focus:outline-none bg-transparent" /></Field>
               <Field icon={Phone}><input value={f.phone} onChange={(e) => { setF({ ...f, phone: e.target.value }); setErr(""); }} type="tel" placeholder="Telefono *" className="flex-1 text-sm focus:outline-none bg-transparent" /></Field>
               <Field icon={Mail}><input value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} type="email" placeholder="Email (facoltativa)" className="flex-1 text-sm focus:outline-none bg-transparent" /></Field>
+              </>}
               <textarea value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} rows={2} placeholder="Note per il salone (facoltative)" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm focus:outline-none focus:border-stone-400 transition-colors" />
             </div>
 

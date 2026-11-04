@@ -92,6 +92,18 @@
   </div>
 
   <div class="card">
+    <h2>Stampante non fiscale (ESC/POS, 80 mm, rete)</h2>
+    <p class="d">Stampa le <b>ricevute dei movimenti parziali</b> (acconti, pagamenti in più tranche), che non passano dal registratore. Una normale stampante termica ESC/POS collegata in rete (porta 9100).</p>
+    <label class="chk"><input type="checkbox" id="escpos-attiva"> Usa la stampante non fiscale</label>
+    <div class="g g3" style="margin-top:10px">
+      <div><label class="f" for="escpos-host">Indirizzo IP</label><input id="escpos-host" placeholder="192.168.1.60"></div>
+      <div><label class="f" for="escpos-port">Porta</label><input id="escpos-port" type="number" value="9100"></div>
+      <div><label class="f" for="escpos-larghezza">Caratteri per riga</label><select id="escpos-larghezza"><option value="42">42 (80 mm, font A)</option><option value="48">48 (80 mm, font stretto)</option><option value="32">32 (58 mm)</option></select></div>
+    </div>
+    <div class="row" style="margin-top:12px"><button id="escpos-prova">Stampa di prova</button><span id="escpos-esito" class="msg"></span></div>
+  </div>
+
+  <div class="card">
     <h2>Scontrino</h2>
     <div class="g g2">
       <div><label class="f" for="messaggio">Messaggio in fondo (max 42 caratteri)</label><input id="messaggio" maxlength="42"></div>
@@ -121,6 +133,7 @@
   function riempi() {
     ["url", "host", "matricola", "scheme", "port", "path", "timeout", "aliquotaPredefinita", "aliquotaServizi", "messaggio", "rigaReso"].forEach(function (k) { $(k).value = cfg[k] == null ? "" : cfg[k]; });
     $("simula").checked = !!cfg.simula; $("cassetto").checked = !!cfg.cassetto;
+    var ep = cfg.escpos || {}; $("escpos-attiva").checked = !!ep.attiva; $("escpos-host").value = ep.host || ""; $("escpos-port").value = ep.port || 9100; $("escpos-larghezza").value = String(ep.larghezza || 42);
     $("pc-tipo").value = cfg.pagamenti.contanti.tipo; $("pc-nome").value = cfg.pagamenti.contanti.nome;
     $("pe-tipo").value = cfg.pagamenti.elettronico.tipo; $("pe-nome").value = cfg.pagamenti.elettronico.nome;
     simTesto(); disegnaReparti();
@@ -152,6 +165,7 @@
     n.reparti = (cfg.reparti || []).filter(function (r) { return String(r.numero || "").trim(); });
     n.pagamenti = { contanti: { tipo: $("pc-tipo").value.replace(/\D/g, "") || "1", nome: $("pc-nome").value || "CONTANTI" }, elettronico: { tipo: $("pe-tipo").value.replace(/\D/g, "") || "2", nome: $("pe-nome").value || "ELETTRONICO" } };
     n.categorieReparto = cfg.categorieReparto || {};
+    n.escpos = { attiva: $("escpos-attiva").checked, host: $("escpos-host").value.trim(), port: Number($("escpos-port").value) || 9100, larghezza: Number($("escpos-larghezza").value) || 42 };
     return n;
   }
   $("salva").onclick = function () {
@@ -159,6 +173,14 @@
     if (!n.url || !/^https?:\/\//.test(n.url)) { e.className = "msg err"; e.textContent = "Scrivi l'indirizzo del gestionale (inizia con https://)."; return; }
     if (!n.simula && !n.host) { e.className = "msg err"; e.textContent = "Senza simulazione serve l'indirizzo IP del registratore."; return; }
     C.salva(n, pw).then(function (c) { cfg = c; e.className = "msg ok"; e.textContent = "Salvato."; }).catch(function (err) { e.className = "msg err"; e.textContent = "Non salvato: " + err.message; });
+  };
+  $("escpos-prova").onclick = function () {
+    var e = $("escpos-esito"); var n = raccogli(); e.className = "msg"; e.textContent = "Stampo…";
+    if (!n.escpos.host) { e.className = "msg err"; e.textContent = "Manca l'indirizzo IP della stampante."; return; }
+    // prima si salvano le impostazioni, perché la stampa usa quelle salvate
+    C.salva(n, pw).then(function (c) { cfg = c; var righe = ["\x1b@", "\x1ba\x01", "\x1bE\x01LUCENTIA CASSA\x1bE\x00\n", "Stampa di prova\n", new Date().toLocaleString("it-IT") + "\n\n", "Se leggi questo foglio la stampante\nnon fiscale e' collegata.\n\n\n\n", "\x1dVB\x00"].join(""); return C.escposPrint(btoa(righe)); })
+      .then(function () { e.className = "msg ok"; e.textContent = "Stampa mandata alla stampante."; })
+      .catch(function (err) { e.className = "msg err"; e.textContent = err.message; });
   };
   $("verifica").onclick = function () {
     var n = raccogli(); var e = $("verifica-esito"); e.className = "msg"; e.textContent = "Verifico…";

@@ -39,7 +39,7 @@ function scenario(mode) {
     staff: [op("sara", "Sara"), op("federica", "Federica"), op("anna", "Anna")],
     cabine: [{ id: "cab-lampada", name: "Cabina lampada" }],
     closures: [],
-    onlineBooking: { mode, leadHours: 0, horizonDays: 30 },
+    onlineBooking: { mode, leadHours: 0, horizonDays: 30, senzaAccount: true },
   };
   return { config, aziende: { [AID]: { id: AID, denominazione: "Centro", attiva: 1, licenza_scadenza: "2099-01-01", moduli: JSON.stringify(["online", "opinf"]) } },
     dati: { config, bookings: [], clients: [], eventi: [] }, online: [], inserite: [] };

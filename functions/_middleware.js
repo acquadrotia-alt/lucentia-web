@@ -15,7 +15,7 @@ export async function onRequest(context) {
   const url = new URL(request.url);
   const origin = url.origin;
   const path = url.pathname.replace(/\/+$/, "") || "/";
-  if (path.startsWith("/api") || path.startsWith("/gestionale") || path.startsWith("/utenti") || /\.[a-z0-9]{2,5}$/i.test(path) && path !== "/sitemap.xml" && path !== "/robots.txt") return next();
+  if (path.startsWith("/api") || path.startsWith("/gestionale") || path.startsWith("/utenti") || path.startsWith("/registrazione") || /\.[a-z0-9]{2,5}$/i.test(path) && path !== "/sitemap.xml" && path !== "/robots.txt") return next();
 
   try {
     if (path === "/robots.txt") return new Response(robots(origin), { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" } });

@@ -4,6 +4,7 @@ import SalonApp from "./core/salone/SalonApp.jsx";
 import PannelloHub from "./hub/PannelloHub.jsx";
 import OperatorApp from "./OperatorApp.jsx";
 import UtentiApp from "./UtentiApp.jsx";
+import RegistrazionePage from "./RegistrazionePage.jsx";
 import Site from "./site/Site.jsx";
 import BookingPage from "./BookingPage.jsx";
 import EventoPage from "./EventoPage.jsx";
@@ -212,6 +213,7 @@ function AppCliente({ inst, me, stato, refresh, logout }) {
     return <UtentiApp user={me.user} azienda={azu} onLogout={logout} />;
   }
   if (p === "/prenota") return <BookingPage aid={inst.salone.id} />;
+  if (p === "/registrazione") return <RegistrazionePage aid={inst.salone.id} />;
   if (p.startsWith("/evento/")) return <EventoPage token={`${inst.salone.id}:${p.slice("/evento/".length)}`} />;
   return <SitoSalone inst={inst} path={p} vai={vai} />;
 }
@@ -221,6 +223,7 @@ export default function App() {
   // prenotazione, ?evento=<aziendaId>:<eventoId> per la pagina di un evento.
   const qs = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const prenotaId = qs ? qs.get("prenota") : null;
+  const registrazioneId = qs ? qs.get("registrazione") : null;
   const eventoToken = qs ? qs.get("evento") : null;
 
   const [stato, setStato] = useState("loading"); // loading | login | ready
@@ -253,6 +256,7 @@ export default function App() {
 
   if (eventoToken) return <EventoPage token={eventoToken} />;
   if (prenotaId) return <BookingPage aid={prenotaId} />;
+  if (registrazioneId) return <RegistrazionePage aid={registrazioneId} />;
 
   if (!inst) return <Caricamento />;
   if (inst.modalita === "cliente") return <AppCliente inst={inst} me={me} stato={stato} refresh={refresh} logout={logout} />;

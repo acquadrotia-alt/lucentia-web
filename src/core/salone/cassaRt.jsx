@@ -12,6 +12,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Banknote, CreditCard, Printer, AlertTriangle, Check, Receipt, Settings } from "lucide-react";
 import { rtImpostazioniDi, rtRicevutaDaRighe, rtEmetti, rtRettifica, rtInvia, rtXmlServizio, rtAnnullaAperto, rtImporto } from "../cassa/customrt.js";
+import { ricevutaNonFiscale, inBase64 } from "../cassa/escpos.js";
 
 export const cassaRtDisponibile = () => typeof window !== "undefined" && !!(window.lucentiaCassa && window.lucentiaCassa.programma);
 const SIM_KEY = "lc-rt-simulazione";
@@ -64,8 +65,22 @@ export function useCassaRt() {
 }
 
 // ---- dal carrello e dagli appuntamenti alle righe del registratore ----
-export function righeDaCarrello(cart, catalog) {
-  return (cart || []).map((it) => { const p = (catalog.products || []).find((x) => x.id === it.productId) || {}; const f = (p.formats || []).find((x) => x.id === it.formatId) || {}; return { descrizione: it.name + (it.label && it.label !== "Standard" ? " " + it.label : ""), qta: it.qty, prezzo: it.price, aliquota: f.aliquota || p.aliquota || "", categoria: p.categoryId || "" }; });
+export function righeDaCarrello(cart, catalog, config, cfg) {
+  return (cart || []).map((it) => {
+    if (it.tipo === "servizio") { const s = ((config && config.services) || []).find((x) => x.id === it.serviceId) || {}; return { descrizione: it.name, qta: it.qty, prezzo: it.price, aliquota: s.aliquota || (cfg && (cfg.aliquotaServizi || cfg.aliquotaPredefinita)) || "", categoria: "" }; }
+    const p = (catalog.products || []).find((x) => x.id === it.productId) || {}; const f = (p.formats || []).find((x) => x.id === it.formatId) || {};
+    return { descrizione: it.name + (it.label && it.label !== "Standard" ? " " + it.label : ""), qta: it.qty, prezzo: it.price, aliquota: f.aliquota || p.aliquota || "", categoria: p.categoryId || "" };
+  });
+}
+// La ricevuta NON fiscale dei movimenti parziali, sulla stampante ESC/POS del programma.
+export const stampanteNonFiscale = (cfg) => !!(cfg && cfg.escpos && cfg.escpos.attiva && cfg.escpos.host);
+export async function stampaRicevutaNonFiscale({ righe, totale, totaleDovuto, cliente, pagamento, note, numero }, cfg, branding) {
+  if (!cassaRtDisponibile()) return { ok: false, errore: "solo nel programma della cassa" };
+  if (!stampanteNonFiscale(cfg)) { await rtChiedi("Stampante non fiscale non configurata", "La ricevuta del pagamento parziale va su una stampante ESC/POS: configurala in Impostazioni della cassa → Stampante non fiscale. Il movimento viene registrato comunque.", [{ label: "Ok", value: "ok" }], "warn"); return { ok: false, errore: "non configurata" }; }
+  const d = new Date();
+  const byte = ricevutaNonFiscale({ larghezza: cfg.escpos.larghezza, intestazione: { nome: branding && branding.name, indirizzo: branding && branding.address, telefono: branding && branding.phone }, titolo: "RICEVUTA DI PAGAMENTO PARZIALE", cliente, data: d.toLocaleString("it-IT"), numero, righe, totale, totaleDovuto, residuo: totaleDovuto != null ? Math.max(0, totaleDovuto - totale) : null, pagamento, note, piede: cfg.messaggio });
+  try { await window.lucentiaCassa.escposPrint(inBase64(byte)); return { ok: true }; }
+  catch (e) { await rtChiedi("Ricevuta non stampata", String((e && e.message) || e) + "\n\nIl movimento viene registrato comunque: puoi ristampare la ricevuta dallo storico.", [{ label: "Ok", value: "ok" }], "warn"); return { ok: false, errore: String((e && e.message) || e) }; }
 }
 export function righeDaAppuntamento(b, config, importo, cfg) {
   const servizi = (b.serviceIds || []).map((id) => (config.services || []).find((s) => s.id === id)).filter(Boolean);

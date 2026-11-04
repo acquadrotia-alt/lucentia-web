@@ -217,7 +217,8 @@ un modulo del core, non nella cartella del cliente.
   (obbligatoria per il modulo), `migrazione-risorse.sql` aggiunge la colonna `impegni`
   (senza, una prenotazione online occupa l'operatore per tutta la durata del servizio),
   `migrazione-installazioni.sql` crea `installazioni` (portale) e `licenza_locale` (installazioni),
-  `migrazione-integrazioni.sql` crea `integrazioni` (segreti di Gmail/Google Calendar, codice del feed).
+  `migrazione-integrazioni.sql` crea `integrazioni` (segreti di Gmail/Google Calendar, codice del feed),
+  `migrazione-clienti-online.sql` crea `clienti_online` e `sessioni_clienti` (account dei clienti).
 - **Gmail e Google Calendar** (modulo `google`, Impostazioni → Google): il titolare crea un
   progetto su Google Cloud, abilita Gmail API e Google Calendar API, pubblica la schermata
   consenso OAuth (Esterno) con gli ambiti `gmail.send` e `calendar`, crea un ID client
@@ -249,6 +250,13 @@ un modulo del core, non nella cartella del cliente.
   Si costruisce da GitHub → Actions → «Programma Windows (Lucentia Cassa)»; sul PC del cliente si
   installa l'.exe e in Cassa → Impostazioni (password del tecnico 0724) si scrivono l'indirizzo
   del gestionale e i dati del registratore. Dettagli in `desktop/LEGGIMI.md`.
+- **Account dei clienti e email automatiche**: il cliente si registra da `/registrazione` (link da dare
+  a mano, non è sul sito) con nome, cognome, telefono, email e password; riceve l'email di benvenuto
+  (col modulo Google e Gmail collegato) e da «Prenota» entra con email e password: appuntamenti,
+  punti, dati, nuova prenotazione. Senza account non si prenota (si può togliere in Impostazioni →
+  Sito e prenotazioni). Email automatiche: conferma a ogni appuntamento, promemoria alle 19 del giorno
+  prima e un'ora prima; il giro lo chiama GitHub ogni 10 minuti sul portale (`promemoria.yml`), che
+  lo gira alle installazioni. Migrazione: `migrazione-clienti-online.sql`.
 - **Zona ripristino** (Impostazioni → Dati e backup): azzera punti, azzera vendite e
   appuntamenti, ripristino totale, protetti da password.
 - **Svuota dati** (pannello, saloni di prova): riporta un salone a licenza vuota lasciando

@@ -18,6 +18,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Mail, Calendar, Check, X, ExternalLink, Trash2, Copy, RefreshCw, ChevronRight, AlertTriangle, Send, Rss, Clock, MapPin, User, CalendarCheck, Link2, AlertCircle } from "lucide-react";
 import { minToStr, strToMin, todayStr, addDays, fmtDate, Field } from "./comuni.jsx";
+import { MODELLI_EMAIL, TIPI_EMAIL, SEGNAPOSTO_EMAIL, compila } from "../email/modelli.js";
 
 async function googleApi(rotta, action, body) {
   try {
@@ -43,18 +44,14 @@ export const GOOGLE_ESITI = {
 };
 
 // ---- Email ai clienti: testi, segnaposto, firma -------------------------
-export const DEFAULT_GOOGLE = {
-  firma: "", copiaAMe: false, conferma: true,
-  modelli: {
-    conferma: { oggetto: "Conferma appuntamento {data} alle {ora} · {salone}", testo: "Gentile {cliente},\n\nle confermiamo l'appuntamento di {data} alle {ora} per {servizi}{conOperatore}.\n\nSe avesse un imprevisto la preghiamo di avvisarci con anticipo{telefonoFrase}.\n\nA presto,\n{salone}" },
-    promemoria: { oggetto: "Promemoria appuntamento {data} alle {ora} · {salone}", testo: "Gentile {cliente},\n\nle ricordiamo l'appuntamento di {data} alle {ora} per {servizi}{conOperatore}.\n\nLa aspettiamo{indirizzoFrase}.\n\n{salone}" },
-  },
-};
+export const DEFAULT_GOOGLE = { firma: "", copiaAMe: false, conferma: true, confermaAutomatica: true, promemoriaGiornoPrima: true, promemoriaOraPrima: true, modelli: MODELLI_EMAIL };
 export function googleConfig(config) {
   const g = (config && config.google) || {};
-  return { ...DEFAULT_GOOGLE, ...g, modelli: { conferma: { ...DEFAULT_GOOGLE.modelli.conferma, ...((g.modelli || {}).conferma || {}) }, promemoria: { ...DEFAULT_GOOGLE.modelli.promemoria, ...((g.modelli || {}).promemoria || {}) } } };
+  const modelli = {};
+  Object.keys(MODELLI_EMAIL).forEach((k) => { modelli[k] = { ...MODELLI_EMAIL[k], ...((g.modelli || {})[k] || {}) }; });
+  return { ...DEFAULT_GOOGLE, ...g, modelli };
 }
-export const compila = (t, v) => String(t || "").replace(/\{(\w+)\}/g, (m, k) => (v[k] != null ? String(v[k]) : m));
+export { compila };
 export const emailValida = (s) => /^[^\s@<>(),;:"]+@[^\s@<>(),;:"]+\.[^\s@<>(),;:"]+$/.test(String(s || "").trim());
 export function valoriPrenotazione(b, config) {
   const br = (config && config.branding) || {};
@@ -419,7 +416,6 @@ export function GoogleImpostazioni({ config, saveConfig, esito, onEsitoVisto }) 
   const copia = async (v) => { try { await navigator.clipboard.writeText(v); setMsg({ ok: true, testo: "Copiato." }); } catch (e) { prompt("Copia:", v); } };
   const esitoInfo = esito ? GOOGLE_ESITI[esito] || GOOGLE_ESITI.errore : null;
   const collegato = !!(stato && stato.collegato);
-  const SEGNAPOSTO = "{cliente} {data} {ora} {fine} {servizi} {operatore} {conOperatore} {salone} {telefono} {telefonoFrase} {indirizzo} {indirizzoFrase}";
 
   return (
     <>
@@ -485,18 +481,24 @@ export function GoogleImpostazioni({ config, saveConfig, esito, onEsitoVisto }) 
 
       <section className="lc-card p-5">
         <h3 className="font-semibold text-stone-900 tracking-tight flex items-center gap-2"><Send size={16} className="brand-accent" /> 3 · Email ai clienti</h3>
-        <p className="text-sm text-stone-500 mt-0.5 mb-3">Dall'agenda, aprendo un appuntamento, puoi mandare al cliente una <b>conferma</b> o un <b>promemoria</b> col testo qui sotto. L'indirizzo è quello preso alla prenotazione o quello in anagrafica.</p>
+        <p className="text-sm text-stone-500 mt-0.5 mb-3">Dall'agenda, aprendo un appuntamento, puoi mandare una conferma o un promemoria. In più, da sole: la <b>conferma</b> a ogni nuovo appuntamento, il <b>promemoria alle 19 del giorno prima</b> e quello <b>un'ora prima</b>, e il <b>benvenuto</b> a chi si registra per prenotare online. Partono tutte dalla tua casella Gmail, al cliente che ha un'email.</p>
+        <div className="space-y-2 mb-4">
+          {[["confermaAutomatica", "Conferma automatica a ogni nuovo appuntamento"], ["promemoriaGiornoPrima", "Promemoria alle 19 del giorno prima"], ["promemoriaOraPrima", "Promemoria un'ora prima"]].map(([k, l]) => (
+            <label key={k} className="flex items-center gap-2.5 text-sm text-stone-700 cursor-pointer"><input type="checkbox" checked={g[k] !== false} onChange={(e) => salvaG({ [k]: e.target.checked })} /> {l}</label>
+          ))}
+          <p className="text-[11px] text-stone-400">Il giro delle email automatiche passa ogni 10 minuti circa.</p>
+        </div>
         <div className="space-y-4">
-          {[["conferma", "Conferma appuntamento"], ["promemoria", "Promemoria"]].map(([k, titolo]) => (
+          {TIPI_EMAIL.map(([k, titolo]) => (
             <div key={k} className="rounded-xl border border-stone-200 p-3 space-y-2">
               <div className="text-sm font-medium text-stone-800">{titolo}</div>
               <Field label="Oggetto"><input defaultValue={g.modelli[k].oggetto} onBlur={(e) => salvaModello(k, { oggetto: e.target.value })} className={inp} /></Field>
               <Field label="Testo"><textarea defaultValue={g.modelli[k].testo} onBlur={(e) => salvaModello(k, { testo: e.target.value })} rows={6} className={`${inp} leading-relaxed`} /></Field>
             </div>
           ))}
-          <p className="text-[11px] text-stone-400 leading-relaxed">Segnaposto che si riempiono da soli: <span className="text-stone-500">{SEGNAPOSTO}</span></p>
+          <p className="text-[11px] text-stone-400 leading-relaxed">Segnaposto che si riempiono da soli: <span className="text-stone-500">{SEGNAPOSTO_EMAIL}</span></p>
           <Field label="Firma (in fondo a ogni email)"><textarea defaultValue={g.firma} onBlur={(e) => salvaG({ firma: e.target.value })} rows={3} placeholder={`${(config.branding && config.branding.name) || "Il salone"}\nTel. …`} className={inp} /></Field>
-          <label className="flex items-start gap-2.5 text-sm text-stone-700 cursor-pointer"><input type="checkbox" checked={!!g.copiaAMe} onChange={(e) => salvaG({ copiaAMe: e.target.checked })} className="mt-0.5" /><span><span className="font-medium block">Mandane una copia anche a me</span><span className="text-xs text-stone-400">In copia nascosta, alla tua casella Gmail.</span></span></label>
+          <label className="flex items-start gap-2.5 text-sm text-stone-700 cursor-pointer"><input type="checkbox" checked={!!g.copiaAMe} onChange={(e) => salvaG({ copiaAMe: e.target.checked })} className="mt-0.5" /><span><span className="font-medium block">Mandane una copia anche a me</span><span className="text-xs text-stone-400">In copia nascosta, alla tua casella Gmail (solo per le email mandate a mano dall'agenda).</span></span></label>
         </div>
       </section>
 

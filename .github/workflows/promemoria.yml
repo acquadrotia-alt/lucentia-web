@@ -1,0 +1,15 @@
+# Le email automatiche ai clienti (conferma, promemoria alle 19 del giorno prima, un'ora prima)
+# partono da un giro che Cloudflare Pages non può programmare da sé: lo chiama GitHub ogni
+# 10 minuti sul portale, che lo esegue per i saloni ospitati e lo gira a ogni installazione.
+# Vale solo nel repository del ceppo: i repository dei clienti lo ereditano ma non lo eseguono.
+name: Promemoria email ai clienti
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+jobs:
+  giro:
+    if: github.repository == 'acquadrotia-alt/lucentia-web'
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS -m 120 -X POST https://lucentia-app.com/api/promemoria/giro
