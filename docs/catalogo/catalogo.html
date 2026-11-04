@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Lucentia — Catalogo delle funzionalità</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm 18mm 14mm; }
+  :root { --gold: #b8893b; --accent: #8a6a2e; --soft: #f5efe2; --ink: #1c1917; --stone: #57534e; --line: #e7e5e4; --bg: #fafaf9; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; color: var(--ink); font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 10.5pt; line-height: 1.5; }
+  h1, h2, h3, h4 { margin: 0; letter-spacing: -0.02em; line-height: 1.15; }
+  p { margin: 0 0 7pt; }
+  ul { margin: 4pt 0 8pt 0; padding-left: 16pt; }
+  li { margin: 0 0 2.5pt; }
+  .pb { page-break-before: always; }
+  .nobreak { page-break-inside: avoid; }
+  .muted { color: var(--stone); }
+  .small { font-size: 9pt; }
+  .eyebrow { font-size: 8.5pt; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); margin-bottom: 4pt; }
+  /* copertina */
+  .cover { height: 257mm; display: flex; flex-direction: column; justify-content: space-between; border-radius: 10mm; padding: 16mm; background: linear-gradient(150deg, #f5efe2 0%, #ebe1cc 60%, #e4d7bd 100%); position: relative; overflow: hidden; }
+  .cover .logo { height: 16mm; }
+  .cover h1 { font-size: 34pt; max-width: 120mm; }
+  .cover h1 span { color: var(--accent); }
+  .cover .sub { font-size: 13pt; color: var(--stone); max-width: 125mm; margin-top: 8pt; }
+  .cover .shot { position: absolute; left: 18mm; top: 138mm; width: 150mm; border-radius: 5mm; box-shadow: 0 18px 50px rgba(28,25,23,.25); border: 1px solid #d6cfbf; transform: rotate(-2deg); }
+  .cover .phone { position: absolute; right: 16mm; bottom: 30mm; width: 34mm; border-radius: 6mm; border: 2.2mm solid var(--ink); box-shadow: 0 18px 40px rgba(28,25,23,.3); transform: rotate(5deg); }
+  .cover .foot { position: relative; z-index: 2; background: rgba(245,239,226,.85); border-radius: 4mm; padding: 4mm 5mm; margin: 0 -4mm -4mm; }
+  .cover .foot { display: flex; justify-content: space-between; align-items: flex-end; font-size: 9pt; color: var(--stone); }
+  .pill { display: inline-block; background: #fff; border: 1px solid #e0d6c1; border-radius: 99pt; padding: 2pt 9pt; font-size: 8.5pt; font-weight: 600; color: var(--accent); margin-right: 4pt; }
+  /* sezioni */
+  .sez { margin-top: 10pt; }
+  .sez > h2 { font-size: 20pt; margin-bottom: 4pt; }
+  .sez > h2 small { display: block; font-size: 10pt; font-weight: 400; color: var(--stone); letter-spacing: 0; margin-top: 3pt; }
+  h3 { font-size: 13pt; margin: 12pt 0 4pt; }
+  h4 { font-size: 10.5pt; margin: 8pt 0 2pt; }
+  .lead { font-size: 11.5pt; color: var(--stone); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8pt; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8pt; }
+  .card { border: 1px solid var(--line); border-radius: 8pt; padding: 8pt 10pt; background: #fff; page-break-inside: avoid; }
+  .card h4 { margin-top: 0; }
+  .card.dark { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .card.dark .muted { color: #d6d3d1; }
+  .card.soft { background: var(--soft); border-color: #e9dcc0; }
+  .esempio { border-left: 3pt solid var(--gold); background: var(--soft); border-radius: 0 7pt 7pt 0; padding: 7pt 10pt; margin: 8pt 0 10pt; page-break-inside: avoid; }
+  .esempio .t { font-size: 8.5pt; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 2pt; }
+  .esempio p { margin: 0 0 3pt; }
+  .shot { width: 100%; border: 1px solid var(--line); border-radius: 6pt; display: block; page-break-inside: avoid; }
+  .shotrow { display: grid; grid-template-columns: 1fr 1fr; gap: 8pt; margin: 6pt 0 10pt; page-break-inside: avoid; }
+  .shotrow figcaption, figure figcaption { font-size: 8.5pt; color: var(--stone); margin-top: 3pt; }
+  figure { margin: 6pt 0 10pt; page-break-inside: avoid; }
+  .phones { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10pt; page-break-inside: avoid; }
+  .phones img { width: 100%; border-radius: 6mm; border: 2mm solid var(--ink); display: block; }
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; page-break-inside: auto; }
+  th, td { text-align: left; padding: 4pt 6pt; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.08em; color: var(--stone); background: var(--bg); }
+  tr { page-break-inside: avoid; }
+  .tag { display: inline-block; font-size: 7.5pt; font-weight: 600; padding: 1pt 6pt; border-radius: 99pt; background: var(--soft); color: var(--accent); }
+  .tag.base { background: #e7e5e4; color: var(--stone); }
+  .check li { list-style: none; position: relative; padding-left: 13pt; }
+  .check li::before { content: "✓"; position: absolute; left: 0; color: var(--accent); font-weight: 700; }
+  .toc li { margin-bottom: 3pt; }
+  .toc .n { display: inline-block; width: 16pt; color: var(--accent); font-weight: 700; }
+  .band { background: var(--ink); color: #fff; border-radius: 8pt; padding: 12pt 14pt; margin-top: 10pt; page-break-inside: avoid; }
+  .band h3 { margin-top: 0; color: #fff; }
+  .band .muted { color: #d6d3d1; }
+  .band .gold { color: var(--gold); }
+  .kv { display: grid; grid-template-columns: 38mm 1fr; gap: 2pt 8pt; font-size: 9.5pt; }
+  .kv b { color: var(--stone); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<!-- ======================= COPERTINA ======================= -->
+<section class="cover">
+  <div>
+    <img class="logo" src="img/lucentia-logo.png" alt="Lucentia">
+    <div style="margin-top:22mm">
+      <div class="eyebrow">Catalogo delle funzionalità · edizione novembre 2026</div>
+      <h1>Il tuo sito. Il tuo dominio.<br>Il tuo <span>gestionale</span>.</h1>
+      <div class="sub">Tutto ciò che Lucentia fa per un centro estetico o un salone di parrucchieri, funzione per funzione, con esempi presi dal centro estetico di prova <b>Estetica Aura</b>.</div>
+      <div style="margin-top:10pt"><span class="pill">Agenda e cabine</span><span class="pill">Cassa fiscale</span><span class="pill">App per il telefono</span><span class="pill">Clienti online</span><span class="pill">Fatture e IVA</span><span class="pill">Personale</span></div>
+    </div>
+  </div>
+  <img class="shot" src="img/agenda-desktop.webp" alt="">
+  <img class="phone" src="img/utenti-mobile.webp" alt="">
+  <div class="foot">
+    <div><b>Office Solution</b> · Oleggio (NO)<br>officesolutionoleggio.com · lucentia-app.com</div>
+    <div style="text-align:right">Tel. 392 024 1955<br>Amministrazione@cmav.it</div>
+  </div>
+</section>
+
+<!-- ======================= INDICE E CONCETTO ======================= -->
+<section class="sez pb">
+  <div class="eyebrow">Indice</div>
+  <h2>Cosa trovi in questo catalogo</h2>
+  <div class="grid2" style="margin-top:8pt">
+    <ol class="toc" style="margin:0;padding-left:0;list-style:none">
+      <li><span class="n">1</span> Cos'è Lucentia e come è fatto</li>
+      <li><span class="n">2</span> Le aree di lavoro del gestionale</li>
+      <li><span class="n">3</span> Banco: agenda, clienti, buoni, vendita e fatture</li>
+      <li><span class="n">4</span> Lucentia Cassa: lo scontrino fiscale e gli acconti</li>
+      <li><span class="n">5</span> L'app per il telefono delle operatrici</li>
+      <li><span class="n">6</span> Il sito del salone, le prenotazioni e l'area clienti</li>
+      <li><span class="n">7</span> Email automatiche: conferme, promemoria, recensioni</li>
+    </ol>
+    <ol class="toc" style="margin:0;padding-left:0;list-style:none">
+      <li><span class="n">8</span> Articoli: catalogo, carichi, magazzino, ordini</li>
+      <li><span class="n">9</span> Marketing e statistiche, cruscotto settimanale</li>
+      <li><span class="n">10</span> Gestione personale: fogli ore, timbrature, ferie, provvigioni</li>
+      <li><span class="n">11</span> Impostazioni, dati, backup e registro delle attività</li>
+      <li><span class="n">12</span> Più dispositivi insieme, anche senza rete</li>
+      <li><span class="n">13</span> Personalizzazione: si modifica e si adatta</li>
+      <li><span class="n">14</span> Moduli, licenza, sicurezza e assistenza</li>
+    </ol>
+  </div>
+
+  <h2 style="margin-top:18pt"><span class="eyebrow" style="display:block">1</span>Cos'è Lucentia e come è fatto</h2>
+  <p class="lead">Lucentia non è un abbonamento a un software condiviso con mille altre attività: è un <b>progetto dedicato</b>. Ogni salone ha il suo sito vetrina sul proprio dominio, il suo gestionale su <b>tuodominio.it/gestionale</b>, un database tutto suo e i moduli scelti insieme.</p>
+  <div class="grid3">
+    <div class="card"><h4>tuodominio.it</h4><p class="muted small">Il sito del salone: foto, servizi col listino, team, eventi, prodotti, contatti, pagine legali. Si aggiorna dal gestionale.</p></div>
+    <div class="card dark"><h4>tuodominio.it/gestionale</h4><p class="muted small">Agenda, clienti, cassa, fatture, magazzino, statistiche, personale, impostazioni. Dal browser, senza installare nulla.</p></div>
+    <div class="card"><h4>tuodominio.it/utenti · /prenota</h4><p class="muted small">L'app per il telefono delle operatrici e la pagina di prenotazione con l'area del cliente.</p></div>
+  </div>
+  <div class="esempio">
+    <div class="t">L'esempio che useremo: Estetica Aura</div>
+    <p><b>Estetica Aura</b> è il centro estetico di prova con cui mostriamo il programma ai clienti. Ha tre operatori — <b>Clarissa</b> (viso e benessere), <b>Marta</b> (mani, piedi ed epilazione) e <b>Luigi</b> (specialista uomo) — tre cabine (viso e massaggi, corpo ed epilazione, Aura Men) e un listino di 61 servizi in otto categorie: Face Rituals, Body Wellness, Epilazione, Nail Care, Aura Men e i pacchetti. Prenotazione online in modalità «ottimizzata», preavviso di 6 ore per spostare o annullare.</p>
+    <p class="small muted">Tutti i nomi di clienti, numeri e importi di questo catalogo sono dati di prova.</p>
+  </div>
+  <div class="grid2">
+    <div class="card soft"><h4>Una licenza annuale, tutto incluso</h4><p class="small">Dominio, hosting su Cloudflare, sito vetrina, gestionale con i moduli scelti, aggiornamenti e assistenza diretta. Prezzo su preventivo, in base ai moduli e alle personalizzazioni.</p></div>
+    <div class="card soft"><h4>Si modifica e si adatta</h4><p class="small">Servizi a fasi, operatori, cabine, moduli, testi del sito e delle email, regole di prenotazione: tutto si configura. E ciò che non c'è si realizza su misura (vedi capitolo 13).</p></div>
+  </div>
+</section>
+
+<!-- ======================= 2 AREE ======================= -->
+<section class="sez pb">
+  <div class="eyebrow">2</div>
+  <h2>Le aree di lavoro del gestionale</h2>
+  <p class="lead">All'accesso il gestionale mostra una home con un riquadro per ogni area. Si entra in un'area e si passa fra le sue sezioni; chi ha solo la cassa (Lucentia Cassa) vede direttamente il Banco aperto sulla Vendita.</p>
+  <table>
+    <thead><tr><th style="width:30mm">Area</th><th style="width:48mm">Sezioni</th><th>A cosa serve</th></tr></thead>
+    <tbody>
+      <tr><td><b>Banco</b></td><td>Agenda · Clienti · Buoni · Vendita · Fatture</td><td>Il lavoro di tutti i giorni: appuntamenti, schede cliente, buoni regalo, cassa con scontrini e storico, fatture elettroniche.</td></tr>
+      <tr><td><b>Articoli</b></td><td>Catalogo · Carichi · Magazzino · Ordini</td><td>Prodotti con formati, costi e giacenze; documenti di carico dai fornitori; magazzino con scorta minima; ordini ai fornitori.</td></tr>
+      <tr><td><b>Marketing</b></td><td>Messaggi · Statistiche</td><td>Messaggi WhatsApp ai clienti; cruscotto della settimana, costo del venduto, incassi e classifiche.</td></tr>
+      <tr><td><b>Gestione personale</b></td><td>Fogli ore · Riepilogo del mese · Ferie e assenze · Dipendenti</td><td>Ore lavorate, timbrature dal telefono, ferie pianificate, straordinari, provvigioni, invio al consulente paghe.</td></tr>
+      <tr><td><b>Impostazioni</b></td><td>Attività · Servizi · Operatori e cabine · Sito e prenotazioni · Google · Fatture · Dati e backup · Licenza</td><td>Tutto ciò che configura il salone, le integrazioni, i backup e il registro delle attività.</td></tr>
+    </tbody>
+  </table>
+  <h3>Fuori dal gestionale, ma collegati</h3>
+  <div class="grid3">
+    <div class="card"><h4>Lucentia Cassa</h4><p class="small muted">Il programma Windows per il PC del negozio: apre il Banco e parla col registratore telematico Custom e con la stampante delle ricevute. Capitolo 4.</p></div>
+    <div class="card"><h4>/utenti</h4><p class="small muted">L'app per il telefono delle operatrici: la propria agenda, la scheda dell'appuntamento, un nuovo appuntamento, la timbratura. Capitolo 5.</p></div>
+    <div class="card"><h4>/prenota e /registrazione</h4><p class="small muted">La prenotazione online con l'account del cliente, i suoi appuntamenti, i punti, i dati. Capitolo 6.</p></div>
+  </div>
+</section>
+
+<!-- ======================= 3 BANCO ======================= -->
+<section class="sez pb">
+  <div class="eyebrow">3</div>
+  <h2>Banco: agenda, clienti, buoni, vendita e fatture</h2>
+  <h3>Agenda intelligente</h3>
+  <p>L'agenda mostra la giornata per operatore (vista Elenco) o a griglia con <b>una colonna per ogni risorsa</b>, operatrici e cabine (vista Studio); giorno, 3 giorni o settimana. Un servizio non è «una durata su un operatore» ma una <b>sequenza di fasi</b> su operatori e cabine diversi: applicazione, posa, risciacquo. Gli orari liberi si calcolano sulle risorse reali — turni, chiusure, ferie, cabine con più unità — e la prenotazione manuale può anche sovrapporre di proposito.</p>
+  <div class="esempio">
+    <div class="t">Esempio · Estetica Aura</div>
+    <p>L'<b>Aura Skin Ritual</b> dura 75 minuti: 25 minuti di Clarissa, poi 30 di posa in cabina viso senza nessuno, poi 20 minuti ancora con Clarissa. Nei 30 minuti di posa l'agenda propone Clarissa per un contorno occhi da 20 minuti a un'altra cliente; la cabina resta occupata per tutti i 75. In vista Studio si vedono le due fasi come due blocchi con lo spazio vuoto in mezzo.</p>
+  </div>
+  <figure><img class="shot" src="img/studio-desktop.webp" alt=""><figcaption>Vista Studio: una colonna per Clarissa, Marta, Luigi e per ciascuna delle tre cabine.</figcaption></figure>
+  <ul class="check">
+    <li>Stati dell'appuntamento: svolto, parziale (acconto), non presentato, annullato; importo incassato; nota; scontrino collegato.</li>
+    <li>Eventi del salone (serate, corsi, open day) che occupano gli operatori e hanno una pagina pubblica sul sito.</li>
+    <li>Google Calendar a due vie per ogni operatrice (modulo Google); feed iCalendar per telefono e Outlook.</li>
+    <li>Dettaglio dell'appuntamento con la linea del tempo per risorsa, le fasi e chi fa cosa.</li>
+  </ul>
+
+  <h3>Scheda cliente</h3>
+  <p>Anagrafica, telefono ed email, storico appuntamenti e acquisti, tessera, note, <b>allergie e patologie</b> con avviso quando si apre l'appuntamento (modulo Allergeni), punti fedeltà e premi (modulo Fidelity), pacchetti prepagati con le sedute residue (modulo Pacchetti), dati di fatturazione, account online collegato.</p>
+  <div class="esempio"><div class="t">Esempio · Estetica Aura</div><p>Anna Rossi ha «Nichel» fra le allergie: quando Marta apre il suo appuntamento per il semipermanente, l'avviso è in alto, in rosso. Elena Romano ha un pacchetto di 5 semipermanenti: a ogni seduta svolta il gestionale ne scala una e mostra «3 di 5 rimaste».</p></div>
+
+  <h3>Buoni regalo</h3>
+  <p>Buoni a valore o a pacchetto con codice univoco, saldo residuo, storico degli utilizzi, stampa elegante; vendibili in cassa.</p>
+
+  <h3>Vendita (cassa e storico)</h3>
+  <p>Carrello con prodotti e servizi, cliente collegato, punti generati, «Venduto da» per le provvigioni, totale o <b>Parziale</b> (acconto). Lo storico mostra ogni vendita con lo scontrino, i resi e gli annulli; da una vendita si emette la fattura. Con Lucentia Cassa i tasti diventano <b>Contanti</b> e <b>Carta / POS</b> e lo scontrino esce dal registratore (capitolo 4).</p>
+
+  <h3>Fatture elettroniche (modulo Fatture)</h3>
+  <p>Fatture e note di credito FatturaPA che nascono dalla cassa, da un appuntamento svolto o da zero, numerazione automatica per anno, regime ordinario o forfettario, bollo virtuale. Con <b>Effatta</b> collegato partono allo SDI con un clic e l'esito (consegnata, scartata…) arriva da solo; le <b>fatture dei fornitori</b> si scaricano da sole e diventano carichi di magazzino. Il <b>riepilogo IVA</b> del mese, trimestre o anno mette a confronto IVA a debito e a credito per aliquota, con il CSV per il commercialista.</p>
+  <div class="shotrow">
+    <figure><img class="shot" src="img/fatture-desktop.webp" alt=""><figcaption>Fatture emesse con lo stato dello SDI.</figcaption></figure>
+    <figure><img class="shot" src="img/iva-desktop.webp" alt=""><figcaption>Il riepilogo IVA del periodo, con il CSV per il commercialista.</figcaption></figure>
+  </div>
+</section>
+
+<!-- ======================= 4 CASSA ======================= -->
+<section class="sez pb">
+  <div class="eyebrow">4</div>
+  <h2>Lucentia Cassa: lo scontrino fiscale e gli acconti</h2>
+  <p class="lead">Per chi ha il registratore telematico <b>Custom</b> (K3 RT e gli altri di terza generazione), Lucentia Cassa è il programma Windows che apre il Banco del gestionale e parla col registratore e con la stampante delle ricevute.</p>
+  <ul class="check">
+    <li><b>Scontrino fiscale</b> da Vendita → Contanti o Carta / POS, e da un appuntamento con «Svolto». La vendita si registra nel gestionale solo dopo che lo scontrino è uscito: mai doppioni, mai vendite perse.</li>
+    <li>Tasto <b>Appuntamento</b>: i servizi dell'appuntamento entrano nel carrello, col prezzo modificabile; l'appuntamento risulta svolto con l'incasso e il numero dello scontrino.</li>
+    <li><b>Parziale</b>: un acconto senza scontrino, con <b>ricevuta non fiscale</b> stampata sulla stampante termica da 80 mm in rete (si ristampa dallo storico).</li>
+    <li>Resi e annulli, lettura X, <b>chiusura Z</b>, stato dell'invio dei corrispettivi, apertura cassetto, ristampa, annullamento del documento aperto.</li>
+    <li>Impostazioni del tecnico protette da password: IP e matricola del registratore, reparti e aliquote, pagamenti, messaggio di cortesia, stampante non fiscale. Modalità <b>simulazione</b> per le prove.</li>
+    <li>Funziona <b>anche senza rete</b>: la cassa si apre dalla copia locale e gli scontrini si registrano, poi tutto si allinea da solo (capitolo 12).</li>
+  </ul>
+  <div class="esempio"><div class="t">Esempio · Estetica Aura</div><p>Federica Costa paga l'Aura Deep Relax (89 €) e una crema viso (38 €): Luigi preme «Appuntamento», sceglie l'appuntamento di Federica, aggiunge la crema dal catalogo e preme «Carta / POS». Il registratore stampa lo scontrino Z120 n. 41; nello storico restano scontrino, metodo e cliente, e l'appuntamento passa a «svolto · 89 €». Per la ricostruzione unghie con acconto di 30 €, Marta usa «Parziale»: esce la ricevuta non fiscale con «Resta da pagare 35 €».</p></div>
+  <figure><img class="shot" src="img/cassa-desktop.webp" alt=""><figcaption>Il carrello con i tasti Contanti e Carta / POS, il Parziale con ricevuta non fiscale, la scheda Registratore accanto allo Storico.</figcaption></figure>
+</section>
+
+<!-- ======================= 5 UTENTI ======================= -->
+<section class="sez pb">
+  <div class="eyebrow">5</div>
+  <h2>L'app per il telefono delle operatrici</h2>
+  <p class="lead">Su <b>tuodominio.it/utenti</b>, con l'accesso del salone, ogni operatrice sceglie il suo nome e ha in tasca ciò che le serve in cabina. Quello che fa dal telefono compare al banco entro un minuto, e viceversa.</p>
+  <div class="phones">
+    <img src="img/utenti-mobile.webp" alt="">
+    <img src="img/timbra-mobile.webp" alt="">
+    <img src="img/agenda-mobile.webp" alt="">
+  </div>
+  <div class="grid2" style="margin-top:10pt">
+    <div class="card"><h4>La mia agenda</h4><p class="small muted">I propri appuntamenti di oggi e dei prossimi giorni, con gli eventi del salone.</p></div>
+    <div class="card"><h4>Scheda appuntamento</h4><p class="small muted">L'appuntamento in corso: servizi e fasi, note, allergie e patologie della cliente, pacchetti, chiamata e WhatsApp.</p></div>
+    <div class="card"><h4>Nuovo appuntamento</h4><p class="small muted">Cliente (anche nuova), servizi, operatore o «il primo libero», orario: quattro passi.</p></div>
+    <div class="card"><h4>Timbra</h4><p class="small muted">Entrata e uscita di oggi, dritte nel foglio ore della Gestione personale. Se si sbaglia, il titolare corregge da lì.</p></div>
+  </div>
+  <div class="esempio"><div class="t">Esempio · Estetica Aura</div><p>Clarissa arriva alle 8:58, apre /utenti, tocca «Timbra l'entrata». Alle 10 vede dalla scheda che Sara Esposito ha la pelle sensibile; mentre Sara è in posa, prenota per lei il prossimo rituale fra tre settimane con «il primo libero». Al banco, l'appuntamento è già in agenda.</p></div>
+</section>
+
+<!-- ======================= 6 SITO E CLIENTI ======================= -->
+<section class="sez pb">
+  <div class="eyebrow">6</div>
+  <h2>Il sito del salone, le prenotazioni e l'area clienti</h2>
+  <p class="lead">Il sito vive sul dominio del salone con le sue foto, i suoi colori e i suoi testi: home, servizi col listino per categoria, team, eventi, prodotti, contatti e pagine legali generate dai dati dell'attività. È fatto per i motori di ricerca (titoli, descrizioni, dati strutturati, sitemap) e si aggiorna dal gestionale.</p>
+  <h3>Prenotazione online (modulo Prenotazioni online)</h3>
+  <p>Il cliente sceglie servizio, operatrice (o chiunque) e orario fra quelli davvero liberi. Tre modi di proporre gli orari: <b>anti-vuoto</b> (subito dopo l'ultimo appuntamento), <b>griglia</b> (ogni quarto d'ora) o <b>ottimizzata</b> (gli orari che non lasciano buchi inutilizzabili). Preavviso minimo, giorni in avanti, sospensione temporanea, scelta dei servizi prenotabili.</p>
+  <h3>L'account del cliente</h3>
+  <p>Dal link di registrazione (dato dal salone, non pubblicato) il cliente crea il suo account con nome, telefono, email e password e riceve l'email di benvenuto. Da «Prenota» entra nella <b>sua area</b>:</p>
+  <ul class="check">
+    <li>i suoi appuntamenti, compresi quelli presi al banco, con <b>Sposta</b> e <b>Annulla</b> entro il preavviso del salone;</li>
+    <li><b>«Ripeti l'ultimo»</b>: ripropone l'ultimo trattamento con la stessa operatrice;</li>
+    <li>i punti fedeltà e i premi raggiunti, i propri dati, il cambio di email e password, il recupero della password da soli.</li>
+  </ul>
+  <div class="esempio"><div class="t">Esempio · Estetica Aura</div><p>Anna Rossi ha un semipermanente giovedì alle 9 con Marta, preso per telefono. Mercoledì sera, dall'area cliente, lo sposta a venerdì alle 11: Aura ha 6 ore di preavviso, quindi è permesso; il gestionale scrive nel registro «Anna Rossi ha spostato l'appuntamento…». A dicembre tocca «Ripeti l'ultimo» e trova già selezionati il semipermanente e Marta.</p></div>
+  <div class="phones" style="grid-template-columns: repeat(3, 1fr)">
+    <img src="img/prenota-mobile.webp" alt="">
+    <img src="img/cliente-mobile.webp" alt="">
+    <img src="img/evento-mobile.webp" alt="">
+  </div>
+</section>
+
+<!-- ======================= 7 EMAIL ======================= -->
+<section class="sez pb">
+  <div class="eyebrow">7</div>
+  <h2>Email automatiche: conferme, promemoria, recensioni</h2>
+  <p class="lead">Col modulo Google le email partono dalla <b>casella Gmail del salone</b> e restano fra le sue «Inviate». Testi e firma si personalizzano con i segnaposto (cliente, data, ora, servizi, operatrice, salone…).</p>
+  <table>
+    <thead><tr><th style="width:42mm">Email</th><th>Quando parte</th></tr></thead>
+    <tbody>
+      <tr><td><b>Conferma</b></td><td>A ogni nuovo appuntamento: subito per le prenotazioni online, entro dieci minuti per quelle prese al banco o dal telefono.</td></tr>
+      <tr><td><b>Promemoria</b></td><td>Alle 19 del giorno prima e un'ora prima dell'appuntamento.</td></tr>
+      <tr><td><b>Richiesta di recensione</b></td><td>Dopo il <b>primo</b> appuntamento svolto del cliente, una volta sola, col link alla pagina Google o Facebook del salone.</td></tr>
+      <tr><td><b>Benvenuto</b></td><td>Alla registrazione dell'account, con il riepilogo dei dati.</td></tr>
+      <tr><td><b>Recupero password</b></td><td>Quando il cliente lo chiede da «Password dimenticata?» (link valido un'ora).</td></tr>
+      <tr><td><b>Dall'agenda, a mano</b></td><td>Conferma o promemoria mandati dal titolare aprendo l'appuntamento.</td></tr>
+      <tr><td><b>Ordini e fogli ore</b></td><td>Gli ordini ai fornitori e i fogli ore al consulente paghe partono dalla stessa casella.</td></tr>
+    </tbody>
+  </table>
+  <p class="small muted" style="margin-top:6pt">Ogni email parte una volta sola; gli automatismi si accendono o spengono uno per uno. Il <b>Marketing WhatsApp</b> (promemoria, auguri, promozioni dalla scheda cliente) resta a disposizione per chi preferisce il messaggio.</p>
+</section>
+
+<!-- ======================= 8 ARTICOLI ======================= -->
+<section class="sez pb">
+  <div class="eyebrow">8</div>
+  <h2>Articoli: catalogo, carichi, magazzino, ordini</h2>
+  <ul class="check">
+    <li><b>Catalogo</b>: categorie, prodotti con formati, prezzo, costo, scorta minima, aliquota IVA, punti fedeltà, descrizione per il sito.</li>
+    <li><b>Carichi</b> come documenti: fornitore, bolla o fattura, numero, data, righe con quantità e costo. Dal modulo Fatture, un carico parte dalla fattura del fornitore scaricata da Effatta.</li>
+    <li><b>Magazzino</b>: giacenze, valore al prezzo e al costo, sotto scorta ed esauriti, rettifiche d'inventario con motivo, CSV.</li>
+    <li><b>Ordini ai fornitori</b>: proposti dal sotto scorta o a mano; stati bozza, inviato, ricevuto; email al fornitore (modulo Google) o stampa; <b>«Ricevi la merce»</b> registra il carico e alza le giacenze.</li>
+  </ul>
+  <div class="esempio"><div class="t">Esempio · Estetica Aura</div><p>Il siero alla vitamina C è sceso a 2 pezzi, sotto la scorta minima di 2. In Articoli → Ordini, «Proponi dal sotto scorta» prepara l'ordine con 3 pezzi; Clarissa aggiunge 4 oli corpo, scrive ordini@cosmeticinord.it e preme «Invia per email». Quando arriva lo scatolone, «Ricevi la merce» carica tutto in magazzino e l'ordine diventa «ricevuto».</p></div>
+  <div class="shotrow">
+    <figure><img class="shot" src="img/magazzino-desktop.webp" alt=""><figcaption>Magazzino con giacenze, scorte minime e valore.</figcaption></figure>
+    <figure><img class="shot" src="img/ordini-desktop.webp" alt=""><figcaption>Un ordine inviato al fornitore, pronto per «Ricevi la merce».</figcaption></figure>
+  </div>
+</section>
+
+<!-- ======================= 9 STATISTICHE ======================= -->
+<section class="sez pb">
+  <div class="eyebrow">9</div>
+  <h2>Marketing e statistiche, cruscotto settimanale</h2>
+  <p class="lead">Il <b>cruscotto della settimana</b> mette in una schermata l'incasso (servizi e prodotti), gli appuntamenti svolti, online e annullati, l'<b>occupazione</b> di ogni operatrice (ore impegnate su ore disponibili), i clienti nuovi e abituali, i no-show e il confronto con la settimana prima. Sotto, il <b>costo del venduto</b> con ricavo, costo della merce e margine per prodotto, gli incassi mese per mese, i servizi più richiesti, le fasce orarie, i clienti più attivi e i buoni regalo. Tutto esportabile in CSV.</p>
+  <figure><img class="shot" src="img/statistiche-desktop.webp" alt=""><figcaption>Il cruscotto della settimana di Estetica Aura: occupazione per operatrice, incasso giorno per giorno, clienti.</figcaption></figure>
+  <div class="esempio"><div class="t">Esempio · Estetica Aura</div><p>Lunedì mattina il titolare apre le Statistiche: la settimana scorsa Clarissa ha lavorato al 32% delle ore disponibili con 18 appuntamenti e 504 € di servizi, Luigi al 21% nei suoi quattro giorni. Un no-show su 43 appuntamenti (2%). Il margine sui prodotti è del 55%: la crema viso rende bene, lo scrub meno. Decide di proporre lo scrub in abbinamento ai massaggi e di spingere la prenotazione online nei pomeriggi di Luigi.</p></div>
+  <p><b>Marketing WhatsApp</b> (modulo Marketing): clienti che non vengono da tempo, clienti di un servizio o di un prodotto, messaggi pronti con il nome della cliente, inviati da WhatsApp con un tocco.</p>
+</section>
+
+<!-- ======================= 10 PERSONALE ======================= -->
+<section class="sez pb">
+  <div class="eyebrow">10</div>
+  <h2>Gestione personale: fogli ore, timbrature, ferie, provvigioni</h2>
+  <ul class="check">
+    <li><b>Fogli ore</b> mensili per dipendente: lavoro, riposo, ferie, permesso, malattia, festivo; entrata, uscita e pausa; ore ordinarie e <b>straordinari</b> oltre le ore giornaliere di contratto; compilazione automatica dagli orari dell'operatrice.</li>
+    <li><b>Timbrature</b> dal telefono (/utenti → Timbra): entrano nel foglio ore col segno dello smartphone.</li>
+    <li><b>Ferie e assenze</b> pianificate: ferie, permessi, malattia per periodo; compaiono nel foglio ore e, per chi lavora in agenda, bloccano le prenotazioni in quei giorni.</li>
+    <li><b>Provvigioni</b> in percentuale sui servizi svolti e sui prodotti venduti («Venduto da» in cassa), nel riepilogo del mese.</li>
+    <li>Riepilogo del mese per tutti, stampa/PDF, CSV e <b>invio al consulente paghe</b> via email con gli allegati (modulo Google).</li>
+    <li>Dipendenti fuori agenda (reception, apprendisti) con ore di contratto, giorni, matricola e note per il consulente.</li>
+  </ul>
+  <div class="esempio"><div class="t">Esempio · Estetica Aura</div><p>Marta sarà in ferie dal 13 al 17: il titolare la pianifica in «Ferie e assenze» e la prenotazione online smette di proporla in quei giorni. A fine mese il riepilogo mostra per Clarissa 27 giorni, 3 ore e 37 di straordinari, e 72,40 € di provvigioni (10% sui servizi, 5% sui prodotti). «Invia tutti al consulente» manda i fogli ore allo Studio Paghe Verdi con CSV e PDF.</p></div>
+  <figure><img class="shot" src="img/personale-desktop.webp" alt=""><figcaption>Il foglio ore di Clarissa, con le timbrature arrivate dal telefono.</figcaption></figure>
+</section>
+
+<!-- ======================= 11 IMPOSTAZIONI ======================= -->
+<section class="sez pb">
+  <div class="eyebrow">11</div>
+  <h2>Impostazioni, dati, backup e registro delle attività</h2>
+  <div class="grid2">
+    <div class="card"><h4>Attività e aspetto</h4><p class="small muted">Nome, logo, colori, contatti, orari e chiusure; listino PDF col logo; favicon e foto del sito.</p></div>
+    <div class="card"><h4>Servizi</h4><p class="small muted">Durata, prezzo, categoria, aliquota, chi può farlo, fasi su operatori e cabine, prenotabile online o no.</p></div>
+    <div class="card"><h4>Operatori e cabine</h4><p class="small muted">Orari di ogni operatrice, ferie, foto o avatar, cabina abituale; cabine con orari propri e più unità; accessi operatore con password.</p></div>
+    <div class="card"><h4>Sito e prenotazioni</h4><p class="small muted">Testi e foto del sito, dati legali per privacy e cookie, regole di prenotazione, registrazione dei clienti, catalogo in vetrina.</p></div>
+    <div class="card"><h4>Google e Fatture</h4><p class="small muted">Collegamento Gmail e calendari, testi delle email, automatismi, link recensioni; dati della ditta, numerazione, credenziali Effatta.</p></div>
+    <div class="card"><h4>Dati e backup</h4><p class="small muted">Esporta e importa backup; backup automatico in una cartella del PC a un orario; <b>backup scaricato al primo avvio del giorno</b> dal computer; zona ripristino protetta da password.</p></div>
+  </div>
+  <h3>Registro delle attività</h3>
+  <p>Chi ha fatto cosa e quando: accessi, salvataggi (con cosa è cambiato), impostazioni, scontrini, fatture, backup, timbrature, modifiche fatte dai clienti dalla loro area. Si filtra per tipo e periodo, si esporta in CSV, si conserva 180 giorni.</p>
+  <figure><img class="shot" src="img/registro-desktop.webp" alt=""><figcaption>Backup e registro delle attività in Impostazioni → Dati e backup.</figcaption></figure>
+</section>
+
+<!-- ======================= 12 INSIEME ======================= -->
+<section class="sez pb">
+  <div class="eyebrow">12</div>
+  <h2>Più dispositivi insieme, anche senza rete</h2>
+  <p class="lead">Banco, telefoni delle operatrici, Lucentia Cassa e area dei clienti scrivono nello stesso gestionale. Ogni modifica si salva <b>un record alla volta</b> e arriva agli altri dispositivi entro un minuto: nessuno sovrascrive il lavoro dell'altro.</p>
+  <div class="grid3">
+    <div class="card"><h4>Si salva da solo</h4><p class="small muted">Niente tasto «salva»: ogni cambiamento parte da solo e resta anche se si chiude la scheda.</p></div>
+    <div class="card"><h4>Coda senza rete</h4><p class="small muted">Se internet manca, i salvataggi restano in coda e partono appena torna la linea; una spia nell'intestazione lo dice.</p></div>
+    <div class="card dark"><h4>La cassa non si ferma</h4><p class="small muted">Lucentia Cassa si apre anche senza rete dalla copia locale, emette gli scontrini (il registratore è in rete locale) e allinea tutto dopo.</p></div>
+  </div>
+  <div class="esempio"><div class="t">Esempio · Estetica Aura</div><p>Alle 11 la linea salta. Luigi, in cassa, batte due scontrini: escono dal registratore e restano in attesa. Marta, dal telefono, non riesce a prenotare: lo farà fra dieci minuti. Alle 11:20 la rete torna: i due scontrini salgono sul server, il banco li vede nello storico entro un minuto.</p></div>
+</section>
+
+<!-- ======================= 13 PERSONALIZZAZIONE ======================= -->
+<section class="sez pb">
+  <div class="eyebrow">13</div>
+  <h2>Personalizzazione: si modifica e si adatta</h2>
+  <p class="lead">Lucentia nasce per essere <b>adattato al modo di lavorare di ogni salone</b>, all'inizio e ogni volta che qualcosa cambia. Niente di quello che vedi in questo catalogo è fisso.</p>
+  <div class="grid2">
+    <div class="card soft"><h4>Lo configuri tu, dal gestionale</h4><ul class="check small" style="margin-bottom:0"><li>Servizi, durate, prezzi, categorie e fasi su operatori e cabine</li><li>Operatori, orari, cabine, chiusure, ferie</li><li>Regole di prenotazione online e preavviso</li><li>Testi, foto e pagine del sito; testi delle email; messaggi WhatsApp</li><li>Premi fedeltà, pacchetti, aliquote, numerazione delle fatture</li><li>Moduli: solo quelli che servono, accesi anche dopo</li></ul></div>
+    <div class="card soft"><h4>Lo realizziamo noi, su misura</h4><ul class="check small" style="margin-bottom:0"><li>Il sito con la grafica, i colori e i caratteri del salone</li><li>Viste e sezioni aggiuntive nel gestionale, per il singolo cliente</li><li>Integrazioni con altri programmi, stampanti, registratori, servizi</li><li>Automazioni sul metodo di lavoro (promemoria, report, export)</li><li>Campi in più nella scheda cliente o nell'appuntamento</li><li>Modifiche a una funzione esistente, se serve lavorare diversamente</li></ul></div>
+  </div>
+  <p style="margin-top:8pt">Ogni installazione ha il suo codice separato dal «ceppo» comune: le personalizzazioni del singolo salone restano sue e <b>gli aggiornamenti generali arrivano lo stesso</b>, senza perderle. Un modulo in più si accende dal portale Lucentia e compare subito nel gestionale, senza interruzioni.</p>
+  <div class="esempio"><div class="t">Esempio · Estetica Aura</div><p>Aura ha chiesto le categorie «Aura Men» separate nel listino del sito e la cabina Aura Men riservata a Luigi: due impostazioni, fatte dal gestionale. Se un giorno volesse una scheda «trattamento viso» con le foto prima/dopo della cliente, è una vista su misura che si aggiunge al suo gestionale senza toccare quello degli altri saloni.</p></div>
+</section>
+
+<!-- ======================= 14 MODULI E LICENZA ======================= -->
+<section class="sez pb">
+  <div class="eyebrow">14</div>
+  <h2>Moduli, licenza, sicurezza e assistenza</h2>
+  <table>
+    <thead><tr><th style="width:44mm">Modulo</th><th>Cosa accende</th></tr></thead>
+    <tbody>
+      <tr><td><span class="tag base">sempre incluso</span><br><b>Base</b></td><td>Agenda con operatori, cabine e fasi; clienti; buoni regalo; eventi; app per il telefono; gestione personale; listino PDF; backup; registro delle attività; accessi operatori (secondo il livello).</td></tr>
+      <tr><td><span class="tag">modulo</span><br><b>Fidelity &amp; premi</b></td><td>Punti da servizi e vendite, premi, riscatto dalla scheda e dall'area cliente.</td></tr>
+      <tr><td><span class="tag">modulo</span><br><b>Pacchetti sedute</b></td><td>Pacchetti prepagati con sedute residue scalate a ogni appuntamento.</td></tr>
+      <tr><td><span class="tag">modulo</span><br><b>Cassa, magazzino &amp; ordini</b></td><td>Vendita, storico, catalogo, carichi, magazzino, ordini ai fornitori, costo del venduto. Con Lucentia Cassa, gli scontrini dal registratore Custom.</td></tr>
+      <tr><td><span class="tag">modulo</span><br><b>Statistiche &amp; cruscotto</b></td><td>Cruscotto settimanale, costo del venduto, incassi, classifiche, CSV.</td></tr>
+      <tr><td><span class="tag">modulo</span><br><b>Marketing WhatsApp</b></td><td>Messaggi ai clienti dalla scheda: inattivi, per servizio, per prodotto.</td></tr>
+      <tr><td><span class="tag">modulo</span><br><b>Allergeni &amp; patologie</b></td><td>Schede salute con avvisi sugli appuntamenti.</td></tr>
+      <tr><td><span class="tag">modulo</span><br><b>Prenotazioni online</b></td><td>Prenotazione dal sito, account dei clienti, area cliente con sposta/annulla e «Ripeti l'ultimo».</td></tr>
+      <tr><td><span class="tag">modulo</span><br><b>Gmail &amp; Google Calendar</b></td><td>Email automatiche dalla casella del salone, calendari a due vie, feed iCalendar, ordini ed email al consulente.</td></tr>
+      <tr><td><span class="tag">modulo</span><br><b>Fatture elettroniche</b></td><td>FatturaPA, invio allo SDI tramite Effatta, esiti, fatture dei fornitori, riepilogo IVA.</td></tr>
+      <tr><td><span class="tag">livello</span><br><b>Operatori</b></td><td>1 operatore, fino a 3, oppure illimitati.</td></tr>
+      <tr><td><span class="tag">su misura</span><br><b>Integrazioni</b></td><td>Funzioni, collegamenti e automazioni realizzati sul metodo di lavoro del salone.</td></tr>
+    </tbody>
+  </table>
+  <div class="grid2" style="margin-top:10pt">
+    <div class="card"><h4>La licenza annuale comprende</h4><ul class="check small" style="margin-bottom:0"><li>Dominio registrato o collegato, con rinnovo</li><li>Hosting su Cloudflare: veloce, sempre raggiungibile</li><li>Sito vetrina personalizzato</li><li>Gestionale con i moduli scelti, app per il telefono, Lucentia Cassa</li><li>Database dedicato, backup, registro</li><li>Aggiornamenti e assistenza diretta per tutta la durata</li></ul></div>
+    <div class="card"><h4>Sicurezza e dati</h4><ul class="check small" style="margin-bottom:0"><li>Un database solo per il tuo salone, isolato dagli altri</li><li>Accessi con email e password cifrata; sessioni protette</li><li>I clienti entrano solo nella loro area, con la loro password</li><li>Segreti delle integrazioni mai nel browser</li><li>Backup esportabili in qualsiasi momento: i dati sono tuoi</li><li>Sito pronto per il GDPR: privacy, cookie, consensi</li></ul></div>
+  </div>
+  <div class="band">
+    <h3>Come si parte</h3>
+    <p class="muted">1 · <span class="gold">Demo gratuita</span> di 10 giorni con tutti i moduli, senza carta di credito. &nbsp; 2 · <span class="gold">Progettiamo insieme</span>: servizi, operatori, cabine, moduli, sito. &nbsp; 3 · <span class="gold">Online col tuo dominio</span>, con l'affiancamento alla partenza.</p>
+    <p style="margin:6pt 0 0"><b>Office Solution</b> · Oleggio (NO) · Tel. e WhatsApp 392 024 1955 · Amministrazione@cmav.it · officesolutionoleggio.com · lucentia-app.com</p>
+    <p class="small muted" style="margin:4pt 0 0">Il prezzo della licenza è su preventivo, in base ai moduli attivati e alle personalizzazioni. Questo catalogo descrive la versione 2.1 di Lucentia (novembre 2026); le funzioni evolvono con gli aggiornamenti, inclusi nella licenza.</p>
+  </div>
+</section>
+
+</body>
+</html>
