@@ -1,6 +1,6 @@
-import { ArrowRight, Sparkles, Smartphone, Cloud, ShieldCheck } from "lucide-react";
+import { ArrowRight, Sparkles, Smartphone, Cloud, ShieldCheck, Check } from "lucide-react";
 import { GOLD, GOLD_SOFT, ACCENT, INK, Reveal, SiteLink, Punti, CtaBand, useSite, BtnInk, BtnLight, Eyebrow, Titolo, Intestazione, IconTile, Browser, Telefono } from "./ui.jsx";
-import { FUNZIONALITA, APPROFONDIMENTI, ONLINE_PUNTI } from "./dati.js";
+import { FUNZIONALITA, APPROFONDIMENTI, ONLINE_PUNTI, PER_CHI } from "./dati.js";
 
 // Pagina Funzionalità: l'elenco completo delle funzioni del gestionale e le
 // anteprime reali dell'app. Volutamente NON contiene prezzi né canoni: per
@@ -32,9 +32,9 @@ export default function FunzionalitaPage() {
         </Reveal>
         <div className="grid sm:grid-cols-3 gap-4 mt-6">
           {[
-            [Cloud, "Nessuna installazione", "Apri tuodominio.it/gestionale dal browser e sei operativo."],
-            [Smartphone, "Multi-dispositivo", "Computer, tablet e telefono, sempre sincronizzati."],
-            [ShieldCheck, "Dati protetti", "Accessi con credenziali, database dedicato al tuo salone."],
+            [Cloud, "Nessuna installazione", "Apri tuodominio.it/gestionale dal browser e sei operativo. Solo la cassa fiscale ha il suo programma sul PC del negozio."],
+            [Smartphone, "Tutti insieme", "Banco, telefoni delle operatrici, cassa e clienti online scrivono nello stesso gestionale, senza pestarsi."],
+            [ShieldCheck, "Dati protetti", "Accessi con credenziali, database dedicato, backup automatico ogni giorno e registro delle attività."],
           ].map(([Icon, t, d], i) => (
             <Reveal key={i} delay={i * 80} className="flex items-start gap-4 rounded-3xl border border-stone-200 p-5">
               <IconTile icon={Icon} size={44} />
@@ -44,9 +44,26 @@ export default function FunzionalitaPage() {
         </div>
       </section>
 
+      {/* PER CHI */}
+      <section id="per-chi" className="max-w-6xl mx-auto px-5 pt-16 sm:pt-24 scroll-mt-24">
+        <Intestazione eyebrow="Per chi lavora e per chi amministra" titolo="Ognuno trova la sua parte" testo="Le operatrici in cabina, chi sta in cassa e chi fa i conti a fine mese: lo stesso gestionale, tre modi di usarlo." />
+        <div className="mt-12 grid md:grid-cols-3 gap-5">
+          {PER_CHI.map((c, i) => (
+            <Reveal key={i} delay={i * 90} className={`rounded-3xl p-6 sm:p-7 lc-lift ${i === 1 ? "text-white" : "bg-white border border-stone-200"}`} style={i === 1 ? { background: INK } : undefined}>
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5" style={{ background: i === 1 ? "rgba(255,255,255,0.08)" : GOLD_SOFT, color: i === 1 ? GOLD : ACCENT }}><c.icon size={22} /></div>
+              <h3 className={`font-bold text-lg tracking-tight ${i === 1 ? "" : "text-stone-900"}`}>{c.titolo}</h3>
+              <p className={`mt-1.5 text-[15px] leading-relaxed ${i === 1 ? "text-stone-300" : "text-stone-600"}`}>{c.testo}</p>
+              <ul className={`mt-5 space-y-2.5 text-[15px] ${i === 1 ? "text-stone-200" : "text-stone-700"}`}>
+                {c.punti.map((t) => <li key={t} className="flex items-start gap-2.5"><Check size={16} className="mt-0.5 shrink-0" style={{ color: i === 1 ? GOLD : ACCENT }} /> {t}</li>)}
+              </ul>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
       {/* ELENCO COMPLETO */}
       <section id="elenco" className="max-w-6xl mx-auto px-5 py-16 sm:py-24 scroll-mt-24">
-        <Intestazione eyebrow="L'elenco completo" titolo="Ogni funzione al suo posto" testo="Il cuore del gestionale c'è sempre; gli altri moduli si attivano quando servono, anche dopo la partenza." />
+        <Intestazione eyebrow="L'elenco completo" titolo="Ogni funzione al suo posto" testo="Il cuore del gestionale c'è sempre; gli altri moduli si attivano quando servono, anche dopo la partenza. E ogni parte si può adattare al modo di lavorare del tuo salone." />
         <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {FUNZIONALITA.map(([Icon, title, desc], i) => (
             <Reveal key={i} delay={(i % 3) * 80} className="group bg-white rounded-3xl border border-stone-200 p-6 lc-lift">
@@ -103,7 +120,7 @@ export default function FunzionalitaPage() {
         </div>
       </section>
 
-      <CtaBand titolo="Vuoi vederlo sul tuo salone?" testo="Attiva una demo gratuita di 10 giorni con tutti i moduli, oppure scrivici e ti mostriamo Lucentia dal vivo, con i tuoi servizi e i tuoi operatori." img="/anteprime/statistiche-desktop.webp" alt="Statistiche del gestionale Lucentia" phone="/anteprime/clienti-mobile.webp" />
+      <CtaBand titolo="Vuoi vederlo sul tuo salone?" testo="Attiva una demo gratuita di 10 giorni con tutti i moduli, oppure scrivici e ti mostriamo Lucentia dal vivo, con i tuoi servizi e le tue operatrici." img="/anteprime/cassa-desktop.webp" alt="La cassa fiscale del gestionale Lucentia" phone="/anteprime/timbra-mobile.webp" />
     </>
   );
 }

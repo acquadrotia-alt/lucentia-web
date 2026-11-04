@@ -1,29 +1,46 @@
 // Contenuti del sito pubblico: funzionalità, approfondimenti, passi,
 // licenza, moduli e domande frequenti. Tenuti qui per non duplicarli tra le
 // pagine. Attenzione: il sito non riporta prezzi — la licenza è su preventivo.
-import { Calendar, Users, Star, Mail, Layers, ShoppingBag, BarChart3, MessageCircle, HeartPulse, KeyRound, Cloud, FileText, ShieldCheck, Gift, CalendarClock, PartyPopper, Globe, Database, Server, Wrench, Palette, Sparkles, Rocket, PenTool, RefreshCw, Headset, ToggleRight, Puzzle, Image, Type, LayoutTemplate, Package, Scissors, Lock } from "lucide-react";
+import { Calendar, Users, Star, Mail, Layers, ShoppingBag, BarChart3, MessageCircle, HeartPulse, KeyRound, Cloud, FileText, ShieldCheck, Gift, CalendarClock, PartyPopper, Globe, Database, Server, Wrench, Palette, Sparkles, Rocket, PenTool, RefreshCw, Headset, ToggleRight, Puzzle, Image, Type, LayoutTemplate, Package, Scissors, Lock, Receipt, Smartphone, UserCog, ScrollText, WifiOff, Truck, UserCheck, LayoutDashboard, Percent, Fingerprint, Bell } from "lucide-react";
 
 // ===== Funzionalità del gestionale, senza alcun riferimento a prezzi =====
 export const FUNZIONALITA = [
   [Calendar, "Agenda intelligente", "Operatori, cabine e servizi a fasi: gli orari liberi sono calcolati sulle risorse reali del salone, con vista elenco o a griglia per postazione."],
-  [Users, "Scheda cliente", "Anagrafica completa, storico appuntamenti e acquisti, tessera digitale e ricerca rapida."],
+  [Users, "Scheda cliente", "Anagrafica completa, storico appuntamenti e acquisti, tessera digitale, allergie e note, ricerca rapida."],
+  [Receipt, "Cassa fiscale", "Scontrini dal registratore telematico Custom direttamente dalla cassa, con Lucentia Cassa sul PC del negozio: contanti o carta, resi, chiusura Z, ricevute non fiscali per gli acconti."],
+  [Smartphone, "L'app per il telefono", "Ogni operatrice apre la sua agenda dal telefono, legge la scheda dell'appuntamento in corso, prenota per una cliente e timbra entrata e uscita."],
+  [UserCheck, "Area clienti online", "I clienti si registrano, prenotano, spostano o annullano entro il preavviso, ripetono l'ultimo appuntamento e vedono i loro punti. Password recuperabile da soli."],
+  [Mail, "Email automatiche", "Conferma a ogni appuntamento, promemoria alle 19 del giorno prima e un'ora prima, richiesta di recensione dopo la prima visita: dalla casella Gmail del salone."],
   [Star, "Fidelity & premi", "Programma punti automatico dai servizi e dalle vendite, con premi riscattabili dalla scheda cliente."],
   [Layers, "Pacchetti sedute", "Crea e gestisci pacchetti prepagati, scala le sedute usate e tieni traccia dei residui."],
   [Gift, "Buoni regalo", "Emetti buoni a valore o a pacchetto, con codice univoco, saldo residuo e storico degli utilizzi."],
-  [ShoppingBag, "Cassa & magazzino", "Cassa integrata, prodotti con formati e giacenze, scontrino di riepilogo e carico magazzino."],
-  [BarChart3, "Statistiche", "Andamento incassi, servizi più richiesti e attività dei clienti, sempre aggiornati."],
+  [ShoppingBag, "Vendite & magazzino", "Prodotti con formati, costi e giacenze, documenti di carico dai fornitori, scorta minima, rettifiche d'inventario e storico dei movimenti."],
+  [Truck, "Ordini ai fornitori", "L'ordine nasce da solo dai prodotti sotto scorta, parte via email o in stampa e, all'arrivo della merce, diventa un carico."],
+  [FileText, "Fatture elettroniche", "Fatture e note di credito FatturaPA inviate allo SDI tramite Effatta, fatture dei fornitori scaricate da sole e riepilogo IVA del periodo pronto per il commercialista."],
+  [LayoutDashboard, "Cruscotto settimanale", "Incasso, appuntamenti, occupazione per operatrice, clienti nuovi e abituali, no-show, confronto con la settimana prima: tutto in una schermata."],
+  [Percent, "Costo del venduto", "Ricavo, costo della merce e margine per ogni prodotto, col costo fissato al momento della vendita."],
+  [UserCog, "Gestione personale", "Fogli ore mensili, timbrature dal telefono, ferie e assenze pianificate, straordinari, provvigioni e invio al consulente paghe."],
   [MessageCircle, "Marketing WhatsApp", "Promemoria, auguri e promozioni ai clienti via WhatsApp, direttamente dalla loro scheda."],
   [HeartPulse, "Allergeni & patologie", "Schede salute del cliente con avvisi sugli appuntamenti, per lavorare in sicurezza."],
   [PartyPopper, "Eventi del salone", "Serate, corsi e open day in agenda: occupano gli operatori coinvolti e hanno una pagina pubblica sul tuo sito."],
-  [CalendarClock, "Prenotazioni online", "I clienti prenotano dal tuo sito 24 ore su 24: gli orari si incastrano in automatico e arrivano dritti in agenda."],
+  [Calendar, "Google Calendar", "L'agenda di ogni operatrice sincronizzata a due vie col suo calendario Google, anche dal telefono."],
+  [Cloud, "Tutti insieme, senza pestarsi", "Banco, telefono, cassa e area clienti scrivono nello stesso gestionale: ogni modifica si salva da sola e arriva agli altri entro un minuto."],
+  [WifiOff, "La cassa anche senza rete", "Se internet manca, Lucentia Cassa si apre dalla copia locale, emette gli scontrini e allinea tutto appena torna la linea."],
+  [ScrollText, "Registro delle attività", "Chi ha fatto cosa e quando: accessi, salvataggi, scontrini, fatture, backup, timbrature e modifiche dei clienti, per 180 giorni."],
+  [ShieldCheck, "Backup e sicurezza", "Accesso protetto, database dedicato al tuo salone, backup automatico scaricato ogni giorno al primo avvio dal computer."],
   [KeyRound, "Accessi operatori", "Ogni operatore entra con le proprie credenziali e vede solo la sua agenda."],
-  [Cloud, "Multi-dispositivo", "Computer alla reception, tablet in cabina, telefono in borsa: lo stesso gestionale, sempre sincronizzato."],
   [FileText, "Listino PDF", "Genera un listino servizi elegante col tuo logo e i tuoi colori, pronto da stampare o condividere."],
-  [ShieldCheck, "Backup e sicurezza", "Accesso protetto, database dedicato al tuo salone e copie di sicurezza dei dati."],
+];
+
+// Per chi è pensata ogni parte del gestionale.
+export const PER_CHI = [
+  { icon: Scissors, titolo: "Per chi lavora in salone", testo: "Tutto ciò che serve dietro la poltrona o in cabina, senza passare dalla reception.", punti: ["L'agenda del giorno sul telefono, con la scheda dell'appuntamento in corso", "Prenotare per una cliente mentre è ancora in negozio", "Timbrare entrata e uscita con un tocco", "Allergie e note della cliente sempre a portata di mano"] },
+  { icon: Receipt, titolo: "Per chi sta in cassa", testo: "Scontrini, acconti e vendite senza doppioni, anche se la rete fa i capricci.", punti: ["Scontrino fiscale col registratore Custom, contanti o carta", "L'appuntamento entra nel carrello con un tasto", "Acconti con ricevuta non fiscale sulla stampante da 80 mm", "Resi, annulli e chiusura Z dal gestionale"] },
+  { icon: BarChart3, titolo: "Per chi amministra", testo: "I numeri del salone letti in un minuto, i documenti pronti per il commercialista.", punti: ["Cruscotto della settimana e margine sui prodotti", "Fatture elettroniche e riepilogo IVA del periodo", "Fogli ore, ferie e provvigioni del personale", "Registro delle attività e backup automatici"] },
 ];
 
 // Le tre funzionalità in evidenza nella home.
-export const FUNZIONALITA_HOME = [0, 1, 5].map((i) => FUNZIONALITA[i]);
+export const FUNZIONALITA_HOME = [0, 2, 4].map((i) => FUNZIONALITA[i]);
 
 // ===== Approfondimenti con screenshot (pagina Funzionalità) =====
 export const APPROFONDIMENTI = [
@@ -42,16 +59,36 @@ export const APPROFONDIMENTI = [
     phone: { img: "/anteprime/clienti-mobile.webp", alt: "Elenco clienti di Lucentia su smartphone" },
   },
   {
-    icon: ShoppingBag, kicker: "Cassa, vendite & magazzino", title: "Vendi prodotti e tieni le scorte in ordine",
-    text: "La cassa integrata registra vendite di prodotti e servizi, con scontrino di riepilogo e possibilità di collegare ogni vendita al cliente. Il magazzino si aggiorna da solo: carichi i prodotti quando arrivano, le giacenze scalano a ogni vendita.",
-    points: ["Cassa rapida con riepilogo di giornata", "Prodotti con formati, prezzi e giacenze", "Carico magazzino e storico movimenti", "Buoni regalo e pacchetti vendibili in cassa"],
-    img: "/anteprime/vendite-desktop.webp", alt: "Cassa e magazzino del gestionale per saloni Lucentia", flip: false,
+    icon: Receipt, kicker: "Cassa fiscale, vendite & magazzino", title: "Dallo scontrino al magazzino, senza doppioni",
+    text: "Con Lucentia Cassa sul PC del negozio la vendita emette lo scontrino fiscale dal registratore telematico Custom: contanti o carta, resi, annulli, chiusura Z. L'appuntamento entra nel carrello con un tasto, gli acconti escono con una ricevuta non fiscale sulla stampante da 80 mm. Il magazzino si aggiorna da solo e, quando un prodotto scende sotto scorta, l'ordine al fornitore è già pronto.",
+    points: ["Scontrino fiscale dal registratore Custom (contanti o carta)", "Appuntamento in cassa con un tasto, acconti con ricevuta", "Documenti di carico, scorta minima, rettifiche d'inventario", "Ordini ai fornitori proposti dal sotto scorta, via email"],
+    img: "/anteprime/cassa-desktop.webp", alt: "La cassa fiscale di Lucentia col registratore telematico: carrello con i tasti Contanti e Carta", flip: false,
+  },
+  {
+    icon: Smartphone, kicker: "L'app per il telefono", title: "Ogni operatrice ha il salone in tasca",
+    text: "Su tuodominio.it/utenti ogni operatrice sceglie il suo nome e trova la sua agenda, la scheda dell'appuntamento in corso con fasi, note e allergie della cliente, il nuovo appuntamento con chiunque e la timbratura di entrata e uscita, che finisce dritta nel foglio ore. Quello che fa dal telefono compare al banco entro un minuto.",
+    points: ["La mia agenda e la scheda dell'appuntamento in corso", "Nuovo appuntamento per una cliente, con chi si vuole", "Timbra entrata e uscita: va nel foglio ore", "Chiamata e WhatsApp alla cliente da un tocco"],
+    img: "/anteprime/studio-desktop.webp", alt: "Vista Studio dell'agenda di Lucentia: una colonna per ogni operatrice e cabina", flip: true,
+    phone: { img: "/anteprime/utenti-mobile.webp", alt: "L'app per il telefono delle operatrici di Lucentia" },
+  },
+  {
+    icon: UserCheck, kicker: "Clienti online & email automatiche", title: "I clienti si gestiscono da soli, con garbo",
+    text: "Dal link di registrazione il cliente crea il suo account e da Prenota vede appuntamenti, punti e dati. Prenota, sposta o annulla entro il preavviso del salone — anche gli appuntamenti presi al banco — e ripete l'ultimo trattamento con un tocco. Le email partono da sole dalla casella Gmail del salone: conferma, promemoria alle 19 del giorno prima e un'ora prima, richiesta di recensione dopo la prima visita.",
+    points: ["Account cliente con password recuperabile da soli", "Sposta e annulla entro il preavviso, «Ripeti l'ultimo»", "Conferme, promemoria e richiesta di recensione automatici", "Punti fedeltà e premi visibili al cliente"],
+    img: "/anteprime/clienti-desktop.webp", alt: "Scheda clienti del gestionale Lucentia con fidelity e pacchetti", flip: false,
+    phone: { img: "/anteprime/cliente-mobile.webp", alt: "L'area del cliente di Lucentia su smartphone: appuntamenti da spostare o annullare" },
   },
   {
     icon: BarChart3, kicker: "Statistiche & marketing", title: "Decidi con i numeri, fidelizza con i messaggi",
-    text: "Incassi di servizi e prodotti, servizi più richiesti, clienti più attivi: le statistiche si aggiornano in tempo reale su 30 giorni, 90 giorni o tutto lo storico. E dalla scheda cliente parti con promemoria e promozioni via WhatsApp, senza esportare nulla.",
-    points: ["Andamento incassi servizi e prodotti", "Classifiche di servizi e prodotti più venduti", "Clienti più attivi e frequenza visite", "Messaggi WhatsApp direttamente dalla scheda"],
-    img: "/anteprime/statistiche-desktop.webp", alt: "Statistiche del salone nel gestionale Lucentia: incassi e servizi più richiesti", flip: true,
+    text: "Il cruscotto della settimana mette in una schermata incasso, appuntamenti, occupazione di ogni operatrice, clienti nuovi e abituali, no-show e il confronto con la settimana prima. Sotto, il costo del venduto col margine di ogni prodotto, gli incassi mese per mese, i servizi e i clienti più attivi. E dalla scheda cliente parti con promemoria e promozioni via WhatsApp.",
+    points: ["Cruscotto settimanale con occupazione per operatrice", "Costo del venduto e margine per prodotto", "Incassi, classifiche e clienti più attivi, con CSV", "Messaggi WhatsApp direttamente dalla scheda"],
+    img: "/anteprime/statistiche-desktop.webp", alt: "Il cruscotto settimanale di Lucentia: incasso, occupazione per operatrice, clienti nuovi e no-show", flip: true,
+  },
+  {
+    icon: FileText, kicker: "Amministrazione & personale", title: "Fatture, IVA e fogli ore senza fogli volanti",
+    text: "Le fatture elettroniche nascono dalla cassa o da un appuntamento e partono allo SDI tramite Effatta; le fatture dei fornitori arrivano da sole e il riepilogo IVA del periodo è pronto per il commercialista. In Gestione personale ci sono i fogli ore con le timbrature dal telefono, ferie e assenze pianificate (che bloccano anche l'agenda), straordinari, provvigioni e l'invio al consulente paghe. Ogni cosa che succede resta nel registro delle attività.",
+    points: ["FatturaPA inviate allo SDI, esiti e fatture dei fornitori", "Riepilogo IVA per mese, trimestre o anno, con CSV", "Fogli ore, timbrature, ferie, provvigioni, invio al consulente", "Registro delle attività e backup automatico ogni giorno"],
+    img: "/anteprime/personale-desktop.webp", alt: "Fogli ore della Gestione personale di Lucentia con le timbrature dal telefono", flip: false,
   },
   {
     icon: Globe, kicker: "Il tuo sito & gli eventi", title: "Il sito del salone si aggiorna dal gestionale",
@@ -66,8 +103,8 @@ export const APPROFONDIMENTI = [
 export const ONLINE_PUNTI = [
   [Globe, "Il tuo sito, col tuo brand", "Foto, colori, testi e pagine: il sito è tuo e vive sul tuo dominio. Lo aggiorni dal gestionale, senza passare da nessuno."],
   [CalendarClock, "Niente vuoti in agenda", "Gli orari offerti online si incastrano in automatico dopo gli appuntamenti — oppure a griglia, come preferisci."],
-  [PartyPopper, "Eventi in vetrina", "Serate, corsi e open day compaiono da soli sul sito, ognuno con la sua pagina condivisibile."],
-  [Users, "Scelta dell'operatore", "Il cliente sceglie chi preferisce, con foto o avatar personalizzati, e gestisce la prenotazione in autonomia."],
+  [UserCheck, "L'area del cliente", "Con il suo account il cliente prenota, sposta o annulla entro il preavviso, ripete l'ultimo trattamento e vede i suoi punti."],
+  [Bell, "Email che partono da sole", "Conferma, promemoria alle 19 del giorno prima e un'ora prima, richiesta di recensione: dalla casella Gmail del salone."],
 ];
 
 // ===== Hero: i tre punti di fiducia =====
@@ -133,8 +170,8 @@ export const LICENZA_INCLUDE = [
   [Globe, "Il tuo dominio", "Registrazione o collegamento del dominio e rinnovo compresi nella licenza."],
   [Server, "Hosting su Cloudflare", "Sito e gestionale pubblicati sulla rete Cloudflare: veloci, sempre raggiungibili, protetti."],
   [LayoutTemplate, "Sito vetrina personalizzato", "Foto, colori, testi, pagine, eventi e catalogo prodotti, aggiornabili dal gestionale."],
-  [Calendar, "Gestionale completo", "Agenda, clienti, cassa e tutti i moduli attivati, raggiungibile da tuodominio.it/gestionale."],
-  [Database, "Database dedicato e backup", "Un database solo per il tuo salone, con copie di sicurezza dei dati."],
+  [Calendar, "Gestionale completo", "Agenda, clienti, cassa, gestione personale e tutti i moduli attivati, da tuodominio.it/gestionale; l'app per il telefono su /utenti; Lucentia Cassa sul PC del negozio."],
+  [Database, "Database dedicato e backup", "Un database solo per il tuo salone, backup automatico ogni giorno e registro delle attività."],
   [RefreshCw, "Aggiornamenti", "Tutte le nuove versioni del gestionale, incluse per tutta la durata della licenza."],
   [Headset, "Assistenza", "Supporto diretto per tutta la durata della licenza, dalla partenza ai dubbi quotidiani."],
   [Lock, "Accessi e sicurezza", "Login protetti per il salone e per ogni operatore, dati isolati e cifrati in transito."],
@@ -146,13 +183,13 @@ export const LICENZA_SINTESI = ["Dominio", "Hosting su Cloudflare", "Sito vetrin
 export const MODULI = [
   { key: "fidelity", icon: Star, nome: "Fidelity & premi", desc: "Punti accumulati in automatico da servizi e vendite, soglie premio configurabili e riscatto dalla scheda cliente." },
   { key: "pacchetti", icon: Layers, nome: "Pacchetti sedute", desc: "Pacchetti prepagati venduti in cassa, con sedute residue scalate a ogni appuntamento e storico degli utilizzi." },
-  { key: "vendite", icon: ShoppingBag, nome: "Cassa & magazzino", desc: "Cassa prodotti e servizi, formati e giacenze, carico magazzino, scontrino di riepilogo e vendite collegate al cliente." },
-  { key: "statistiche", icon: BarChart3, nome: "Statistiche", desc: "Incassi di servizi e prodotti, classifiche dei più venduti, clienti più attivi, su 30 giorni, 90 giorni o tutto lo storico." },
+  { key: "vendite", icon: ShoppingBag, nome: "Cassa, magazzino & ordini", desc: "Cassa prodotti e servizi, formati, costi e giacenze, documenti di carico, scorta minima, ordini ai fornitori e vendite collegate al cliente. Con Lucentia Cassa, gli scontrini fiscali dal registratore Custom." },
+  { key: "statistiche", icon: BarChart3, nome: "Statistiche & cruscotto", desc: "Cruscotto della settimana con occupazione per operatrice, clienti nuovi e no-show; costo del venduto e margine; incassi, classifiche e clienti più attivi su 30 giorni, 90 giorni o tutto lo storico." },
   { key: "marketing", icon: MessageCircle, nome: "Marketing WhatsApp", desc: "Promemoria appuntamento, auguri e promozioni inviati via WhatsApp direttamente dalla scheda del cliente." },
   { key: "allergeni", icon: HeartPulse, nome: "Allergeni & patologie", desc: "Schede salute con allergie, patologie e note, con avvisi automatici quando apri l'appuntamento del cliente." },
   { key: "online", icon: CalendarClock, nome: "Prenotazioni online & mini-sito", desc: "I clienti prenotano dal tuo sito 24 ore su 24, scelgono l'operatore e trovano eventi e informazioni. Gli orari si incastrano in automatico in agenda." },
-  { key: "fatture", icon: FileText, nome: "Fatture elettroniche", desc: "Fatture e note di credito in formato FatturaPA emesse dal gestionale e inviate allo SDI tramite Effatta, con l'esito di consegna e le fatture dei fornitori scaricate da sole." },
-  { key: "google", icon: Mail, nome: "Gmail & Google Calendar", desc: "Conferme e promemoria ai clienti dalla tua casella Gmail, e l'agenda sincronizzata a due vie con i calendari Google di ogni operatore, anche dal telefono." },
+  { key: "fatture", icon: FileText, nome: "Fatture elettroniche", desc: "Fatture e note di credito FatturaPA emesse dal gestionale e inviate allo SDI tramite Effatta, esiti di consegna, fatture dei fornitori scaricate da sole e riepilogo IVA del periodo per il commercialista." },
+  { key: "google", icon: Mail, nome: "Gmail & Google Calendar", desc: "Email automatiche dalla tua casella Gmail (conferme, promemoria, richiesta di recensione, benvenuto e recupero password dei clienti, ordini ai fornitori, fogli ore al consulente) e l'agenda sincronizzata a due vie coi calendari Google di ogni operatore." },
   { key: "integrazioni", icon: Wrench, nome: "Integrazioni su misura", desc: "Funzioni, collegamenti e automazioni realizzati sul metodo di lavoro del tuo salone, aggiunti al gestionale quando servono." },
 ];
 
@@ -164,6 +201,8 @@ export const FAQ_LICENZA = [
   ["I dati sono miei?", "Sì. Il tuo salone ha un database dedicato, isolato dagli altri, con copie di sicurezza. Clienti, appuntamenti, vendite e statistiche sono tuoi e puoi esportarli dal gestionale."],
   ["Cosa succede alla scadenza?", "Il sito e il gestionale vengono sospesi finché non si rinnova: i dati restano al loro posto e tutto riparte appena la licenza viene rinnovata."],
   ["Posso provare prima?", "Sì: la demo gratuita dura 10 giorni con tutti i moduli attivi, senza carta di credito e senza rinnovo automatico. Poi decidi con calma."],
+  ["Possiamo lavorare in più persone insieme?", "Sì. Il banco, i telefoni delle operatrici, la cassa e l'area dei clienti scrivono nello stesso gestionale un record alla volta: ogni modifica arriva agli altri entro un minuto e nessuno sovrascrive il lavoro dell'altro."],
+  ["E se manca internet?", "Il gestionale lavora dal browser e ha bisogno della rete, ma i salvataggi non si perdono: restano in coda e partono da soli appena torna la linea. Lucentia Cassa, sul PC del negozio, si apre anche senza rete dalla copia locale e continua a emettere scontrini."],
 ];
 
 // ===== Domande frequenti sul percorso =====
