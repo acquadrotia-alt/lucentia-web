@@ -1,11 +1,11 @@
 import { todayStr } from "./comuni.jsx";
 
 // La licenza NON viene inclusa nel backup: il cliente non può estendersela reimportando un file.
-export function exportBackup(config, bookings, clients, catalog, sales, eventi, fatture, acquisti) {
+export function exportBackup(config, bookings, clients, catalog, sales, eventi, fatture, acquisti, suffisso) {
   const data = backupPayload(config, bookings, clients, catalog, sales, eventi, fatture, acquisti);
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement("a"); a.href = url; a.download = `backup-salone-${todayStr()}.json`; document.body.appendChild(a); a.click(); a.remove();
+  const a = document.createElement("a"); a.href = url; a.download = `backup-salone-${todayStr()}${suffisso ? "-" + suffisso : ""}.json`; document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 }
 
@@ -19,4 +19,14 @@ export async function writeBackupToDir(handle, data) {
   if (handle.queryPermission) { let p = await handle.queryPermission({ mode: "readwrite" }); if (p !== "granted") { p = await handle.requestPermission({ mode: "readwrite" }); if (p !== "granted") throw new Error("perm"); } }
   const fh = await handle.getFileHandle(`lucentia-backup-${todayStr()}.json`, { create: true });
   const w = await fh.createWritable(); await w.write(JSON.stringify(data, null, 2)); await w.close();
+}
+
+// Backup automatico scaricato al primo avvio del giorno dal computer (versione
+// web): un file JSON completo nella cartella Download, una volta al giorno per
+// ogni PC. Sul telefono e nel programma della cassa non parte.
+export const BACKUP_AUTO_KEY = "lc-backup-auto-v1";
+export function computerDaBackup() {
+  if (typeof window === "undefined") return false;
+  if (window.lucentiaCassa) return false;
+  try { return window.innerWidth >= 900 && !(window.matchMedia && window.matchMedia("(pointer: coarse)").matches && window.innerWidth < 1100); } catch (e) { return window.innerWidth >= 900; }
 }

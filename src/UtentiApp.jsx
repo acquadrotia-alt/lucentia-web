@@ -9,7 +9,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { User, Calendar, ClipboardList, CalendarPlus, LogOut, ChevronLeft, ChevronRight, Phone, Mail, Check, Search, Plus, AlertTriangle, Clock, Sparkles, RefreshCw, Users, X } from "lucide-react";
 import { orariPossibili, impegniServizi } from "./orari.js";
-import { uid, minToStr, todayStr, addDays, fmtDate, parseDate, WDAY_SHORT, MONTHS, apiLoad, apiSaveVerificato, eventiImpegni, upsertClient, loyaltyConfig, matchPackage, STATUS, themeVars, BRAND_CSS, ModsCtx, flagsFromModuli, BRANDING, DEFAULT_CONFIG } from "./core/salone/comuni.jsx";
+import { uid, minToStr, todayStr, addDays, fmtDate, parseDate, WDAY_SHORT, MONTHS, apiLoad, apiPatchVerificato, impostaOrigine, eventiImpegni, upsertClient, loyaltyConfig, matchPackage, STATUS, themeVars, BRAND_CSS, ModsCtx, flagsFromModuli, BRANDING, DEFAULT_CONFIG } from "./core/salone/comuni.jsx";
 import { ApptCard, DettaglioAppuntamento, SlotPicker, risorseDi } from "./core/salone/agenda.jsx";
 import { AvatarSvg, avatarIdFor } from "./avatars.jsx";
 
@@ -43,20 +43,17 @@ export default function UtentiApp({ user, azienda, onLogout }) {
   const b = (config && config.branding) || BRANDING;
   const impegniEventi = useMemo(() => eventiImpegni(eventi), [eventi]);
 
-  // Salvataggio di un nuovo appuntamento: si rilegge l'elenco dal server e
-  // si aggiunge in coda, così non si pestano le modifiche fatte dal banco
-  // nel frattempo. I clienti nuovi si salvano allo stesso modo.
+  // Salvataggio di un nuovo appuntamento: parte solo il record nuovo (PATCH),
+  // così non si pestano le modifiche fatte dal banco nel frattempo. I clienti
+  // nuovi si salvano allo stesso modo.
+  useEffect(() => { impostaOrigine("telefono"); }, []);
   const salvaNuovo = async (booking, clientiNuovi) => {
-    const freschi = await apiLoad("bookings", null);
-    const lista = Array.isArray(freschi) ? freschi : bookings;
-    const r = await apiSaveVerificato("bookings", [...lista.filter((x) => x && x.id !== booking.id), booking]);
+    const r = await apiPatchVerificato("bookings", [...bookings.filter((x) => x && x.id !== booking.id), booking]);
     if (!r.ok) return { ok: false, error: r.error };
     if (clientiNuovi) {
-      const cf = await apiLoad("clients", null);
-      const base = Array.isArray(cf) ? cf : clients;
-      const codici = new Set(base.map((c) => c.code));
+      const codici = new Set(clients.map((c) => c.code));
       const aggiunti = clientiNuovi.filter((c) => !codici.has(c.code));
-      if (aggiunti.length) await apiSaveVerificato("clients", [...base, ...aggiunti]);
+      if (aggiunti.length) await apiPatchVerificato("clients", [...clients, ...aggiunti]);
     }
     await ricarica();
     return { ok: true };

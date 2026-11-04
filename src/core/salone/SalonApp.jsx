@@ -1,15 +1,15 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Sparkles, Calendar, Mail, Lock, Settings, Users, Phone, MapPin, Gift, LogOut, ShieldCheck, AlertTriangle, ShoppingBag, AlertCircle, BarChart3, MessageCircle, FileText, Store, Boxes, Package, Truck, Warehouse, LayoutGrid, ChevronRight, CalendarClock, Megaphone, Clock, Table2, UserCog } from "lucide-react";
+import { WifiOff, Sparkles, Calendar, Mail, Lock, Settings, Users, Phone, MapPin, Gift, LogOut, ShieldCheck, AlertTriangle, ShoppingBag, AlertCircle, BarChart3, MessageCircle, FileText, Store, Boxes, Package, Truck, Warehouse, LayoutGrid, ChevronRight, CalendarClock, Megaphone, Clock, Table2, UserCog } from "lucide-react";
 import { setBrandTab } from "../../favicon.js";
-import { APP_VERSION, RESELLER_CODE, uid, pad, todayStr, DAY_NAMES, MONTHS, parseDate, BRANDING, DEFAULT_CONFIG, DEFAULT_CATALOG, loadKey, saveKey, apiLoad, apiSaveVerificato, apiSave, apiSaveDebounced, loadLicense, saveLicense, licenseState, licenseOk, themeVars, eventiImpegni, buildDemoData, buildSampleData, BRAND_CSS, flagsFromModuli, ModsCtx, planName, LUCENTIA_LOGO, MAKER_LOGO } from "./comuni.jsx";
-import { BACKUP_KEY, backupPayload, saveDirHandle, loadDirHandle, clearDirHandle, writeBackupToDir } from "./backup.js";
+import { APP_VERSION, RESELLER_CODE, uid, pad, todayStr, DAY_NAMES, MONTHS, parseDate, BRANDING, DEFAULT_CONFIG, DEFAULT_CATALOG, loadKey, saveKey, apiLoad, apiLoadEsito, apiSaveVerificato, apiPatchVerificato, apiSave, apiSaveDebounced, unisciDalServer, unisci, fissaBase, svuotaCoda, useStatoRete, impostaOrigine, scriviCopiaCassa, leggiCopiaCassa, copiaCassaOre, registraAttivita, loadLicense, saveLicense, licenseState, licenseOk, themeVars, eventiImpegni, buildDemoData, buildSampleData, BRAND_CSS, flagsFromModuli, ModsCtx, planName, LUCENTIA_LOGO, MAKER_LOGO } from "./comuni.jsx";
+import { BACKUP_KEY, backupPayload, saveDirHandle, loadDirHandle, clearDirHandle, writeBackupToDir, exportBackup, BACKUP_AUTO_KEY, computerDaBackup } from "./backup.js";
 import { AgendaPage } from "./agenda.jsx";
 import { ClientsView } from "./clienti.jsx";
 import { GiftCardsView } from "./buoni.jsx";
 import { ShopView } from "./cassa.jsx";
 import { ArticoliView } from "./articoli.jsx";
 import { PersonaleView } from "./personale.jsx";
-import { useCassaRt, StatoCassa } from "./cassaRt.jsx";
+import { useCassaRt, StatoCassa, StatoRete } from "./cassaRt.jsx";
 import { StatsView } from "./statistiche.jsx";
 import { MarketingView } from "./marketing.jsx";
 import { SettingsView } from "./impostazioni.jsx";
@@ -89,9 +89,28 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
   const backupDirRef = useRef(null); backupDirRef.current = backupDir;
   const dataRef = useRef(null);
 
+  const [daCopia, setDaCopia] = useState(null); // nel programma della cassa: aperta dalla copia locale, senza rete
+  useEffect(() => { impostaOrigine(soloBanco ? "cassa" : "gestionale"); }, [soloBanco]);
   useEffect(() => {
     let alive = true;
     (async () => {
+      // Senza rete, nel programma della cassa, si parte dalla copia locale: scontrini e
+      // vendite si registrano lo stesso e si allineano al server appena torna la rete.
+      if (soloBanco) {
+        const prova = await apiLoadEsito("config");
+        if (!alive) return;
+        if (!prova.ok && prova.rete) {
+          const c = leggiCopiaCassa();
+          if (c) {
+            setConfig({ ...DEFAULT_CONFIG, ...c.config, branding: { ...BRANDING, ...(c.config.branding || {}) } });
+            setBookings(c.bookings || []); setClients(c.clients || []); setCatalog(c.catalog && Array.isArray(c.catalog.products) ? c.catalog : DEFAULT_CATALOG); setSales(c.sales || []); setVouchers(c.vouchers || []); setEventi(c.eventi || []); setPersonale({});
+            ["bookings", "clients", "sales", "vouchers", "eventi"].forEach((k) => fissaBase(k, c[k] || []));
+            setDaCopia({ ore: copiaCassaOre(c) });
+            loadedRef.current = true; setLoading(false);
+            return;
+          }
+        }
+      }
       const [cfg, bk, cl, cat, sl] = await Promise.all([
         apiLoad("config", null), apiLoad("bookings", null), apiLoad("clients", null), apiLoad("catalog", null), apiLoad("sales", null),
       ]);
@@ -141,27 +160,44 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
   };
   const cancelOnline = async (b) => { await fetch("/api/online-bookings/" + b.id, { method: "DELETE", credentials: "include" }).catch(() => {}); refreshOnline(); };
 
+  // Gli elenchi (appuntamenti, clienti, vendite, buoni…) si salvano un record
+  // alla volta: parte solo ciò che è cambiato (vedi dati.js).
   useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("bookings", bookings); }, [bookings]);
-  // Gli appuntamenti presi da un altro dispositivo (l'app /utenti sul
-  // telefono) arrivano qui da soli: ogni minuto, e quando si torna sulla
-  // scheda, si legge l'elenco dal server e si aggiungono quelli che mancano.
-  // Le modifiche fatte qui vincono sempre su quelle già conosciute.
+  // Ciò che cambia su un altro dispositivo (il telefono con /utenti, la cassa,
+  // un altro PC, l'area dei clienti) arriva qui da solo: ogni minuto, e
+  // quando si torna sulla scheda, si rilegge l'elenco e si fondono le
+  // modifiche. I record toccati qui e non ancora salvati restano come sono.
+  const setterRef = useRef(null); setterRef.current = { bookings: [bookings, setBookings], clients: [clients, setClients], sales: [sales, setSales], vouchers: [vouchers, setVouchers] };
   useEffect(() => {
+    let inCorso = false;
     const unisci = async () => {
-      if (demoRef.current || !loadedRef.current || document.visibilityState === "hidden") return;
-      const dal = await apiLoad("bookings", null);
-      if (!Array.isArray(dal)) return;
-      setBookings((cur) => { const ids = new Set(cur.map((x) => x && x.id)); const nuovi = dal.filter((x) => x && x.id && !ids.has(x.id) && !x.gcal && (x.daUtenti || x.fromOnline)); return nuovi.length ? [...cur, ...nuovi] : cur; });
+      if (demoRef.current || !loadedRef.current || inCorso || document.visibilityState === "hidden") return;
+      inCorso = true;
+      try {
+        for (const coll of ["bookings", "clients", "sales", "vouchers"]) {
+          const [lista, setter] = setterRef.current[coll];
+          const r = await unisciDalServer(coll, lista);
+          if (!r.server) continue;
+          // se nel frattempo l'elenco locale è cambiato, si rifonde su quello attuale
+          setter((cur) => { const m = cur === lista ? r : unisci(coll, cur, r.server); m.applica(); return m.cambiata ? m.lista : cur; });
+        }
+      } finally { inCorso = false; }
     };
     const t = setInterval(unisci, 60000);
     const vis = () => { if (document.visibilityState === "visible") unisci(); };
     document.addEventListener("visibilitychange", vis);
-    return () => { clearInterval(t); document.removeEventListener("visibilitychange", vis); };
+    window.addEventListener("focus", vis);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", vis); window.removeEventListener("focus", vis); };
   }, []);
   useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("clients", clients); }, [clients]);
   useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("catalog", catalog); }, [catalog]);
   useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("sales", sales); }, [sales]);
   useEffect(() => { if (demoRef.current || !loadedRef.current) return; apiSaveDebounced("vouchers", vouchers); }, [vouchers]);
+  // Nel programma della cassa si tiene una copia locale dei dati, per aprire la cassa anche senza rete.
+  const rete = useStatoRete();
+  useEffect(() => { if (!soloBanco || !loadedRef.current || loading) return; const t = setTimeout(() => scriviCopiaCassa({ config, catalog, clients, vouchers, bookings, sales, eventi }), 2500); return () => clearTimeout(t); }, [soloBanco, loading, config, catalog, clients, vouchers, bookings, sales, eventi]);
+  // Tornata la rete dopo un avvio dalla copia locale: si ricarica tutto dal server (le vendite in coda sono già partite).
+  useEffect(() => { if (daCopia && !rete.offline && !rete.inCoda) { setDaCopia(null); window.location.reload(); } }, [daCopia, rete.offline, rete.inCoda]);
   useEffect(() => { if (demoRef.current || !loadedRef.current || personale == null) return; apiSaveDebounced("personale", personale); }, [personale]);
   useEffect(() => { if (demoRef.current || !loadedRef.current || !flags.fatture) return; apiSaveDebounced("fatture", fatture); }, [fatture]);
   useEffect(() => { if (demoRef.current || !loadedRef.current || !flags.fatture) return; apiSaveDebounced("acquisti", acquisti); }, [acquisti]);
@@ -180,7 +216,7 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
   useEffect(() => {
     if (demoRef.current || !loadedRef.current) return;
     (async () => {
-      const r = await apiSaveVerificato("eventi", eventi);
+      const r = await apiPatchVerificato("eventi", eventi);
       if (!r.ok) alert(`Attenzione: il salvataggio degli eventi non è riuscito (${r.error}). Se hai caricato un'immagine molto grande, riprova con una foto più leggera.`);
     })();
   }, [eventi]);
@@ -195,11 +231,25 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
       const today = todayStr(); const last = loadKey(BACKUP_KEY, null);
       if (last && last.date === today) return;
       const now = new Date(); const hhmm = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-      if (hhmm >= bkc.time) { try { await writeBackupToDir(h, backupPayload(d.config, d.bookings, d.clients, d.catalog, d.sales, d.eventi, d.fatture, d.acquisti)); const info = { date: today, at: Date.now() }; saveKey(BACKUP_KEY, info); setLastBackup(info); } catch (e) {} }
+      if (hhmm >= bkc.time) { try { await writeBackupToDir(h, backupPayload(d.config, d.bookings, d.clients, d.catalog, d.sales, d.eventi, d.fatture, d.acquisti)); const info = { date: today, at: Date.now() }; saveKey(BACKUP_KEY, info); setLastBackup(info); registraAttivita("backup", "Backup automatico salvato nella cartella scelta"); } catch (e) {} }
     };
     const id = setInterval(tick, 60000); const t0 = setTimeout(tick, 5000);
     return () => { clearInterval(id); clearTimeout(t0); };
   }, []);
+  // Backup automatico al primo avvio del giorno dal computer (versione web):
+  // scarica un file completo nella cartella Download, una volta al giorno.
+  useEffect(() => {
+    if (loading || isDemo || soloBanco || !loadedRef.current) return;
+    const bkc = (config && config.backup) || {};
+    if (bkc.scaricaAlPrimoAvvio === false || !computerDaBackup()) return;
+    const oggi = todayStr();
+    const ultimo = loadKey(BACKUP_AUTO_KEY, null);
+    if (ultimo && ultimo.date === oggi) return;
+    const t = setTimeout(() => {
+      try { const d = dataRef.current || {}; exportBackup(d.config, d.bookings, d.clients, d.catalog, d.sales, d.eventi, d.fatture, d.acquisti, "automatico"); saveKey(BACKUP_AUTO_KEY, { date: oggi, at: Date.now() }); registraAttivita("backup", "Backup automatico scaricato all'avvio", {}, false); } catch (e) {}
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [loading]);
   // La licenza è ora verificata dal server: nessun controllo locale qui.
   useEffect(() => {}, [session]);
 
@@ -235,7 +285,7 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
   };
   const backupNow = async () => {
     const h = backupDirRef.current; if (!h) { alert("Scegli prima una cartella di destinazione."); return; }
-    try { await writeBackupToDir(h, backupPayload(config, bookings, clients, catalog, sales, eventi, fatture, acquisti)); const info = { date: todayStr(), at: Date.now() }; saveKey(BACKUP_KEY, info); setLastBackup(info); alert("Backup salvato nella cartella scelta."); } catch (e) { alert("Backup non riuscito: permesso negato o cartella non disponibile. Riprova."); }
+    try { await writeBackupToDir(h, backupPayload(config, bookings, clients, catalog, sales, eventi, fatture, acquisti)); const info = { date: todayStr(), at: Date.now() }; saveKey(BACKUP_KEY, info); setLastBackup(info); registraAttivita("backup", "Backup salvato nella cartella scelta"); alert("Backup salvato nella cartella scelta."); } catch (e) { alert("Backup non riuscito: permesso negato o cartella non disponibile. Riprova."); }
   };
   const clearBackupDir = async () => { await clearDirHandle(); setBackupDir(null); setBackupDirName(""); };
 
@@ -280,6 +330,7 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
           </div>
           <nav className="flex items-center gap-0.5 shrink-0 min-w-0">
             {areaCorrente ? <>
+              <StatoRete rete={rete} onRiprova={() => svuotaCoda()} />
               {soloBanco ? <StatoCassa cfg={cassaRt.cfg} /> : <button onClick={() => setArea(null)} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-medium text-stone-500 hover:bg-stone-100 hover:text-stone-800 transition" title="Torna alle aree di lavoro"><LayoutGrid size={16} /><span className="hidden lg:inline">Aree</span></button>}
               <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-2 text-sm font-semibold text-stone-800"><areaCorrente.icon size={16} className="brand-accent" /> {areaCorrente.label}</span>
               {!areaCorrente.menu && areaCorrente.sezioni.length > 1 ? <span className="hidden sm:block w-px h-5 bg-stone-200 mx-1" /> : null}
@@ -295,6 +346,7 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
             <button onClick={onLogout} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-medium text-stone-500 hover:bg-stone-100 ml-1" title="Esci"><LogOut size={16} /><span className="hidden lg:inline">Esci</span></button>
           </nav>
         </div>
+        {daCopia ? <div className="bg-red-50 border-t border-red-200 text-red-700 text-xs text-center py-1.5 flex items-center justify-center gap-1.5"><WifiOff size={13} /> Cassa aperta <b>senza rete</b> dalla copia locale{daCopia.ore != null ? ` (aggiornata ${daCopia.ore} ore fa)` : ""}: scontrini e vendite si registrano e partono da soli appena torna la rete.</div> : null}
         {operatorWarn ? <div className="bg-amber-50 border-t border-amber-200 text-amber-700 text-xs text-center py-1.5 flex items-center justify-center gap-1.5"><AlertTriangle size={13} /> Licenza in scadenza tra {ls.days} giorn{ls.days === 1 ? "o" : "i"}. Contatta il rivenditore per il rinnovo.</div> : null}
       </header>
 

@@ -27,3 +27,6 @@ CREATE TABLE IF NOT EXISTS integrazioni (azienda_id TEXT NOT NULL, chiave TEXT N
 -- Account dei clienti per la prenotazione online (/registrazione) e le loro sessioni (cookie csid).
 CREATE TABLE IF NOT EXISTS clienti_online (id TEXT PRIMARY KEY, azienda_id TEXT NOT NULL, email TEXT NOT NULL, password_hash TEXT NOT NULL, nome TEXT, cognome TEXT, telefono TEXT, client_code TEXT, creato_il TEXT DEFAULT (datetime('now')), UNIQUE(azienda_id, email));
 CREATE TABLE IF NOT EXISTS sessioni_clienti (token TEXT PRIMARY KEY, cliente_id TEXT NOT NULL, scadenza TEXT NOT NULL);
+-- Registro delle attività del salone (accessi, salvataggi, scontrini, fatture, backup…).
+CREATE TABLE IF NOT EXISTS registro (id TEXT PRIMARY KEY, azienda_id TEXT NOT NULL, quando TEXT DEFAULT (datetime('now')), chi TEXT, origine TEXT, tipo TEXT, testo TEXT, dettagli TEXT);
+CREATE INDEX IF NOT EXISTS idx_registro_azienda ON registro(azienda_id, quando);

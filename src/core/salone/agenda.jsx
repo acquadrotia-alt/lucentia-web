@@ -3,6 +3,7 @@ import { Sparkles, Calendar, Clock, User, Mail, Plus, Trash2, Check, ChevronLeft
 import { orariPossibili, durataServizio, impegniServizio, senzaOperatore, impegniBooking, operatoriDelServizio } from "../../orari.js";
 import { ESTENSIONI } from "../../cliente/index.jsx";
 import { ADVANCE_DAYS, uid, minToStr, strToMin, pd, todayStr, parseDate, addDays, WDAY_SHORT, MONTHS, fmtDate, fmtDateTime, eur, fileToCoverDataURL, qualifiedStaff, staffOff, salonClosure, upsertClient, loyaltyConfig, clientBalance, matchPackage, STATUS, useMods, FieldIcon, Row } from "./comuni.jsx";
+import { registraAttivita } from "./comuni.jsx";
 import { GoogleCard, GoogleEventoModal, EmailModal, emailDi } from "./google.jsx";
 import { emettiScontrino, righeDaAppuntamento, SceltaPagamento, etichettaRt, stampaRicevutaNonFiscale, stampanteNonFiscale } from "./cassaRt.jsx";
 
@@ -842,6 +843,7 @@ export function ApptActions({ booking, config, clients, setClients, bookings, sa
     const esito = await emettiScontrino(righeDaAppuntamento(booking, config, importo, cassaRt.cfg), metodo, importo, cassaRt.cfg);
     setInStampa(false);
     if (!esito.ok) return;
+    registraAttivita("cassa", `Scontrino ${etichettaRt(esito.rt)} · appuntamento di ${booking.clientName || ""} · ${eur(price)}`, { appuntamento: booking.id });
     onStatus(booking.id, status, price, { rt: esito.rt, metodo });
   };
   // «Parziale» col programma della cassa: acconto con ricevuta NON fiscale sulla stampante ESC/POS

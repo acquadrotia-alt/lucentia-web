@@ -28,6 +28,7 @@ import { effatta } from "./core/effatta.js";
 import { clientiOnline } from "./core/clienti.js";
 import { promemoriaRoute } from "./core/promemoria.js";
 import { icsGestione, icsFeed } from "./core/ics.js";
+import { registroRoute, registra } from "./core/registro.js";
 import { getAzienda } from "./core/sessione.js";
 import { parseModuli } from "./core/util.js";
 
@@ -151,6 +152,8 @@ async function gestisci(context) {
 
   if (segs[0] === "operatori") return await operatori(context, segs, sess);
   if (segs[0] === "data" && segs[1]) return await dati(context, segs, sess, statoDi);
+  // ---- registro delle attività (titolare) ----
+  if (segs[0] === "registro") return await registroRoute(context, sess);
 
   return json({ error: "not found" }, 404);
 }

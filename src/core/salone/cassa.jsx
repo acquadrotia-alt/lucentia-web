@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { User, Plus, Trash2, Check, ChevronRight, X, Image as ImageIcon, Search, Star, Timer, Printer, ShoppingCart, Package, Tag, Minus, Boxes, Receipt, Layers, AlertCircle, PackagePlus, FileText, Undo2, Ban, CalendarCheck, ChevronLeft, Sparkles } from "lucide-react";
 import { uid, eur, fmtDateTime, fileToSquareDataURL, generateCode, useMods, Field } from "./comuni.jsx";
+import { registraAttivita } from "./comuni.jsx";
 import { printSale } from "./stampa.jsx";
 import { cassaRtDisponibile, emettiScontrino, annullaScontrino, resoScontrino, righeDaCarrello, SceltaPagamento, RegistratorePannello, etichettaRt, rtChiedi, stampaRicevutaNonFiscale, stampanteNonFiscale } from "./cassaRt.jsx";
 import { uid as uid2, minToStr, todayStr, addDays, fmtDate, parseDate, WDAY_SHORT } from "./comuni.jsx";
@@ -82,10 +83,12 @@ export function PosTab({ catalog, setCatalog, sales, setSales, clients, setClien
       if (partial) {
         const r = await stampaRicevutaNonFiscale({ righe: cart.map((it) => ({ descrizione: it.name + (it.label && it.label !== "Standard" ? " " + it.label : ""), qta: it.qty, prezzo: it.price })), totale: total, cliente: client ? client.name : "", pagamento: metodo === "elettronico" ? "Carta / POS" : "Contanti", numero: sale.id.slice(0, 7).toUpperCase() }, cassaRt.cfg, branding);
         sale.ricevutaNonFiscale = r.ok; sale.metodo = metodo || "contanti";
+        registraAttivita("cassa", `Parziale ${eur(total)} · ricevuta non fiscale${r.ok ? "" : " non stampata"}`, { vendita: sale.id });
       } else {
         const esito = await emettiScontrino(righeDaCarrello(cart, catalog, config, cassaRt.cfg), metodo || "contanti", total, cassaRt.cfg);
         if (!esito.ok) { setInStampa(false); return; }
         sale.rt = esito.rt; sale.metodo = metodo || "contanti";
+        registraAttivita("cassa", `Scontrino ${etichettaRt(sale.rt)} · ${eur(total)} · ${metodo === "elettronico" ? "carta" : "contanti"}`, { vendita: sale.id });
       }
       setInStampa(false);
     }

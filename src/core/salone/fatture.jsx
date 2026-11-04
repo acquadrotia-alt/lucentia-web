@@ -14,6 +14,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { FileText, Plus, X, Check, AlertTriangle, Download, Send, RefreshCw, ChevronRight, Trash2, Receipt, Building2, Ban, Search, Inbox } from "lucide-react";
 import { uid, eur, todayStr, fmtDateTime, Field, useMods } from "./comuni.jsx";
+import { registraAttivita } from "./comuni.jsx";
 import { TIPI_DOCUMENTO, MODALITA_PAGAMENTO, REGIMI_FISCALI, NATURE_IVA, n2, nettoDaLordo, rigaTotale, totali, controlla, fatturaXml, nomeFile, leggiEsitoSdi, ESITO_DEFINITIVO, chiaveAcquisto, pivaPulita, cfPulito } from "../fatture/fatturapa.js";
 
 export async function effattaApi(action, { query = "", body } = {}) {
@@ -98,6 +99,7 @@ export function FattureView({ config, saveConfig, fatture, setFatture, acquisti,
       const { anno, n } = prossimoNumero(cfgF, nuova.data);
       if (nuova.numero === prossimoNumero(cfgF, nuova.data).numero) saveConfig({ ...config, fatture: { ...cfgF, numerazione: { ...cfgF.numerazione, prossimo: { ...(cfgF.numerazione.prossimo || {}), [anno]: n + 1 } } } });
       onEmessa && onEmessa(nuova);
+      registraAttivita("fatture", `${nuova.tipo === "TD04" ? "Nota di credito" : "Fattura"} n. ${nuova.numero} emessa · ${nuova.cliente && nuova.cliente.denominazione ? nuova.cliente.denominazione : ""}`, { fattura: nuova.id });
     }
     setForm(null); setOpenId(nuova.id);
   };
@@ -116,6 +118,7 @@ export function FattureView({ config, saveConfig, fatture, setFatture, acquisti,
     const d = r.invio || {};
     const effattaId = String(d.idDocumento || d.IdDocumento || d.id || d.IdentificativoSdI || "").slice(0, 80);
     patch(f.id, { xmlProgressivo: prog, xmlNome: nome, effattaId: effattaId || "inviata", sdiInviatoIl: new Date().toISOString(), sdiEsito: "", sdiEsitoTipo: "", sdiEsitoIl: "" });
+    registraAttivita("fatture", `Fattura n. ${f.numero} mandata allo SDI tramite Effatta`, { fattura: f.id });
     if (!f.xmlProgressivo) saveConfig({ ...config, fatture: { ...cfgF, progressivoInvio: prog + 1 } });
     setMsg({ ok: true, testo: `Fattura n. ${f.numero} mandata allo SDI. L'esito arriva da solo entro qualche ora.` });
   };
