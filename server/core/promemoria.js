@@ -145,6 +145,13 @@ export async function promemoriaRoute(ctx, segs, cliente, statoDi) {
       } catch (e) { return { installazione: i.nome, dominio: dom, errore: String((e && e.message) || e) }; }
     });
     out.installazioni = (await Promise.allSettled(chiamate)).map((x) => (x.status === "fulfilled" ? x.value : { errore: String(x.reason) }));
+    // l'esito resta nel portale (pannello → avvisi): per ogni installazione l'ultimo giro e com'è andato
+    for (let k = 0; k < inst.length; k++) {
+      const e = out.installazioni[k] || {};
+      const ok = !e.errore && e.http === 200 && !!(e.esito && e.esito.ok);
+      try { await scriviInt(env, SISTEMA, "giro:" + inst[k].id, { il: out.quando, ok, http: e.http || null, errore: e.errore || (e.motivo ? e.motivo : (!ok && e.esito && e.esito.error) || "") || "", saloni: e.esito && Array.isArray(e.esito.saloni) ? e.esito.saloni.map((sx) => ({ conferme: sx.conferme || 0, giornoPrima: sx.giornoPrima || 0, oraPrima: sx.oraPrima || 0, recensioni: sx.recensioni || 0, errori: sx.errori || 0, motivo: sx.motivo || "" })) : [] }); } catch (err) {}
+    }
+    try { await scriviInt(env, SISTEMA, "giro:ultimo", { il: out.quando, installazioni: inst.length }); } catch (err) {}
   }
   return json(out);
 }

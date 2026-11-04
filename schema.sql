@@ -18,7 +18,7 @@ CREATE INDEX IF NOT EXISTS idx_prenotazioni_azienda ON prenotazioni_online(azien
 -- Installazioni cliente (solo portale): ogni cliente ha il suo sito+gestionale
 -- su Cloudflare col proprio dominio e database; qui vivono licenza annuale,
 -- moduli attivi e l'impronta della chiave con cui l'installazione si presenta.
-CREATE TABLE IF NOT EXISTS installazioni (id TEXT PRIMARY KEY, nome TEXT, dominio TEXT, chiave_hash TEXT, licenza_scadenza TEXT, attiva INTEGER DEFAULT 1, moduli TEXT, moduli_disponibili TEXT, note TEXT, versione TEXT, dominio_rilevato TEXT, ultimo_contatto TEXT, creata_il TEXT DEFAULT (datetime('now')));
+CREATE TABLE IF NOT EXISTS installazioni (id TEXT PRIMARY KEY, nome TEXT, dominio TEXT, chiave_hash TEXT, licenza_scadenza TEXT, attiva INTEGER DEFAULT 1, moduli TEXT, moduli_disponibili TEXT, note TEXT, versione TEXT, dominio_rilevato TEXT, ultimo_contatto TEXT, repo TEXT, creata_il TEXT DEFAULT (datetime('now')));
 -- Copia locale della licenza ricevuta dal portale (solo installazioni cliente).
 CREATE TABLE IF NOT EXISTS licenza_locale (id TEXT PRIMARY KEY, dati TEXT, verificata_il TEXT, tentata_il TEXT);
 -- Archivio riservato delle integrazioni (Gmail, Google Calendar, feed iCalendar):
