@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { User, Plus, Trash2, Check, ChevronRight, X, Image as ImageIcon, Search, Star, Timer, Printer, ShoppingCart, Package, Tag, Minus, Boxes, Receipt, Layers, AlertCircle, PackagePlus, FileText } from "lucide-react";
+import { User, Plus, Trash2, Check, ChevronRight, X, Image as ImageIcon, Search, Star, Timer, Printer, ShoppingCart, Package, Tag, Minus, Boxes, Receipt, Layers, AlertCircle, PackagePlus, FileText, Undo2, Ban } from "lucide-react";
 import { uid, eur, fmtDateTime, fileToSquareDataURL, generateCode, useMods, Field } from "./comuni.jsx";
 import { printSale } from "./stampa.jsx";
+import { cassaRtDisponibile, emettiScontrino, annullaScontrino, resoScontrino, righeDaCarrello, SceltaPagamento, RegistratorePannello, etichettaRt, rtChiedi } from "./cassaRt.jsx";
 
 export const cartTotal = (cart) => cart.reduce((a, it) => a + it.price * it.qty, 0);
 // Scarica le giacenze dal catalogo in base al carrello venduto.
@@ -14,21 +15,25 @@ export function applySaleToCatalog(catalog, cart) {
   });
   return { ...catalog, products };
 }
-export function ShopView({ catalog, setCatalog, sales, setSales, clients, setClients, branding, loyalty, hidePartial, canAddClient, demo, onFattura = null }) {
+export function ShopView({ catalog, setCatalog, sales, setSales, clients, setClients, branding, loyalty, hidePartial, canAddClient, demo, onFattura = null, cassaRt = null }) {
   const [sezione, setSezione] = useState("cassa");
+  const rt = cassaRt && cassaRt.attiva ? cassaRt : null;
+  const TAB = [["cassa", "Cassa", ShoppingCart], ["storico", "Storico", Receipt], ...(rt ? [["registratore", "Registratore", Printer]] : [])];
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div><h2 className="text-xl font-semibold tracking-tight text-stone-900 leading-none">Vendita</h2><p className="text-[13px] text-stone-400 mt-1">Cassa prodotti e storico delle vendite</p></div>
-        <div className="flex gap-1 bg-stone-100/80 rounded-xl p-1">{[["cassa", "Cassa", ShoppingCart], ["storico", "Storico", Receipt]].map(([k, l, Icon]) => <button key={k} onClick={() => setSezione(k)} aria-current={sezione === k ? "true" : undefined} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition ${sezione === k ? "bg-white shadow-[var(--lc-shadow-xs)] text-stone-900" : "text-stone-500 hover:text-stone-700"}`}><Icon size={15} /> {l}</button>)}</div>
+        <div><h2 className="text-xl font-semibold tracking-tight text-stone-900 leading-none">Vendita</h2><p className="text-[13px] text-stone-400 mt-1">{rt ? "Scontrini fiscali col registratore telematico e storico" : "Cassa prodotti e storico delle vendite"}</p></div>
+        <div className="flex gap-1 bg-stone-100/80 rounded-xl p-1">{TAB.map(([k, l, Icon]) => <button key={k} onClick={() => setSezione(k)} aria-current={sezione === k ? "true" : undefined} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition ${sezione === k ? "bg-white shadow-[var(--lc-shadow-xs)] text-stone-900" : "text-stone-500 hover:text-stone-700"}`}><Icon size={15} /> {l}</button>)}</div>
       </div>
-      {sezione === "cassa" ? <PosTab catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} clients={clients} setClients={setClients} branding={branding} loyalty={loyalty} hidePartial={hidePartial} canAddClient={canAddClient} /> : null}
-      {sezione === "storico" ? <SalesHistoryTab sales={sales} branding={branding} hidePartial={hidePartial} onFattura={onFattura} /> : null}
+      {sezione === "cassa" ? <PosTab catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} clients={clients} setClients={setClients} branding={branding} loyalty={loyalty} hidePartial={hidePartial} canAddClient={canAddClient} cassaRt={rt} /> : null}
+      {sezione === "storico" ? <SalesHistoryTab sales={sales} setSales={setSales} catalog={catalog} setCatalog={setCatalog} branding={branding} hidePartial={hidePartial} onFattura={onFattura} cassaRt={rt} /> : null}
+      {sezione === "registratore" && rt ? <RegistratorePannello cfg={rt.cfg} onRicarica={rt.ricarica} /> : null}
     </div>
   );
 }
 
-export function PosTab({ catalog, setCatalog, sales, setSales, clients, setClients, branding, loyalty, hidePartial, canAddClient }) {
+export function PosTab({ catalog, setCatalog, sales, setSales, clients, setClients, branding, loyalty, hidePartial, canAddClient, cassaRt = null }) {
+  const [inStampa, setInStampa] = useState(false);
   const F = useMods();
   const cats = catalog.categories;
   const [cat, setCat] = useState("all");
@@ -51,10 +56,18 @@ export function PosTab({ catalog, setCatalog, sales, setSales, clients, setClien
   const count = cart.reduce((a, it) => a + it.qty, 0);
   const salePoints = (loyalty && loyalty.fromSales) ? cart.reduce((a, it) => { const p = catalog.products.find((x) => x.id === it.productId); return a + ((p && p.points) || 0) * it.qty; }, 0) : 0;
 
-  const confirm = (partial) => {
-    if (!cart.length) return;
+  const confirm = async (partial, metodo) => {
+    if (!cart.length || inStampa) return;
     for (const it of cart) { const prod = catalog.products.find((p) => p.id === it.productId); const fmt = prod && prod.formats.find((f) => f.id === it.formatId); if (!fmt || (Number(fmt.stock) || 0) < it.qty) { alert(`Giacenza insufficiente per ${it.name}.`); return; } }
     const sale = { id: uid(), ts: Date.now(), type: "sale", partial: !!partial, clientCode: client ? client.code : null, clientName: client ? (client.name || "") : "", items: cart.map((it) => ({ productId: it.productId, formatId: it.formatId, name: it.name, label: it.label, price: it.price, qty: it.qty })), total };
+    // Col registratore: la vendita si registra SOLO dopo che lo scontrino è uscito. Il carrello resta com'è fino ad allora.
+    if (cassaRt && cassaRt.cfg) {
+      setInStampa(true);
+      const esito = await emettiScontrino(righeDaCarrello(cart, catalog), metodo || "contanti", total, cassaRt.cfg);
+      setInStampa(false);
+      if (!esito.ok) return;
+      sale.rt = esito.rt; sale.metodo = metodo || "contanti";
+    }
     setCatalog(applySaleToCatalog(catalog, cart));
     setSales([sale, ...sales]);
     setCart([]); setClient(null); setLastSale(sale);
@@ -120,7 +133,7 @@ export function PosTab({ catalog, setCatalog, sales, setSales, clients, setClien
             <div className="px-4">
               {lastSale ? (
                 <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-sm text-green-700 my-4">
-                  <div className="flex items-center gap-1.5 font-medium"><Check size={15} /> Vendita {lastSale.partial ? "parziale " : ""}registrata · {eur(lastSale.total)}</div>
+                  <div className="flex items-center gap-1.5 font-medium"><Check size={15} /> {lastSale.rt ? `Scontrino ${etichettaRt(lastSale.rt)} emesso` : `Vendita ${lastSale.partial ? "parziale " : ""}registrata`} · {eur(lastSale.total)}</div>
                   <div className="flex gap-2 mt-2">
                     <button onClick={() => printSale(lastSale, branding)} className="text-xs font-medium border border-green-300 text-green-700 px-2.5 py-1.5 rounded-lg hover:bg-green-100 inline-flex items-center gap-1"><Printer size={13} /> Scontrino</button>
                     <button onClick={() => setLastSale(null)} className="text-xs font-medium text-green-700 px-2.5 py-1.5 hover:underline">Nuova vendita</button>
@@ -148,10 +161,12 @@ export function PosTab({ catalog, setCatalog, sales, setSales, clients, setClien
                 <ClientAssign clients={clients} setClients={setClients} client={client} setClient={setClient} canAddClient={canAddClient} />
                 {F.fidelity && loyalty && loyalty.fromSales ? <div className="flex items-center justify-between text-sm"><span className="flex items-center gap-1.5 text-stone-500"><Star size={14} className="brand-accent" /> Punti generati</span><span className="font-medium brand-accent">+{salePoints}{client ? "" : " (assegna un cliente)"}</span></div> : null}
                 <div className="flex items-baseline justify-between pt-1"><span className="text-sm font-medium text-stone-500">Totale</span><span className="text-2xl font-semibold tracking-tight tabular-nums text-stone-900">{eur(total)}</span></div>
+                {cassaRt ? <SceltaPagamento totale={total} disabled={inStampa} onScegli={(m) => confirm(false, m)} /> : (
                 <div className={hidePartial ? "" : "grid grid-cols-2 gap-2"}>
                   <button onClick={() => confirm(false)} className="w-full brand-bg font-semibold py-2.5 rounded-xl flex items-center justify-center gap-1.5 shadow-[var(--lc-shadow-xs)] hover:shadow-[var(--lc-shadow-sm)]"><Check size={16} /> {hidePartial ? "Conferma vendita" : "Totale"}</button>
                   {!hidePartial ? <button onClick={() => confirm(true)} className="font-medium py-2.5 rounded-xl flex items-center justify-center gap-1.5 border border-amber-300 text-amber-700 hover:bg-amber-50 transition"><Timer size={16} /> Parziale</button> : null}
                 </div>
+                )}
               </div>
             </>
           )}
@@ -208,13 +223,37 @@ export function ClientAssign({ clients, setClients, client, setClient, canAddCli
   );
 }
 
-export function SalesHistoryTab({ sales, branding, hidePartial, onFattura = null }) {
+export function SalesHistoryTab({ sales, setSales, catalog, setCatalog, branding, hidePartial, onFattura = null, cassaRt = null }) {
+  const [busyRt, setBusyRt] = useState("");
+  // Annullo (tutto lo scontrino) o reso (una parte) col registratore: prima chiede, poi emette, e solo se è uscito registra.
+  const rettifica = async (s, tipo) => {
+    if (!cassaRt || !cassaRt.cfg || busyRt) return;
+    const righe = s.items.map((it) => { const p = (catalog.products || []).find((x) => x.id === it.productId) || {}; const f = (p.formats || []).find((x) => x.id === it.formatId) || {}; return { descrizione: it.name + (it.label && it.label !== "Standard" ? " " + it.label : ""), qta: it.qty, prezzo: it.price, aliquota: f.aliquota || p.aliquota || "", categoria: p.categoryId || "", productId: it.productId, formatId: it.formatId }; });
+    let daRendere = righe, totale = s.total;
+    if (tipo === "reso") {
+      const q = prompt("Quanti pezzi rendere per ogni riga, nell'ordine, separati da virgola?\n" + righe.map((r, i) => `${i + 1}. ${r.descrizione} (venduti ${r.qta})`).join("\n"), righe.map((r) => r.qta).join(","));
+      if (q == null) return;
+      const nums = q.split(/[,;\s]+/).map((x) => Math.max(0, Math.round(Number(x) || 0)));
+      daRendere = righe.map((r, i) => ({ ...r, qta: Math.min(r.qta, nums[i] || 0) })).filter((r) => r.qta > 0);
+      if (!daRendere.length) return;
+      totale = Math.round(daRendere.reduce((a, r) => a + r.prezzo * r.qta, 0) * 100) / 100;
+    } else if (!(await rtChiedi("Annullare lo scontrino?", `Annullo lo scontrino ${etichettaRt(s.rt)} di ${eur(s.total)}: il registratore emette un documento di annullo e la vendita viene stornata (i prodotti tornano in magazzino).`, [{ label: "Sì, annulla", value: "si" }, { label: "No", value: "no", soft: true }], "warn")) === "si") return;
+    setBusyRt(s.id);
+    const r = tipo === "reso" ? await resoScontrino(s, daRendere, totale, cassaRt.cfg) : await annullaScontrino(s, righe, cassaRt.cfg);
+    setBusyRt("");
+    if (!r.fatto) { if (r.errore) await rtChiedi("Operazione non riuscita", r.errore, [{ label: "Chiudi", value: "close" }], "warn"); return; }
+    // le giacenze tornano su; la vendita resta nello storico, stornata o con il reso collegato
+    if (setCatalog) setCatalog({ ...catalog, products: catalog.products.map((p) => ({ ...p, formats: p.formats.map((f) => { const it = daRendere.find((x) => x.productId === p.id && x.formatId === f.id); return it ? { ...f, stock: (Number(f.stock) || 0) + it.qta } : f; }) })) });
+    const rec = { id: uid(), ts: Date.now(), type: tipo, riferimento: s.id, clientCode: s.clientCode, clientName: s.clientName, items: daRendere.map((r) => ({ productId: r.productId, formatId: r.formatId, name: r.descrizione, label: "", price: r.prezzo, qty: r.qta })), total: -totale, rt: r.rt, metodo: s.metodo };
+    setSales([rec, ...sales.map((x) => (x.id === s.id ? { ...x, [tipo === "reso" ? "resoId" : "annulloId"]: rec.id, ...(tipo === "annullo" ? { annullato: true } : {}) } : x))]);
+  };
   const [openId, setOpenId] = useState(null);
   const [q, setQ] = useState("");
   const isLoad = (r) => r.type === "load" || r.type === "rettifica";
+  const isReso = (r) => r.type === "reso" || r.type === "annullo";
   const visible = (hidePartial ? sales.filter((r) => !r.partial) : sales).filter((r) => !isLoad(r));
   const startToday = new Date(); startToday.setHours(0, 0, 0, 0);
-  const onlySales = visible.filter((s) => !isLoad(s));
+  const onlySales = visible.filter((s) => !isLoad(s) && !isReso(s) && !s.annullato);
   const todaySales = onlySales.filter((s) => s.ts >= startToday.getTime());
   const todayTot = todaySales.reduce((a, s) => a + (s.total || 0), 0);
   const allTot = onlySales.reduce((a, s) => a + (s.total || 0), 0);
@@ -233,7 +272,7 @@ export function SalesHistoryTab({ sales, branding, hidePartial, onFattura = null
             <button onClick={() => setOpenId(open ? null : s.id)} className="w-full flex items-center gap-3 p-3 text-left">
               {load ? <PackagePlus size={18} className="text-emerald-500 shrink-0" /> : <Receipt size={18} className="text-stone-400 shrink-0" />}
               <div className="flex-1 min-w-0">
-                <div className="font-medium truncate flex items-center gap-2">{load ? <span>Carico magazzino</span> : <span>{eur(s.total)}</span>}<span className="text-xs text-stone-400 font-normal">· {pieces} pz</span>{s.partial ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 inline-flex items-center gap-0.5"><Timer size={10} /> Parziale</span> : null}{load ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Carico</span> : null}</div>
+                <div className="font-medium truncate flex items-center gap-2 flex-wrap">{load ? <span>Carico magazzino</span> : <span className={s.annullato ? "line-through text-stone-400" : ""}>{eur(s.total)}</span>}<span className="text-xs text-stone-400 font-normal">· {pieces} pz</span>{isReso(s) ? <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${s.type === "reso" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}>{s.type === "reso" ? "Reso" : "Annullo"}</span> : null}{s.annullato ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-500">Annullata</span> : null}{s.rt ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-600 inline-flex items-center gap-0.5"><Receipt size={10} /> {etichettaRt(s.rt)}</span> : null}{s.partial ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 inline-flex items-center gap-0.5"><Timer size={10} /> Parziale</span> : null}{load ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Carico</span> : null}</div>
                 <div className="text-xs text-stone-400 truncate">{fmtDateTime(s.ts)}{load ? "" : (s.clientName ? ` · ${s.clientName}` : " · Cliente occasionale")}</div>
               </div>
               <ChevronRight size={18} className={`text-stone-300 shrink-0 transition-transform ${open ? "rotate-90" : ""}`} />
@@ -242,7 +281,11 @@ export function SalesHistoryTab({ sales, branding, hidePartial, onFattura = null
               <div className="px-3 pb-3 border-t border-stone-100 pt-2">
                 <div className="space-y-1 text-sm">{s.items.map((it, i) => (<div key={i} className="flex justify-between gap-2"><span className="text-stone-600">{load ? `+${it.qty}` : `${it.qty}×`} {it.name}{it.label ? ` (${it.label})` : ""}</span>{load ? <span className="text-emerald-600 shrink-0">+{it.qty} pz</span> : <span className="text-stone-500 shrink-0">{eur(it.price * it.qty)}</span>}</div>))}</div>
                 {!load ? <div className="mt-3 flex flex-wrap gap-2 items-center"><button onClick={() => printSale(s, branding)} className="text-xs font-medium border border-stone-300 text-stone-600 px-3 py-1.5 rounded-lg hover:bg-stone-50 inline-flex items-center gap-1.5"><Printer size={14} /> Stampa scontrino</button>
-                  {onFattura ? (s.fatturaId ? <span className="text-xs text-stone-500 inline-flex items-center gap-1"><FileText size={13} /> Fattura n. {s.fatturaNumero}</span> : <button onClick={() => onFattura(s)} className="text-xs font-medium border brand-border brand-accent bg-white px-3 py-1.5 rounded-lg hover:brand-soft inline-flex items-center gap-1.5"><FileText size={14} /> Fattura</button>) : null}</div> : null}
+                  {onFattura ? (s.fatturaId ? <span className="text-xs text-stone-500 inline-flex items-center gap-1"><FileText size={13} /> Fattura n. {s.fatturaNumero}</span> : <button onClick={() => onFattura(s)} className="text-xs font-medium border brand-border brand-accent bg-white px-3 py-1.5 rounded-lg hover:brand-soft inline-flex items-center gap-1.5"><FileText size={14} /> Fattura</button>) : null}
+                  {cassaRt && s.rt && s.type === "sale" && !s.annullato ? <>
+                    <button onClick={() => rettifica(s, "reso")} disabled={!!busyRt} className="text-xs font-medium border border-amber-300 text-amber-700 px-3 py-1.5 rounded-lg hover:bg-amber-50 inline-flex items-center gap-1.5 disabled:opacity-50"><Undo2 size={14} /> Reso</button>
+                    <button onClick={() => rettifica(s, "annullo")} disabled={!!busyRt} className="text-xs font-medium border border-red-300 text-red-700 px-3 py-1.5 rounded-lg hover:bg-red-50 inline-flex items-center gap-1.5 disabled:opacity-50"><Ban size={14} /> Annulla scontrino</button>
+                  </> : null}</div> : null}
               </div>
             ) : null}
           </div>

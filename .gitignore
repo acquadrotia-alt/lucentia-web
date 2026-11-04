@@ -16,3 +16,7 @@ __pycache__/
 
 # File di sistema
 .DS_Store
+
+# Programma Windows (generato)
+desktop/risorse/
+desktop/dist/

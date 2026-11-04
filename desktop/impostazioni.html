@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Impostazioni della cassa</title>
+<style>
+  :root { --brand: #1c1917; --soft: #f5f5f4; --line: #d6d3d1; --muted: #78716c; --ok: #15803d; --warn: #b45309; --err: #b91c1c; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Inter, "Segoe UI", system-ui, sans-serif; background: #fafaf9; color: #1c1917; font-size: 14px; }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 24px 20px 40px; }
+  h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -.01em; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 18px; }
+  .card { background: #fff; border: 1px solid #e7e5e4; border-radius: 16px; padding: 18px; margin-bottom: 14px; }
+  .card h2 { font-size: 15px; margin: 0 0 4px; }
+  .card .d { color: var(--muted); font-size: 12.5px; margin: 0 0 12px; line-height: 1.5; }
+  label.f { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 4px; }
+  input, select { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; font-size: 14px; background: #fff; font-family: inherit; }
+  input:focus, select:focus { outline: 2px solid #d6d3d1; outline-offset: 1px; }
+  .g { display: grid; gap: 12px; } .g2 { grid-template-columns: 1fr 1fr; } .g3 { grid-template-columns: 1fr 1fr 1fr; } .g4 { grid-template-columns: 5rem 1fr 6rem 2.5rem; align-items: end; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  button { font-family: inherit; font-size: 14px; font-weight: 600; border-radius: 10px; padding: 10px 16px; cursor: pointer; border: 1px solid var(--line); background: #fff; color: #44403c; }
+  button.p { background: var(--brand); color: #fff; border-color: var(--brand); }
+  button.x { color: var(--err); border-color: #fecaca; background: #fff; padding: 6px 10px; }
+  button:disabled { opacity: .5; cursor: default; }
+  .msg { margin-top: 10px; font-size: 13px; font-weight: 600; } .msg.ok { color: var(--ok); } .msg.err { color: var(--err); }
+  .sim { border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; border: 1px solid; }
+  .sim.on { background: #fffbeb; border-color: #fde68a; } .sim.off { background: #ecfdf5; border-color: #a7f3d0; }
+  .sim label { font-weight: 700; display: flex; gap: 8px; align-items: center; cursor: pointer; }
+  .sim .d { margin: 6px 0 0; }
+  .chk { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; } .chk input { width: auto; }
+  #porta { max-width: 420px; margin: 60px auto; text-align: center; }
+  #porta input { text-align: center; letter-spacing: .3em; font-size: 20px; }
+  .ver { color: #a8a29e; font-size: 11px; text-align: center; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div id="porta" class="wrap">
+  <div class="card">
+    <h1>Impostazioni della cassa</h1>
+    <p class="sub">Riservate al tecnico. Inserisci la password per continuare.</p>
+    <input id="pw" type="password" placeholder="••••" autofocus>
+    <p id="pw-err" class="msg err" style="display:none">Password sbagliata.</p>
+    <div class="row" style="justify-content:center;margin-top:12px"><button class="p" id="pw-ok">Entra</button></div>
+  </div>
+  <p class="ver" id="ver"></p>
+</div>
+
+<div id="app" class="wrap" style="display:none">
+  <h1>Impostazioni della cassa</h1>
+  <p class="sub">Registratore telematico Custom (K3 RT e gli altri di 3ª generazione, protocollo XML 1.30). Le modifiche valgono subito per il gestionale aperto.</p>
+
+  <div class="card">
+    <h2>Gestionale</h2>
+    <p class="d">L'indirizzo del gestionale del salone, quello che si apre all'avvio (es. https://salone.it/gestionale oppure https://nome.pages.dev/gestionale).</p>
+    <label class="f" for="url">Indirizzo del gestionale</label>
+    <input id="url" placeholder="https://…/gestionale">
+  </div>
+
+  <div class="card">
+    <h2>Registratore</h2>
+    <div id="sim" class="sim on">
+      <label><input type="checkbox" id="simula"> Modalità simulazione</label>
+      <p class="d" id="sim-d"></p>
+    </div>
+    <div class="g g2">
+      <div><label class="f" for="host">Indirizzo IP del registratore</label><input id="host" placeholder="192.168.1.50"></div>
+      <div><label class="f" for="matricola">Matricola (anche utente e password)</label><input id="matricola" placeholder="1BMPX000272" style="text-transform:uppercase"></div>
+      <div><label class="f">Schema · porta · percorso</label><div class="row" style="flex-wrap:nowrap"><select id="scheme" style="width:90px"><option value="https">https</option><option value="http">http</option></select><input id="port" style="width:70px"><input id="path"></div></div>
+      <div><label class="f" for="timeout">Tempo massimo per lo scontrino (secondi)</label><input id="timeout" type="number" min="5" max="120"></div>
+    </div>
+    <div class="row" style="margin-top:14px"><button id="verifica">Verifica collegamento</button><span id="verifica-esito" class="msg"></span></div>
+    <p class="d" style="margin:8px 0 0">La verifica usa i valori scritti qui, anche prima di salvarli.</p>
+  </div>
+
+  <div class="card">
+    <h2>Reparti</h2>
+    <p class="d">Come sono programmati sul registratore. Ogni riga dello scontrino va nel reparto con la sua aliquota (22, 10, 5, 4…); per le righe senza IVA la natura (N2.2, N4…).</p>
+    <div id="reparti"></div>
+    <button id="add-rep" style="padding:6px 12px;font-size:13px;margin-top:6px">+ Aggiungi reparto</button>
+    <div class="g g2" style="margin-top:14px">
+      <div><label class="f" for="aliquotaPredefinita">IVA predefinita dei prodotti</label><input id="aliquotaPredefinita" placeholder="22"></div>
+      <div><label class="f" for="aliquotaServizi">IVA predefinita dei servizi</label><input id="aliquotaServizi" placeholder="22"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Pagamenti</h2>
+    <p class="d">Il numero del pagamento (1–30) come è programmato sul registratore, e la descrizione stampata.</p>
+    <div class="g g3" style="align-items:end"><div style="font-weight:600">Contanti</div><div><label class="f">Numero</label><input id="pc-tipo"></div><div><label class="f">Descrizione</label><input id="pc-nome"></div></div>
+    <div class="g g3" style="align-items:end;margin-top:8px"><div style="font-weight:600">Carta / POS</div><div><label class="f">Numero</label><input id="pe-tipo"></div><div><label class="f">Descrizione</label><input id="pe-nome"></div></div>
+  </div>
+
+  <div class="card">
+    <h2>Scontrino</h2>
+    <div class="g g2">
+      <div><label class="f" for="messaggio">Messaggio in fondo (max 42 caratteri)</label><input id="messaggio" maxlength="42"></div>
+      <div><label class="f" for="rigaReso">Righe del reso</label><select id="rigaReso"><option value="printRecItem">come vendita (printRecItem)</option><option value="printRecRefund">reso merce (printRecRefund)</option></select></div>
+    </div>
+    <label class="chk" style="margin-top:12px"><input type="checkbox" id="cassetto"> Apri il cassetto con i pagamenti in contanti</label>
+  </div>
+
+  <div class="row" style="margin-top:6px"><button class="p" id="salva">Salva</button><span id="salva-esito" class="msg"></span></div>
+  <p class="ver" id="ver2"></p>
+</div>
+
+<script>
+(function () {
+  var C = window.lucentiaCassa; var pw = ""; var cfg = null;
+  var $ = function (id) { return document.getElementById(id); };
+  C.versione().then(function (v) { $("ver").textContent = "Lucentia Cassa " + v; $("ver2").textContent = "Lucentia Cassa " + v; });
+  function entra() {
+    C.verificaPassword($("pw").value).then(function (ok) {
+      if (!ok) { $("pw-err").style.display = ""; $("pw").value = ""; $("pw").focus(); return; }
+      pw = $("pw").value; $("porta").style.display = "none"; $("app").style.display = "";
+      C.config().then(function (c) { cfg = c; riempi(); });
+    });
+  }
+  $("pw-ok").onclick = entra; $("pw").addEventListener("keydown", function (e) { if (e.key === "Enter") entra(); });
+
+  function riempi() {
+    ["url", "host", "matricola", "scheme", "port", "path", "timeout", "aliquotaPredefinita", "aliquotaServizi", "messaggio", "rigaReso"].forEach(function (k) { $(k).value = cfg[k] == null ? "" : cfg[k]; });
+    $("simula").checked = !!cfg.simula; $("cassetto").checked = !!cfg.cassetto;
+    $("pc-tipo").value = cfg.pagamenti.contanti.tipo; $("pc-nome").value = cfg.pagamenti.contanti.nome;
+    $("pe-tipo").value = cfg.pagamenti.elettronico.tipo; $("pe-nome").value = cfg.pagamenti.elettronico.nome;
+    simTesto(); disegnaReparti();
+  }
+  function simTesto() {
+    var on = $("simula").checked; $("sim").className = "sim " + (on ? "on" : "off");
+    $("sim-d").textContent = on ? "Non stampa niente: la cassa risponde come il registratore, per provare senza emettere scontrini veri." : "Scontrini VERI sul registratore. Sul primo registratore prova prima uno scontrino da pochi centesimi.";
+  }
+  $("simula").onchange = simTesto;
+  function disegnaReparti() {
+    var box = $("reparti"); box.innerHTML = "";
+    (cfg.reparti || []).forEach(function (r, i) {
+      var d = document.createElement("div"); d.className = "g g4"; d.style.marginBottom = "6px";
+      d.innerHTML = '<div><label class="f">N.</label><input data-k="numero" value="' + esc(r.numero) + '"></div><div><label class="f">Nome</label><input data-k="nome" value="' + esc(r.nome) + '"></div><div><label class="f">Aliquota</label><input data-k="aliquota" value="' + esc(r.aliquota) + '" placeholder="22 / N2.2"></div><div><button class="x" data-del="' + i + '" title="Togli">✕</button></div>';
+      d.querySelectorAll("input").forEach(function (inp) { inp.oninput = function () { cfg.reparti[i][inp.getAttribute("data-k")] = inp.value; }; });
+      d.querySelector("button").onclick = function () { cfg.reparti.splice(i, 1); disegnaReparti(); };
+      box.appendChild(d);
+    });
+  }
+  function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;"); }
+  $("add-rep").onclick = function () { cfg.reparti.push({ numero: String(cfg.reparti.length + 1), nome: "", aliquota: "" }); disegnaReparti(); };
+
+  function raccogli() {
+    var n = {};
+    ["url", "host", "matricola", "scheme", "port", "path", "aliquotaPredefinita", "aliquotaServizi", "messaggio", "rigaReso"].forEach(function (k) { n[k] = $(k).value.trim(); });
+    n.matricola = n.matricola.toUpperCase(); n.url = n.url.replace(/\/+$/, "");
+    n.timeout = Math.min(120, Math.max(5, Number($("timeout").value) || 20));
+    n.simula = $("simula").checked; n.cassetto = $("cassetto").checked;
+    n.reparti = (cfg.reparti || []).filter(function (r) { return String(r.numero || "").trim(); });
+    n.pagamenti = { contanti: { tipo: $("pc-tipo").value.replace(/\D/g, "") || "1", nome: $("pc-nome").value || "CONTANTI" }, elettronico: { tipo: $("pe-tipo").value.replace(/\D/g, "") || "2", nome: $("pe-nome").value || "ELETTRONICO" } };
+    n.categorieReparto = cfg.categorieReparto || {};
+    return n;
+  }
+  $("salva").onclick = function () {
+    var n = raccogli(); var e = $("salva-esito");
+    if (!n.url || !/^https?:\/\//.test(n.url)) { e.className = "msg err"; e.textContent = "Scrivi l'indirizzo del gestionale (inizia con https://)."; return; }
+    if (!n.simula && !n.host) { e.className = "msg err"; e.textContent = "Senza simulazione serve l'indirizzo IP del registratore."; return; }
+    C.salva(n, pw).then(function (c) { cfg = c; e.className = "msg ok"; e.textContent = "Salvato."; }).catch(function (err) { e.className = "msg err"; e.textContent = "Non salvato: " + err.message; });
+  };
+  $("verifica").onclick = function () {
+    var n = raccogli(); var e = $("verifica-esito"); e.className = "msg"; e.textContent = "Verifico…";
+    if (n.simula) { e.className = "msg ok"; e.textContent = "Simulazione attiva: nessun registratore contattato."; return; }
+    var host = n.host.replace(/^https?:\/\//i, "").replace(/\/.*$/, ""); if (!host) { e.className = "msg err"; e.textContent = "Manca l'indirizzo IP."; return; }
+    var url = n.scheme + "://" + host + (/:\d+$/.test(host) || !n.port ? "" : ":" + n.port) + (n.path.charAt(0) === "/" ? n.path : "/" + n.path);
+    C.rtRequest({ url: url, body: '<?xml version="1.0" encoding="utf-8"?>\n<printerCommand>\n  <queryPrinterStatus></queryPrinterStatus>\n</printerCommand>', user: n.matricola, password: n.matricola, timeout: 8000 })
+      .then(function (r) {
+        if (r.status === 401 || r.status === 403) { e.className = "msg err"; e.textContent = "Accesso negato: controlla la matricola."; return; }
+        var m = /<response[^>]*success="([^"]*)"[^>]*status="([^"]*)"/.exec(r.body || "");
+        if (!m) { e.className = "msg err"; e.textContent = "Risposta non riconosciuta (HTTP " + r.status + ")."; return; }
+        if (m[1] !== "true") { e.className = "msg err"; e.textContent = "Il registratore risponde con l'errore " + m[2] + "."; return; }
+        var fw = /<cpuRel>([^<]*)</.exec(r.body || ""); var fp = /<fpStatus>([^<]*)</.exec(r.body || "");
+        e.className = "msg ok"; e.textContent = "Registratore raggiungibile" + (fw ? " · firmware " + fw[1] : "") + (fp && fp[1] !== "000" ? " · attenzione: c'è un documento aperto" : " · nessun documento aperto");
+      }).catch(function (err) { e.className = "msg err"; e.textContent = err.message; });
+  };
+})();
+</script>
+</body>
+</html>
