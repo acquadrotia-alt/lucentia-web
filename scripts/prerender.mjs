@@ -28,15 +28,15 @@ if (process.env.MODALITA === "cliente") {
     .replace(/<meta name="robots"[^>]*>\n?/, "")
     .replace(/[ \t]*<meta (?:property="og:|name="twitter:)[^>]*>\n?/g, "")
     .replace(/[ \t]*<script type="application\/ld\+json">[\s\S]*?<\/script>\n?/, "");
-  for (const [out, titolo] of [["index.html", "Benvenuti"], ["gestionale/index.html", "Gestionale"], ["prenota/index.html", "Prenota"]]) {
+  for (const [out, titolo] of [["index.html", "Benvenuti"], ["gestionale/index.html", "Gestionale"], ["prenota/index.html", "Prenota"], ["utenti/index.html", "Operatori"]]) {
     const file = root + "dist/" + out;
     mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, out === "gestionale/index.html" ? neutro(titolo).replace("<head>", '<head>\n    <meta name="robots" content="noindex" />') : neutro(titolo));
+    writeFileSync(file, out === "gestionale/index.html" || out === "utenti/index.html" ? neutro(titolo).replace("<head>", '<head>\n    <meta name="robots" content="noindex" />') : neutro(titolo));
     console.log(`prerender (cliente): dist/${out}`);
   }
   // La sitemap e il robots del portale non c'entrano col dominio del salone.
   rmSync(root + "dist/sitemap.xml", { force: true });
-  writeFileSync(root + "dist/robots.txt", "User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /gestionale\n");
+  writeFileSync(root + "dist/robots.txt", "User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /gestionale\nDisallow: /utenti\n");
   process.exit(0);
 }
 
