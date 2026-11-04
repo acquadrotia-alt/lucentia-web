@@ -4,6 +4,7 @@ import { orariPossibili, durataServizio, impegniServizio, senzaOperatore, impegn
 import { ESTENSIONI } from "../../cliente/index.jsx";
 import { ADVANCE_DAYS, uid, minToStr, strToMin, pd, todayStr, parseDate, addDays, WDAY_SHORT, MONTHS, fmtDate, fmtDateTime, eur, fileToCoverDataURL, qualifiedStaff, staffOff, salonClosure, upsertClient, loyaltyConfig, clientBalance, matchPackage, STATUS, useMods, FieldIcon, Row } from "./comuni.jsx";
 import { GoogleCard, GoogleEventoModal, EmailModal, emailDi } from "./google.jsx";
+import { emettiScontrino, righeDaAppuntamento, SceltaPagamento, etichettaRt } from "./cassaRt.jsx";
 
 export function SlotPicker({ config, serviceIds, staffFilter, bookings, value, onChange, startDate }) {
   const [weekStart, setWeekStart] = useState(startDate);
@@ -285,7 +286,7 @@ export function ApptItem({ b, staff, services, onCal, onCancel, onEdit, canCance
   );
 }
 
-export function AgendaPage({ config, bookings, setBookings, clients, setClients, sales, catalog, hidePartial, canAddBooking, canAddClient, onlineBk, onImportOnline, onCancelOnline, canManageOnline, eventi, setEventi, impegniEventi, aziendaId, google = null, onFattura = null }) {
+export function AgendaPage({ config, bookings, setBookings, clients, setClients, sales, catalog, hidePartial, canAddBooking, canAddClient, onlineBk, onImportOnline, onCancelOnline, canManageOnline, eventi, setEventi, impegniEventi, aziendaId, google = null, onFattura = null, cassaRt = null }) {
   const [adding, setAdding] = useState(false);
   const [addingEv, setAddingEv] = useState(false);
   const [editingEv, setEditingEv] = useState(null);
@@ -305,7 +306,7 @@ export function AgendaPage({ config, bookings, setBookings, clients, setClients,
       {adding ? <ManualBooking config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} canAddBooking={canAddBooking} canAddClient={canAddClient} impegniEventi={impegniEventi} onDone={() => setAdding(false)} /> : null}
       {addingEv ? <EventForm config={config} eventi={eventi} setEventi={setEventi} onDone={() => setAddingEv(false)} /> : null}
       {editingEv ? <EventForm config={config} eventi={eventi} setEventi={setEventi} editing={editingEv} onDone={() => setEditingEv(null)} /> : null}
-      <AgendaView config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={hidePartial} onlineBk={onlineBk || []} onImportOnline={onImportOnline} onCancelOnline={onCancelOnline} canManageOnline={canManageOnline} eventi={eventi} setEventi={setEventi} impegniEventi={impegniEventi} aziendaId={aziendaId} google={google} onFattura={onFattura} onEditEvento={(ev) => { setEditingEv(ev); setAddingEv(false); setAdding(false); }} />
+      <AgendaView config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={hidePartial} onlineBk={onlineBk || []} onImportOnline={onImportOnline} onCancelOnline={onCancelOnline} canManageOnline={canManageOnline} eventi={eventi} setEventi={setEventi} impegniEventi={impegniEventi} aziendaId={aziendaId} google={google} onFattura={onFattura} cassaRt={cassaRt} onEditEvento={(ev) => { setEditingEv(ev); setAddingEv(false); setAdding(false); }} />
     </div>
   );
 }
@@ -313,7 +314,7 @@ export function AgendaPage({ config, bookings, setBookings, clients, setClients,
 export const VIEW_MODES = [["day", "Giorno", CalendarDays], ["3day", "3 giorni", CalendarRange], ["week", "Settimana", Calendar]];
 export function mondayOf(dateStr) { const d = parseDate(dateStr); const wd = (d.getDay() + 6) % 7; return addDays(dateStr, -wd); }
 
-export function AgendaView({ config, bookings, setBookings, clients, setClients, sales, catalog, hidePartial, onlineBk, onImportOnline, onCancelOnline, canManageOnline, eventi, setEventi, impegniEventi, aziendaId, onEditEvento, google = null, onFattura = null }) {
+export function AgendaView({ config, bookings, setBookings, clients, setClients, sales, catalog, hidePartial, onlineBk, onImportOnline, onCancelOnline, canManageOnline, eventi, setEventi, impegniEventi, aziendaId, onEditEvento, google = null, onFattura = null, cassaRt = null }) {
   const staff = config.staff, services = config.services;
   const [anchor, setAnchor] = useState(todayStr());
   const [mode, setMode] = useState("day");
@@ -343,11 +344,11 @@ export function AgendaView({ config, bookings, setBookings, clients, setClients,
 
   const shift = (dir) => setAnchor((a) => addDays(mode === "week" ? mondayOf(a) : a, dir * span));
   const consumesStatus = (s) => s === "done" || s === "partial";
-  const setStatus = (id, status, amount) => {
+  const setStatus = (id, status, amount, extra) => {
     const b = bookings.find((x) => x.id === id);
     if (!b) { setSel(null); return; }
     const now = consumesStatus(status);
-    let patch = { status };
+    let patch = { status, ...(extra || {}) };
     if (now) patch.amount = (amount === "" || amount == null) ? null : (Number(amount) || 0);
     else patch.amount = null;
     if (now && !b.packageUsed && b.clientCode) {
@@ -441,7 +442,7 @@ export function AgendaView({ config, bookings, setBookings, clients, setClients,
 
       {totalCount + eventCount > 0 ? <p className="text-xs text-stone-400 text-center pt-1">{totalCount} appuntament{totalCount === 1 ? "o" : "i"}{eventCount ? ` e ${eventCount} event${eventCount === 1 ? "o" : "i"}` : ""} nel periodo · tocca una card per gestirla</p> : null}
 
-      {sel ? <ApptActions booking={sel} config={config} clients={clients} setClients={setClients} bookings={bookings} sales={sales} catalog={catalog} hidePartial={hidePartial} onStatus={setStatus} onResch={(bk) => { setResch(bk); setSel(null); }} onClose={() => setSel(null)} onEmailInviata={(id, voce) => setBookings(bookings.map((x) => (x.id === id ? { ...x, emailInviate: [voce, ...(x.emailInviate || [])].slice(0, 10) } : x)))} onFattura={onFattura ? (bk) => { onFattura(bk); setSel(null); } : null} /> : null}
+      {sel ? <ApptActions booking={sel} config={config} clients={clients} setClients={setClients} bookings={bookings} sales={sales} catalog={catalog} hidePartial={hidePartial} onStatus={setStatus} onResch={(bk) => { setResch(bk); setSel(null); }} onClose={() => setSel(null)} onEmailInviata={(id, voce) => setBookings(bookings.map((x) => (x.id === id ? { ...x, emailInviate: [voce, ...(x.emailInviate || [])].slice(0, 10) } : x)))} onFattura={onFattura ? (bk) => { onFattura(bk); setSel(null); } : null} cassaRt={cassaRt} /> : null}
       {selGoogle && google ? <GoogleEventoModal ev={selGoogle} staff={staff} onClose={() => setSelGoogle(null)} onElimina={google.eliminaEsterno} /> : null}
       {selOnline ? <OnlineApptModal booking={selOnline} config={config} canManage={canManageOnline} onImport={(bk) => { onImportOnline && onImportOnline(bk); setSelOnline(null); }} onCancel={(bk) => { onCancelOnline && onCancelOnline(bk); setSelOnline(null); }} onClose={() => setSelOnline(null)} /> : null}
       {resch ? <RescheduleModal booking={resch} config={config} bookings={bookings} impegniEventi={impegniEventi} onClose={() => setResch(null)} onSave={(d2, startMin, slot) => applyResch(resch, d2, startMin, slot)} /> : null}
@@ -830,7 +831,19 @@ export function DettaglioAppuntamento({ b, config }) {
   );
 }
 
-export function ApptActions({ booking, config, clients, setClients, bookings, sales, catalog, hidePartial, onStatus, onResch, onClose, onEmailInviata, onFattura = null }) {
+export function ApptActions({ booking, config, clients, setClients, bookings, sales, catalog, hidePartial, onStatus, onResch, onClose, onEmailInviata, onFattura = null, cassaRt = null }) {
+  const [inStampa, setInStampa] = useState(false);
+  // Col registratore: «Svolto» emette lo scontrino dei servizi e registra l'incasso solo se è uscito.
+  const incassaConScontrino = async (status, metodo) => {
+    const importo = Number(price) || 0;
+    if (!cassaRt || !cassaRt.cfg) { onStatus(booking.id, status, price); return; }
+    if (importo <= 0) { alert("Inserisci l'importo da incassare: lo scontrino non può essere a zero."); return; }
+    setInStampa(true);
+    const esito = await emettiScontrino(righeDaAppuntamento(booking, config, importo, cassaRt.cfg), metodo, importo, cassaRt.cfg);
+    setInStampa(false);
+    if (!esito.ok) return;
+    onStatus(booking.id, status, price, { rt: esito.rt, metodo });
+  };
   const F = useMods();
   const b = booking;
   const [email, setEmail] = useState(false);
@@ -874,7 +887,7 @@ export function ApptActions({ booking, config, clients, setClients, bookings, sa
           <div className="flex items-center gap-2">{ris.persone.length ? <User size={14} className="text-stone-400" /> : <DoorOpen size={14} className="text-stone-400" />} {ris.etichetta}</div>
           {cl && cl.phone ? <div className="flex items-center gap-2"><Phone size={14} className="text-stone-400" /> {cl.phone}</div> : null}
           {b.clientEmail ? <div className="flex items-center gap-2"><Mail size={14} className="text-stone-400" /> {b.clientEmail}</div> : null}
-          {meta ? <div className="flex items-center gap-2"><meta.Icon size={14} className="text-stone-400" /> {meta.label}</div> : null}
+          {meta ? <div className="flex items-center gap-2"><meta.Icon size={14} className="text-stone-400" /> {meta.label}{b.amount != null && b.amount !== "" ? ` · ${eur(b.amount)}` : ""}{b.rt ? ` · scontrino ${etichettaRt(b.rt)}` : ""}</div> : null}
         </div>
         <DettaglioAppuntamento b={b} config={config} />
         {F.has("google") && b.status !== "cancelled" && onEmailInviata ? (
@@ -921,9 +934,10 @@ export function ApptActions({ booking, config, clients, setClients, bookings, sa
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1 flex-1"><input type="number" min={0} step={0.5} value={price} onChange={(e) => setPrice(e.target.value)} autoFocus className="w-full px-3 py-2 rounded-lg border border-stone-300 text-sm text-right brand-ring" /><span className="text-sm text-stone-400">€</span></div>
             </div>
+            {cassaRt ? <div className="mt-3"><SceltaPagamento totale={price} disabled={inStampa} etichetta="Scontrino" onScegli={(m) => incassaConScontrino(askPrice, m)} /></div> : null}
             <div className="grid grid-cols-2 gap-2 mt-3">
-              <button onClick={() => onStatus(b.id, askPrice, price)} className="flex items-center justify-center gap-1.5 text-sm font-medium bg-green-600 text-white px-3 py-2.5 rounded-lg hover:bg-green-700"><Check size={15} /> Conferma {askPrice === "partial" ? "parziale" : "svolto"}</button>
-              <button onClick={() => setAskPrice(null)} className="flex items-center justify-center gap-1.5 text-sm font-medium border border-stone-300 text-stone-600 px-3 py-2.5 rounded-lg hover:bg-stone-50">Indietro</button>
+              {cassaRt ? null : <button onClick={() => onStatus(b.id, askPrice, price)} className="flex items-center justify-center gap-1.5 text-sm font-medium bg-green-600 text-white px-3 py-2.5 rounded-lg hover:bg-green-700"><Check size={15} /> Conferma {askPrice === "partial" ? "parziale" : "svolto"}</button>}
+              <button onClick={() => setAskPrice(null)} className={`${cassaRt ? "col-span-2 " : ""}flex items-center justify-center gap-1.5 text-sm font-medium border border-stone-300 text-stone-600 px-3 py-2.5 rounded-lg hover:bg-stone-50`}>Indietro</button>
             </div>
           </div>
         ) : (

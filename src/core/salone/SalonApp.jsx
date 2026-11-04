@@ -9,6 +9,7 @@ import { GiftCardsView } from "./buoni.jsx";
 import { ShopView } from "./cassa.jsx";
 import { ArticoliView } from "./articoli.jsx";
 import { PersonaleView } from "./personale.jsx";
+import { useCassaRt, StatoCassa } from "./cassaRt.jsx";
 import { StatsView } from "./statistiche.jsx";
 import { MarketingView } from "./marketing.jsx";
 import { SettingsView } from "./impostazioni.jsx";
@@ -55,9 +56,14 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
     { id: "personale", label: "Gestione personale", icon: UserCog, desc: "Ore lavorate di ogni dipendente e fogli ore mensili per chi fa le buste paga.", menu: true, sezioni: [["fogli", "Fogli ore", Clock], ["riepilogo", "Riepilogo del mese", Table2], ["dipendenti", "Dipendenti", Users], ...estensioniIn("personale")] },
     { id: "impostazioni", label: "Impostazioni", icon: Settings, desc: "Attività, servizi, operatori e cabine, sito, integrazioni, dati e licenza.", sezioni: [["settings", "Impostazioni", Settings]] },
   ];
-  const [area, setArea] = useState(esitoGoogle ? "impostazioni" : null);
+  // Nel programma Windows della cassa c'è solo il Banco: si apre direttamente lì, e la
+  // vendita emette scontrini col registratore (impostazioni nel programma, password del tecnico).
+  const cassaRt = useCassaRt();
+  const soloBanco = cassaRt.attiva;
+  const [area, setArea] = useState(esitoGoogle ? "impostazioni" : (soloBanco ? "banco" : null));
   const [view, setView] = useState(esitoGoogle ? "settings" : "agenda");
   const areaCorrente = AREE.find((a) => a.id === area) || null;
+  useEffect(() => { if (soloBanco && area !== "banco") { setArea("banco"); setView("agenda"); } }, [soloBanco, area]);
   const vaiA = (areaId, viewId) => { const a = AREE.find((x) => x.id === areaId); if (!a) { setArea(null); return; } setArea(a.id); setView(viewId && a.sezioni.some((sz) => sz[0] === viewId) ? viewId : a.sezioni[0][0]); try { window.scrollTo({ top: 0 }); } catch (e) {} };
   useEffect(() => { if (area && !areaCorrente) setArea(null); else if (areaCorrente && !areaCorrente.sezioni.some((sz) => sz[0] === view)) setView(areaCorrente.sezioni[0][0]); }, [moduli, area, view]);
   // Google Calendar a due vie (modulo "google"): legge e scrive gli
@@ -272,7 +278,7 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
           </div>
           <nav className="flex items-center gap-0.5 shrink-0 min-w-0">
             {areaCorrente ? <>
-              <button onClick={() => setArea(null)} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-medium text-stone-500 hover:bg-stone-100 hover:text-stone-800 transition" title="Torna alle aree di lavoro"><LayoutGrid size={16} /><span className="hidden lg:inline">Aree</span></button>
+              {soloBanco ? <StatoCassa cfg={cassaRt.cfg} /> : <button onClick={() => setArea(null)} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-medium text-stone-500 hover:bg-stone-100 hover:text-stone-800 transition" title="Torna alle aree di lavoro"><LayoutGrid size={16} /><span className="hidden lg:inline">Aree</span></button>}
               <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-2 text-sm font-semibold text-stone-800"><areaCorrente.icon size={16} className="brand-accent" /> {areaCorrente.label}</span>
               {!areaCorrente.menu && areaCorrente.sezioni.length > 1 ? <span className="hidden sm:block w-px h-5 bg-stone-200 mx-1" /> : null}
               {!areaCorrente.menu && areaCorrente.sezioni.length > 1 ? areaCorrente.sezioni.map(([k, label, Icon]) => (
@@ -283,6 +289,7 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
             </> : null}
             {session.role === "reseller" ? <span className="hidden sm:inline-flex items-center gap-1 text-xs font-medium bg-stone-800 text-white px-2 py-1 rounded-lg ml-1"><ShieldCheck size={13} /> Rivenditore</span> : null}
             {isDemo ? <span className="inline-flex items-center gap-1 text-xs font-medium bg-amber-500 text-white px-2 py-1 rounded-lg ml-1"><Sparkles size={13} /> Demo</span> : null}
+            {soloBanco ? <button onClick={() => { try { window.lucentiaCassa.apriImpostazioni(); } catch (e) {} }} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-medium text-stone-500 hover:bg-stone-100 ml-1" title="Impostazioni della cassa (password del tecnico)"><Settings size={16} /><span className="hidden lg:inline">Impostazioni</span></button> : null}
             <button onClick={onLogout} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-medium text-stone-500 hover:bg-stone-100 ml-1" title="Esci"><LogOut size={16} /><span className="hidden lg:inline">Esci</span></button>
           </nav>
         </div>
@@ -291,10 +298,10 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
 
       <main key={`${area || "home"}-${view}`} className="max-w-5xl w-full mx-auto px-4 py-6 flex-1 lc-fade-up">
         {!area ? <HomeAree aree={AREE} numeri={numeri} branding={b} onApri={(id) => vaiA(id)} /> : null}
-        {area === "banco" && view === "agenda" && <AgendaPage config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={session.hidePartial} canAddBooking={canAddBooking} canAddClient={canAddClient} onlineBk={flags.online ? onlineBk : []} onImportOnline={importOnline} onCancelOnline={cancelOnline} canManageOnline={session.role !== "operator"} eventi={eventi} setEventi={setEventi} impegniEventi={impegni} aziendaId={azienda && azienda.id} google={google} onFattura={flags.fatture && !isDemo ? (b) => fatturaDa("appuntamento", b) : null} />}
+        {area === "banco" && view === "agenda" && <AgendaPage config={config} bookings={bookings} setBookings={setBookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} hidePartial={session.hidePartial} canAddBooking={canAddBooking} canAddClient={canAddClient} onlineBk={flags.online ? onlineBk : []} onImportOnline={importOnline} onCancelOnline={cancelOnline} canManageOnline={session.role !== "operator"} eventi={eventi} setEventi={setEventi} impegniEventi={impegni} aziendaId={azienda && azienda.id} google={google} onFattura={flags.fatture && !isDemo ? (b) => fatturaDa("appuntamento", b) : null} cassaRt={soloBanco && !isDemo ? cassaRt : null} />}
         {area === "banco" && view === "clienti" && <ClientsView config={config} bookings={bookings} clients={clients} setClients={setClients} sales={sales} catalog={catalog} vouchers={vouchers} setVouchers={setVouchers} />}
         {area === "banco" && view === "buoni" && <GiftCardsView config={config} vouchers={vouchers} setVouchers={setVouchers} clients={clients} canAddVoucher={canAddVoucher} />}
-        {area === "banco" && view === "vendita" && <ShopView catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} clients={clients} setClients={setClients} branding={b} loyalty={config.loyalty} hidePartial={session.hidePartial} canAddClient={canAddClient} demo={isDemo} onFattura={flags.fatture && !isDemo ? (s) => fatturaDa("vendita", s) : null} />}
+        {area === "banco" && view === "vendita" && <ShopView catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} clients={clients} setClients={setClients} branding={b} loyalty={config.loyalty} hidePartial={session.hidePartial} canAddClient={canAddClient} demo={isDemo} onFattura={flags.fatture && !isDemo ? (s) => fatturaDa("vendita", s) : null} cassaRt={soloBanco && !isDemo ? cassaRt : null} />}
         {area === "banco" && view === "fatture" && <FattureView config={config} saveConfig={saveConfig} fatture={fatture} setFatture={setFatture} acquisti={acquisti} setAcquisti={setAcquisti} clients={clients} setClients={setClients} bozza={bozzaFattura} onBozzaUsata={() => setBozzaFattura(null)} onEmessa={fatturaEmessa} effatta={effatta} />}
         {area === "banco" && vistaExtra ? <vistaExtra.componente {...propsEstensione} /> : null}
         {area === "articoli" && areaCorrente ? (

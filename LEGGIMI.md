@@ -245,6 +245,10 @@ un modulo del core, non nella cartella del cliente.
   l'accesso del salone. Chiede chi è l'operatore e offre la sua agenda, la scheda
   dell'appuntamento in corso e un nuovo appuntamento con chiunque. Gli appuntamenti presi dal
   telefono compaiono da soli nel gestionale aperto al banco.
+- **Lucentia Cassa (programma Windows)**: per i clienti con il registratore telematico Custom.
+  Si costruisce da GitHub → Actions → «Programma Windows (Lucentia Cassa)»; sul PC del cliente si
+  installa l'.exe e in Cassa → Impostazioni (password del tecnico 0724) si scrivono l'indirizzo
+  del gestionale e i dati del registratore. Dettagli in `desktop/LEGGIMI.md`.
 - **Zona ripristino** (Impostazioni → Dati e backup): azzera punti, azzera vendite e
   appuntamenti, ripristino totale, protetti da password.
 - **Svuota dati** (pannello, saloni di prova): riporta un salone a licenza vuota lasciando

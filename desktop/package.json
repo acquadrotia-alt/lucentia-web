@@ -1,0 +1,27 @@
+{
+  "name": "lucentia-cassa",
+  "productName": "Lucentia Cassa",
+  "version": "1.0.0",
+  "description": "Il gestionale Lucentia sul PC della cassa, con il registratore telematico Custom",
+  "author": "Lucentia",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "prepara": "node prepara.js",
+    "start": "node prepara.js && electron .",
+    "dist": "node prepara.js && electron-builder --win nsis portable --publish never"
+  },
+  "devDependencies": {
+    "electron": "31.7.7",
+    "electron-builder": "24.13.3"
+  },
+  "build": {
+    "appId": "com.lucentia.cassa",
+    "productName": "Lucentia Cassa",
+    "files": ["main.js", "preload.js", "rt-request.js", "impostazioni.html", "benvenuto.html", "risorse/icona.png", "package.json"],
+    "directories": { "output": "dist", "buildResources": "risorse" },
+    "win": { "icon": "risorse/icona.png", "artifactName": "Lucentia-Cassa-${version}-${arch}.${ext}" },
+    "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true, "createDesktopShortcut": true, "shortcutName": "Lucentia Cassa", "artifactName": "Lucentia-Cassa-Installazione-${version}.${ext}" },
+    "portable": { "artifactName": "Lucentia-Cassa-Portatile-${version}.${ext}" }
+  }
+}
