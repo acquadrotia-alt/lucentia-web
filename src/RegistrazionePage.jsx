@@ -21,6 +21,20 @@ export default function RegistrazionePage({ aid }) {
   const [err, setErr] = useState("");
   const [fatto, setFatto] = useState(null);
   const suDominio = typeof window !== "undefined" && window.location.pathname.startsWith("/registrazione");
+  // arrivando dall'email di recupero: ?reset=<token> → si sceglie la nuova password
+  const tokenReset = typeof window !== "undefined" ? (new URLSearchParams(window.location.search).get("reset") || "") : "";
+  const [reset, setReset] = useState({ password: "", conferma: "", busy: false, err: "", fatto: null });
+  const reimposta = async () => {
+    if (reset.password.length < 6) { setReset({ ...reset, err: "La password deve avere almeno 6 caratteri." }); return; }
+    if (reset.password !== reset.conferma) { setReset({ ...reset, err: "Le due password non coincidono." }); return; }
+    setReset({ ...reset, busy: true, err: "" });
+    try {
+      const r = await fetch(`/api/clienti/${aid}/reimposta`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: tokenReset, password: reset.password }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { setReset((x) => ({ ...x, busy: false, err: j.error || "Non riuscito." })); return; }
+      setReset((x) => ({ ...x, busy: false, fatto: j }));
+    } catch (e) { setReset((x) => ({ ...x, busy: false, err: "Rete assente: riprova fra poco." })); }
+  };
   const linkPrenota = suDominio ? "/prenota" : `/?prenota=${encodeURIComponent(aid)}`;
   const privacyUrl = suDominio ? "/privacy" : `/privacy?salone=${encodeURIComponent(aid)}`;
   useEffect(() => {
@@ -57,9 +71,27 @@ export default function RegistrazionePage({ aid }) {
         <div className="text-center mb-6 lc-fade-up">
           {b.logo ? <img src={b.logo} alt={b.brandName} className="h-16 w-16 rounded-2xl object-cover mx-auto mb-3 ring-2 ring-white shadow-md" /> : null}
           <h1 className="font-display text-2xl font-semibold tracking-tight text-stone-900">{b.brandName}</h1>
-          <p className="text-sm text-stone-500 mt-1">{fatto ? "Registrazione completata" : "Crea il tuo account per prenotare online"}</p>
+          <p className="text-sm text-stone-500 mt-1">{tokenReset ? (reset.fatto ? "Password aggiornata" : "Scegli la nuova password") : fatto ? "Registrazione completata" : "Crea il tuo account per prenotare online"}</p>
         </div>
-        {fatto ? (
+        {tokenReset ? (
+          reset.fatto ? (
+            <div className="lc-card lc-scale-in p-7 text-center">
+              <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: primary, color: "#fff" }}><Check size={28} /></div>
+              <h2 className="font-display text-xl font-semibold text-stone-900">Fatto{reset.fatto.cliente && reset.fatto.cliente.nome ? `, ${reset.fatto.cliente.nome}` : ""}!</h2>
+              <p className="text-sm text-stone-500 mt-2 leading-relaxed">La nuova password è attiva e sei già dentro: da «Prenota» vedi i tuoi appuntamenti e prenoti.</p>
+              <a href={linkPrenota} className="mt-5 w-full text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 lc-shine" style={{ background: primary }}>Vai a Prenota <ArrowRight size={16} /></a>
+            </div>
+          ) : (
+            <div className="lc-card lc-fade-up p-5">
+              <div className="space-y-2.5">
+                <Riga icon={Lock}><input value={reset.password} onChange={(e) => setReset({ ...reset, password: e.target.value, err: "" })} type="password" placeholder="Nuova password (almeno 6 caratteri)" className={inp} autoComplete="new-password" /></Riga>
+                <Riga icon={Lock}><input value={reset.conferma} onChange={(e) => setReset({ ...reset, conferma: e.target.value, err: "" })} onKeyDown={(e) => e.key === "Enter" && reimposta()} type="password" placeholder="Ripeti la nuova password" className={inp} autoComplete="new-password" /></Riga>
+              </div>
+              {reset.err ? <p className="text-xs text-red-500 mt-3 flex items-center gap-1.5"><AlertCircle size={13} /> {reset.err}</p> : null}
+              <button onClick={reimposta} disabled={reset.busy} className="mt-4 w-full text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 lc-shine" style={{ background: primary }}>{reset.busy ? "Salvo…" : "Salva la nuova password"}</button>
+            </div>
+          )
+        ) : fatto ? (
           <div className="lc-card lc-scale-in p-7 text-center">
             <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: primary, color: "#fff" }}><Check size={28} /></div>
             <h2 className="font-display text-xl font-semibold text-stone-900">Benvenuto, {fatto.cliente.nome}!</h2>

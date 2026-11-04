@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { Sparkles, Calendar, Clock, Users, Gift, ShoppingBag, Package, TrendingUp } from "lucide-react";
-import { pad, pd, todayStr, addDays, MONTHS, eur } from "./comuni.jsx";
+import { useState, useMemo } from "react";
+import { Sparkles, Calendar, Clock, Users, Gift, ShoppingBag, Package, TrendingUp, ChevronLeft, ChevronRight, LayoutDashboard, UserX, Percent, Download } from "lucide-react";
+import { pad, pd, todayStr, addDays, MONTHS, WDAY_SHORT, eur } from "./comuni.jsx";
+import { cruscottoSettimana, lunediDi, spostaGiorni, costoDelVenduto } from "../statistiche/cruscotto.js";
 
 export function StatBar({ rows, fmt }) {
   const max = rows.reduce((m, r) => Math.max(m, r.value), 0) || 1;
@@ -107,6 +108,8 @@ export function StatsView({ config, bookings, clients, sales, catalog, vouchers 
         </div>
       </div>
 
+      <CruscottoSettimanale config={config} bookings={bookings} sales={sales} clients={clients} />
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi icon={Calendar} label="Appuntamenti" value={counted.length} index={0} />
         <Kpi icon={Users} label="Clienti attivi" value={cliRows.length} index={1} />
@@ -126,6 +129,8 @@ export function StatsView({ config, bookings, clients, sales, catalog, vouchers 
         <section className={card}><h3 className="font-semibold flex items-center gap-2 mb-4 text-stone-900 tracking-tight"><Users size={16} className="brand-accent" /> Clienti più attivi</h3><StatBar rows={cliRows} /></section>
       </div>
 
+      <CostoVenduto sales={sales} catalog={catalog} cutoff={cutoff} days={days} />
+
       <section className={card}>
         <h3 className="font-semibold flex items-center gap-2 mb-4 text-stone-900 tracking-tight"><Gift size={16} className="brand-accent" /> Buoni regalo</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
@@ -136,5 +141,86 @@ export function StatsView({ config, bookings, clients, sales, catalog, vouchers 
         {vchMonthRows.length ? <TrendChart rows={vchMonthRows} fmt={(v) => eur(v)} /> : <p className="text-sm text-stone-400">Nessun buono venduto nel periodo selezionato.</p>}
       </section>
     </div>
+  );
+}
+
+// ---- Cruscotto della settimana ----------------------------------------------
+const oreMin = (m) => `${Math.floor(m / 60)}:${pad(m % 60)}`;
+const Delta = ({ v, soldi, invertito }) => { if (v == null || v === 0) return <span className="text-[11px] text-stone-400">= settimana prima</span>; const bene = invertito ? v < 0 : v > 0; return <span className={`text-[11px] font-medium ${bene ? "text-green-600" : "text-red-500"}`}>{v > 0 ? "+" : ""}{soldi ? eur(v) : v} vs settimana prima</span>; };
+export function CruscottoSettimanale({ config, bookings, sales, clients }) {
+  const [lunedi, setLunedi] = useState(() => lunediDi(todayStr()));
+  const c = useMemo(() => cruscottoSettimana(config, bookings, sales, clients, lunedi), [config, bookings, sales, clients, lunedi]);
+  const T = c.tot;
+  const maxInc = Math.max(1, ...c.perGiorno.map((g) => g.incassoServizi + g.incassoProdotti));
+  const questa = lunedi === lunediDi(todayStr());
+  const etichetta = (d) => { const [y, m, g] = d.split("-").map(Number); return `${g} ${MONTHS[m - 1]}`; };
+  const csv = () => {
+    const righe = [["Operatore", "Appuntamenti", "Svolti", "No-show", "Ore occupate", "Ore disponibili", "Occupazione %", "Incasso servizi"].join(";"), ...c.perOperatore.map((o) => [o.nome, o.appuntamenti, o.svolti, o.noshow, oreMin(o.minutiOccupati), oreMin(o.minutiDisponibili), o.occupazione == null ? "" : o.occupazione, o.incassoServizi.toFixed(2).replace(".", ",")].join(";")), "", ["Giorno", "Appuntamenti", "Svolti", "No-show", "Annullati", "Incasso servizi", "Incasso prodotti"].join(";"), ...c.perGiorno.map((g) => [g.data, g.appuntamenti, g.svolti, g.noshow, g.annullati, g.incassoServizi.toFixed(2).replace(".", ","), g.incassoProdotti.toFixed(2).replace(".", ",")].join(";"))];
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["\ufeff" + righe.join("\n")], { type: "text/csv;charset=utf-8" })); a.download = `cruscotto-${c.lunedi}.csv`; a.click();
+  };
+  const box = "rounded-xl bg-stone-50 border border-stone-100 p-3";
+  return (
+    <section className="lc-card p-5">
+      <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
+        <div><h3 className="font-semibold flex items-center gap-2 text-stone-900 tracking-tight"><LayoutDashboard size={16} className="brand-accent" /> Cruscotto della settimana</h3><p className="text-[13px] text-stone-400 mt-0.5">Da lunedì {etichetta(c.da)} a domenica {etichetta(c.a)}{questa ? " · questa settimana" : ""}</p></div>
+        <div className="flex items-center gap-1">
+          <button onClick={() => setLunedi(spostaGiorni(lunedi, -7))} className="w-8 h-8 flex items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-500 hover:bg-stone-50" aria-label="Settimana precedente"><ChevronLeft size={16} /></button>
+          {!questa ? <button onClick={() => setLunedi(lunediDi(todayStr()))} className="text-xs font-medium px-2.5 h-8 rounded-lg border border-stone-200 bg-white text-stone-600 hover:bg-stone-50">Oggi</button> : null}
+          <button onClick={() => setLunedi(spostaGiorni(lunedi, 7))} className="w-8 h-8 flex items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-500 hover:bg-stone-50" aria-label="Settimana successiva"><ChevronRight size={16} /></button>
+          <button onClick={csv} className="ml-1 text-xs font-medium px-2.5 h-8 rounded-lg border border-stone-200 bg-white text-stone-600 hover:bg-stone-50 inline-flex items-center gap-1"><Download size={13} /> CSV</button>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        <div className={box}><div className="text-[11px] text-stone-400 uppercase tracking-wide font-medium">Incasso</div><div className="text-2xl font-semibold tracking-tight tabular-nums mt-1 brand-accent">{eur(T.incasso)}</div><div className="text-[11px] text-stone-500">servizi {eur(T.incassoServizi)} · prodotti {eur(T.incassoProdotti)}</div><Delta v={c.delta.incasso} soldi /></div>
+        <div className={box}><div className="text-[11px] text-stone-400 uppercase tracking-wide font-medium">Appuntamenti</div><div className="text-2xl font-semibold tracking-tight tabular-nums mt-1 text-stone-900">{T.appuntamenti}</div><div className="text-[11px] text-stone-500">{T.svolti} svolti · {T.online} online · {T.annullati} annullati</div><Delta v={c.delta.appuntamenti} /></div>
+        <div className={box}><div className="text-[11px] text-stone-400 uppercase tracking-wide font-medium">Occupazione</div><div className="text-2xl font-semibold tracking-tight tabular-nums mt-1 text-stone-900">{T.occupazione == null ? "—" : `${T.occupazione}%`}</div><div className="text-[11px] text-stone-500">{oreMin(T.minutiOccupati)} h su {oreMin(T.minutiDisponibili)} h disponibili</div><Delta v={c.delta.occupazione} /></div>
+        <div className={box}><div className="text-[11px] text-stone-400 uppercase tracking-wide font-medium">Clienti</div><div className="text-2xl font-semibold tracking-tight tabular-nums mt-1 text-stone-900">{T.clienti}</div><div className="text-[11px] text-stone-500">{T.nuovi} nuov{T.nuovi === 1 ? "o" : "i"} · {T.abituali} abitual{T.abituali === 1 ? "e" : "i"} · {T.noshow} no-show ({T.tassoNoshow}%)</div><Delta v={c.delta.nuovi} /></div>
+      </div>
+      <div className="grid lg:grid-cols-2 gap-5">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-stone-400 mb-2">Giorno per giorno</div>
+          <div className="flex items-end gap-1.5 h-28">{c.perGiorno.map((g) => { const v = g.incassoServizi + g.incassoProdotti; const h = Math.max(3, (v / maxInc) * 100); const oggi = g.data === todayStr(); return (
+            <div key={g.data} className="flex-1 flex flex-col items-center justify-end h-full min-w-0" title={`${g.data}: ${eur(v)} · ${g.appuntamenti} appuntamenti${g.noshow ? ` · ${g.noshow} no-show` : ""}`}>
+              <div className="text-[10px] tabular-nums text-stone-500 mb-1 whitespace-nowrap">{v ? eur(v).replace(",00", "") : ""}</div>
+              <div className={`w-full rounded-t-md ${g.chiuso ? "bg-stone-200" : oggi ? "brand-bg" : "brand-bg opacity-70"}`} style={{ height: `${h}%` }} />
+            </div>
+          ); })}</div>
+          <div className="flex gap-1.5 mt-1.5">{c.perGiorno.map((g) => <div key={g.data} className="flex-1 text-center"><div className="text-[11px] text-stone-500">{WDAY_SHORT[new Date(g.data + "T12:00:00").getDay()]}</div><div className={`text-[11px] font-semibold tabular-nums ${g.noshow ? "text-amber-600" : "text-stone-700"}`}>{g.appuntamenti || "–"}</div></div>)}</div>
+        </div>
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-stone-400 mb-2">Per operatore</div>
+          {c.perOperatore.length === 0 ? <p className="text-sm text-stone-400">Nessun operatore.</p> : <div className="space-y-2.5">{c.perOperatore.map((o) => (
+            <div key={o.id}>
+              <div className="flex items-center justify-between gap-2 text-sm"><span className="font-medium text-stone-800 truncate">{o.nome}</span><span className="text-xs text-stone-500 tabular-nums shrink-0">{o.appuntamenti} app. · {eur(o.incassoServizi)}{o.noshow ? <span className="text-amber-600"> · {o.noshow} no-show</span> : null}</span></div>
+              <div className="flex items-center gap-2 mt-1"><div className="flex-1 bg-stone-100 rounded-full h-2 overflow-hidden"><div className="h-2 rounded-full brand-bg" style={{ width: `${o.occupazione || 0}%` }} /></div><span className="text-xs tabular-nums text-stone-600 w-24 text-right">{o.occupazione == null ? "non in turno" : `${o.occupazione}% · ${oreMin(o.minutiOccupati)} h`}</span></div>
+            </div>
+          ))}</div>}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---- Costo del venduto e margine sui prodotti --------------------------------
+export function CostoVenduto({ sales, catalog, cutoff, days }) {
+  const r = useMemo(() => costoDelVenduto(sales, catalog, cutoff || null, null), [sales, catalog, cutoff]);
+  const box = "rounded-xl bg-stone-50 border border-stone-100 p-3";
+  return (
+    <section className="lc-card p-5">
+      <h3 className="font-semibold flex items-center gap-2 mb-1 text-stone-900 tracking-tight"><Percent size={16} className="brand-accent" /> Costo del venduto e margine <span className="text-xs font-normal text-stone-400">· prodotti{days ? `, ultimi ${days} giorni` : ""}</span></h3>
+      <p className="text-[13px] text-stone-400 mb-4">Il costo è quello scritto sulle righe di vendita (fissato alla cassa) o, per le vendite più vecchie, il costo attuale del formato nel catalogo.{r.senzaCosto ? ` ${r.senzaCosto} pezz${r.senzaCosto === 1 ? "o" : "i"} senza costo: inserisci il costo nei formati del catalogo.` : ""}</p>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        <div className={box}><div className="text-[11px] text-stone-400 uppercase tracking-wide font-medium">Ricavo</div><div className="text-xl font-semibold tabular-nums mt-1">{eur(r.ricavo)}</div></div>
+        <div className={box}><div className="text-[11px] text-stone-400 uppercase tracking-wide font-medium">Costo della merce</div><div className="text-xl font-semibold tabular-nums mt-1">{eur(r.costo)}</div></div>
+        <div className={box}><div className="text-[11px] text-stone-400 uppercase tracking-wide font-medium">Margine</div><div className="text-xl font-semibold tabular-nums mt-1 brand-accent">{eur(r.margine)}</div></div>
+        <div className={box}><div className="text-[11px] text-stone-400 uppercase tracking-wide font-medium">Margine %</div><div className="text-xl font-semibold tabular-nums mt-1">{r.marginePct == null ? "—" : `${r.marginePct}%`}</div></div>
+      </div>
+      {r.righe.length === 0 ? <p className="text-sm text-stone-400">Nessun prodotto venduto nel periodo.</p> : (
+        <div className="overflow-x-auto"><table className="w-full text-sm min-w-[28rem]">
+          <thead><tr className="text-[11px] uppercase tracking-wide text-stone-400 border-b border-stone-100"><th className="text-left font-medium py-1.5 pr-3">Prodotto</th><th className="text-right font-medium py-1.5 px-2">Pezzi</th><th className="text-right font-medium py-1.5 px-2">Ricavo</th><th className="text-right font-medium py-1.5 px-2">Costo</th><th className="text-right font-medium py-1.5 px-2">Margine</th><th className="text-right font-medium py-1.5 pl-2">%</th></tr></thead>
+          <tbody>{r.righe.slice(0, 15).map((x) => <tr key={x.productId} className="border-b border-stone-50 last:border-0"><td className="py-1.5 pr-3 font-medium text-stone-800">{x.nome}{x.senzaCosto ? <span className="text-[10px] text-amber-600 ml-1">({x.senzaCosto} senza costo)</span> : null}</td><td className="py-1.5 px-2 text-right tabular-nums">{x.qta}</td><td className="py-1.5 px-2 text-right tabular-nums">{eur(x.ricavo)}</td><td className="py-1.5 px-2 text-right tabular-nums text-stone-500">{eur(x.costo)}</td><td className="py-1.5 px-2 text-right tabular-nums font-medium">{eur(x.margine)}</td><td className={`py-1.5 pl-2 text-right tabular-nums ${x.marginePct != null && x.marginePct < 30 ? "text-amber-600" : "text-stone-600"}`}>{x.marginePct == null ? "—" : `${x.marginePct}%`}</td></tr>)}</tbody>
+        </table></div>
+      )}
+    </section>
   );
 }

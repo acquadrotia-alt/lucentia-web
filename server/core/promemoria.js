@@ -3,7 +3,10 @@
 //   · conferma a ogni nuovo appuntamento (subito per le prenotazioni online,
 //     al primo giro per quelle prese al banco o dal telefono),
 //   · promemoria alle 19 del giorno prima,
-//   · promemoria un'ora prima.
+//   · promemoria un'ora prima,
+//   · richiesta di recensione dopo il PRIMO appuntamento svolto del cliente,
+//     una volta sola per cliente (chiave mail:recensione:<email>), se il salone
+//     ha scritto il link in config.google.recensioni.link.
 // Cloudflare Pages non ha un orologio: il giro lo chiama GitHub ogni 10 minuti
 // (.github/workflows/promemoria.yml) sul portale, POST /api/promemoria/giro,
 // che lo esegue per i saloni ospitati e lo gira a ogni installazione
@@ -55,9 +58,33 @@ export async function appuntamentiConEmail(env, aid, config, dataDa) {
   return out;
 }
 
+// La richiesta di recensione: al primo appuntamento svolto del cliente (negli
+// ultimi 3 giorni), una volta sola per indirizzo email.
+export async function giroRecensioni(env, aid, config, ora, esito) {
+  const rc = (config.google || {}).recensioni || {};
+  if (!rc.attivo || !rc.link) return;
+  const clients = (await getCollezione(env, aid, "clients")) || [];
+  const emailDi = (b) => { if (emailOk(b.clientEmail)) return String(b.clientEmail).trim().toLowerCase(); const c = (Array.isArray(clients) ? clients : []).find((x) => x.code === b.clientCode); return c && emailOk(c.email) ? String(c.email).trim().toLowerCase() : ""; };
+  const bookings = (await getCollezione(env, aid, "bookings")) || [];
+  const da = giornoPrima(giornoPrima(giornoPrima(ora.data)));
+  const svolti = (Array.isArray(bookings) ? bookings : []).filter((b) => b && (b.status === "done" || b.status === "partial") && b.date >= da && b.date <= ora.data && !(b.date === ora.data && (Number(b.endMin) || 0) > ora.minuti));
+  const visti = new Set();
+  for (const b of svolti.slice(0, 200)) {
+    const a = emailDi(b); if (!a || visti.has(a)) continue; visti.add(a);
+    const chiave = `mail:recensione:${a}`;
+    if (await leggiInt(env, aid, chiave)) continue;
+    try {
+      await scriviInt(env, aid, chiave, { il: new Date().toISOString(), appuntamento: b.id });
+      const m = emailPronta(config, "recensione", valoriAppuntamento({ ...b, clientEmail: a }, config, { linkRecensione: rc.link }));
+      const r = await gmailInvia(env, aid, { a: [a], oggetto: m.oggetto, testo: m.testo, allegati: [] });
+      if (r.ok) esito.recensioni++; else { await cancellaInt(env, aid, chiave); esito.errori++; }
+    } catch (e) { esito.errori++; }
+  }
+}
+
 // Il giro per un salone: cosa è dovuto adesso.
 export async function giroPromemoria(env, aid, az, adesso) {
-  const esito = { aid, conferme: 0, giornoPrima: 0, oraPrima: 0, errori: 0 };
+  const esito = { aid, conferme: 0, giornoPrima: 0, oraPrima: 0, recensioni: 0, errori: 0 };
   if (!parseModuli(az.moduli).includes("google")) return { ...esito, motivo: "modulo google spento" };
   const tok = await leggiInt(env, aid, "gmail:token");
   if (!tok || !tok.refresh) return { ...esito, motivo: "Gmail non collegato" };
@@ -84,6 +111,7 @@ export async function giroPromemoria(env, aid, az, adesso) {
       }
     } catch (e) { esito.errori++; }
   }
+  try { await giroRecensioni(env, aid, config, ora, esito); } catch (e) { esito.errori++; }
   return esito;
 }
 

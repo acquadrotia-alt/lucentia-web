@@ -29,6 +29,7 @@ import { clientiOnline } from "./core/clienti.js";
 import { promemoriaRoute } from "./core/promemoria.js";
 import { icsGestione, icsFeed } from "./core/ics.js";
 import { registroRoute, registra } from "./core/registro.js";
+import { timbraRoute } from "./core/timbra.js";
 import { getAzienda } from "./core/sessione.js";
 import { parseModuli } from "./core/util.js";
 
@@ -152,8 +153,9 @@ async function gestisci(context) {
 
   if (segs[0] === "operatori") return await operatori(context, segs, sess);
   if (segs[0] === "data" && segs[1]) return await dati(context, segs, sess, statoDi);
-  // ---- registro delle attività (titolare) ----
+  // ---- registro delle attività (titolare) e timbratura dal telefono ----
   if (segs[0] === "registro") return await registroRoute(context, sess);
+  if (segs[0] === "timbra") return await timbraRoute(context, sess, statoDi);
 
   return json({ error: "not found" }, 404);
 }

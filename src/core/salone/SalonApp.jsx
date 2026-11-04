@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { WifiOff, Sparkles, Calendar, Mail, Lock, Settings, Users, Phone, MapPin, Gift, LogOut, ShieldCheck, AlertTriangle, ShoppingBag, AlertCircle, BarChart3, MessageCircle, FileText, Store, Boxes, Package, Truck, Warehouse, LayoutGrid, ChevronRight, CalendarClock, Megaphone, Clock, Table2, UserCog } from "lucide-react";
+import { WifiOff, ShoppingCart, Sparkles, Calendar, Mail, Lock, Settings, Users, Phone, MapPin, Gift, LogOut, ShieldCheck, AlertTriangle, ShoppingBag, AlertCircle, BarChart3, MessageCircle, FileText, Store, Boxes, Package, Truck, Warehouse, LayoutGrid, ChevronRight, CalendarClock, Megaphone, Clock, Table2, UserCog } from "lucide-react";
 import { setBrandTab } from "../../favicon.js";
 import { APP_VERSION, RESELLER_CODE, uid, pad, todayStr, DAY_NAMES, MONTHS, parseDate, BRANDING, DEFAULT_CONFIG, DEFAULT_CATALOG, loadKey, saveKey, apiLoad, apiLoadEsito, apiSaveVerificato, apiPatchVerificato, apiSave, apiSaveDebounced, unisciDalServer, unisci, fissaBase, svuotaCoda, useStatoRete, impostaOrigine, scriviCopiaCassa, leggiCopiaCassa, copiaCassaOre, registraAttivita, loadLicense, saveLicense, licenseState, licenseOk, themeVars, eventiImpegni, buildDemoData, buildSampleData, BRAND_CSS, flagsFromModuli, ModsCtx, planName, LUCENTIA_LOGO, MAKER_LOGO } from "./comuni.jsx";
 import { BACKUP_KEY, backupPayload, saveDirHandle, loadDirHandle, clearDirHandle, writeBackupToDir, exportBackup, BACKUP_AUTO_KEY, computerDaBackup } from "./backup.js";
@@ -51,9 +51,9 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
   const estensioniIn = (areaId) => visteExtra.filter((v) => (v.area || "banco") === areaId).map((v) => [v.id, v.label || v.id, v.icon || Sparkles]);
   const AREE = [
     { id: "banco", label: "Banco", icon: Store, desc: "Agenda, clienti, buoni regalo e vendita: il lavoro di tutti i giorni.", sezioni: [["agenda", "Agenda", Calendar], ["clienti", "Clienti", Users], ["buoni", "Buoni", Gift], ...(flags.vendite ? [["vendita", "Vendita", ShoppingBag]] : []), ...(flags.fatture ? [["fatture", "Fatture", FileText]] : []), ...estensioniIn("banco")] },
-    ...(flags.vendite ? [{ id: "articoli", label: "Articoli", icon: Boxes, desc: "Catalogo dei prodotti, documenti di carico dai fornitori e magazzino.", menu: true, sezioni: [["catalogo", "Catalogo", Package], ["carichi", "Carichi", Truck], ["magazzino", "Magazzino", Warehouse], ...estensioniIn("articoli")] }] : []),
+    ...(flags.vendite ? [{ id: "articoli", label: "Articoli", icon: Boxes, desc: "Catalogo dei prodotti, documenti di carico, magazzino e ordini ai fornitori.", menu: true, sezioni: [["catalogo", "Catalogo", Package], ["carichi", "Carichi", Truck], ["magazzino", "Magazzino", Warehouse], ["ordini", "Ordini", ShoppingCart], ...estensioniIn("articoli")] }] : []),
     ...(flags.marketing || flags.statistiche || estensioniIn("marketing").length ? [{ id: "marketing", label: "Marketing", icon: Megaphone, desc: "Messaggi ai clienti e statistiche dell'attività.", menu: true, sezioni: [...(flags.marketing ? [["marketing", "Messaggi", MessageCircle]] : []), ...(flags.statistiche ? [["stats", "Statistiche", BarChart3]] : []), ...estensioniIn("marketing")] }] : []),
-    { id: "personale", label: "Gestione personale", icon: UserCog, desc: "Ore lavorate di ogni dipendente e fogli ore mensili per chi fa le buste paga.", menu: true, sezioni: [["fogli", "Fogli ore", Clock], ["riepilogo", "Riepilogo del mese", Table2], ["dipendenti", "Dipendenti", Users], ...estensioniIn("personale")] },
+    { id: "personale", label: "Gestione personale", icon: UserCog, desc: "Ore lavorate, timbrature dal telefono, ferie pianificate, provvigioni e fogli ore per chi fa le buste paga.", menu: true, sezioni: [["fogli", "Fogli ore", Clock], ["riepilogo", "Riepilogo del mese", Table2], ["pianificazione", "Ferie e assenze", CalendarClock], ["dipendenti", "Dipendenti", Users], ...estensioniIn("personale")] },
     { id: "impostazioni", label: "Impostazioni", icon: Settings, desc: "Attività, servizi, operatori e cabine, sito, integrazioni, dati e licenza.", sezioni: [["settings", "Impostazioni", Settings]] },
   ];
   // Nel programma Windows della cassa c'è solo il Banco: si apre direttamente lì, e la
@@ -181,6 +181,21 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
           // se nel frattempo l'elenco locale è cambiato, si rifonde su quello attuale
           setter((cur) => { const m = cur === lista ? r : unisci(coll, cur, r.server); m.applica(); return m.cambiata ? m.lista : cur; });
         }
+        // le timbrature fatte dal telefono (POST /api/timbra) entrano nei fogli ore: vince il
+        // server sui giorni timbrati, salvo che qui il titolare li abbia già corretti a mano
+        const pers = await apiLoadEsito("personale");
+        if (pers.ok && pers.value && pers.value.ore) setPersonale((cur) => {
+          if (!cur) return cur;
+          let cambiato = false; const ore = { ...(cur.ore || {}) };
+          for (const dipId of Object.keys(pers.value.ore)) for (const d of Object.keys(pers.value.ore[dipId] || {})) {
+            const sv = pers.value.ore[dipId][d]; if (!sv || !sv.timbrato) continue;
+            const loc = (ore[dipId] || {})[d];
+            if (loc && !loc.timbrato) continue;
+            if (loc && loc.entrata === sv.entrata && loc.uscita === sv.uscita) continue;
+            ore[dipId] = { ...(ore[dipId] || {}), [d]: sv }; cambiato = true;
+          }
+          return cambiato ? { ...cur, ore } : cur;
+        });
       } finally { inCorso = false; }
     };
     const t = setInterval(unisci, 60000);
@@ -360,12 +375,12 @@ export default function SalonApp({ onLogout, moduli, azienda, demo, modalita = "
         {area === "banco" && vistaExtra ? <vistaExtra.componente {...propsEstensione} /> : null}
         {area === "articoli" && areaCorrente ? (
           <AreaMenu titolo="Articoli" sezioni={areaCorrente.sezioni} sezione={view} setSezione={setView}>
-            {vistaExtra ? <vistaExtra.componente {...propsEstensione} /> : <ArticoliView catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} loyalty={config.loyalty} acquisti={flags.fatture ? acquisti : []} demo={isDemo} sezione={view} setSezione={setView} />}
+            {vistaExtra ? <vistaExtra.componente {...propsEstensione} /> : <ArticoliView catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} loyalty={config.loyalty} acquisti={flags.fatture ? acquisti : []} demo={isDemo} sezione={view} setSezione={setView} branding={b} />}
           </AreaMenu>
         ) : null}
         {area === "personale" && areaCorrente ? (
           <AreaMenu titolo="Gestione personale" sezioni={areaCorrente.sezioni} sezione={view} setSezione={setView}>
-            {vistaExtra ? <vistaExtra.componente {...propsEstensione} /> : <PersonaleView config={config} personale={personale || {}} setPersonale={setPersonale} sezione={view} setSezione={setView} demo={isDemo} />}
+            {vistaExtra ? <vistaExtra.componente {...propsEstensione} /> : <PersonaleView config={config} saveConfig={saveConfig} personale={personale || {}} setPersonale={setPersonale} sezione={view} setSezione={setView} demo={isDemo} bookings={bookings} sales={sales} />}
           </AreaMenu>
         ) : null}
         {area === "marketing" && areaCorrente ? (

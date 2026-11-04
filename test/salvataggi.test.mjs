@@ -25,7 +25,7 @@ function db(st) {
           return { results: [] };
         },
         async run() {
-          if (sql.startsWith("INSERT INTO dati_app")) st.dati[a[2]] = JSON.parse(a[3]);
+          if (sql.startsWith("INSERT INTO dati_app")) { if (sql.includes("'personale'")) st.dati.personale = JSON.parse(a[2]); else st.dati[a[2]] = JSON.parse(a[3]); }
           else if (sql.startsWith("INSERT INTO registro")) st.registro.push({ id: a[0], azienda_id: a[1], chi: a[2], origine: a[3], tipo: a[4], testo: a[5], dettagli: a[6], quando: "2026-11-04 10:00:00" });
           else if (sql.startsWith("UPDATE registro SET")) { const r = st.registro.find((x) => x.id === a[1]); if (r) r.dettagli = a[0]; }
           return { success: true };
@@ -110,4 +110,24 @@ test("unisci: tre vie — vince il locale solo sui record toccati qui", () => {
   // senza applica() la base non cambia
   const r2 = unisci("bookings", [{ id: "a", v: 9 }], [{ id: "a", v: 9 }]);
   assert.equal(r2.cambiata, false);
+});
+
+test("timbratura dal telefono: entrata e uscita di oggi nel foglio ore, una volta sola", async () => {
+  const st = scenario();
+  st.dati.config = { staff: [{ id: "a1", name: "Giulia" }] };
+  st.dati.personale = { dipendenti: [], ore: {} };
+  assert.equal((await chiama(st, "/api/timbra", { method: "POST", body: { staffId: "zz", azione: "entrata" } })).status, 404);
+  const e = await chiama(st, "/api/timbra", { method: "POST", body: { staffId: "a1", azione: "entrata" } });
+  assert.equal(e.status, 200, JSON.stringify(e.body));
+  assert.equal(e.body.dipId, "st-a1"); assert.match(e.body.giorno.entrata, /^\d\d:\d\d$/); assert.equal(e.body.giorno.tipo, "lavoro"); assert.equal(e.body.giorno.timbrato, true);
+  assert.equal(st.dati.personale.ore["st-a1"][e.body.data].entrata, e.body.giorno.entrata);
+  assert.equal((await chiama(st, "/api/timbra", { method: "POST", body: { staffId: "a1", azione: "entrata" } })).status, 409, "già timbrata");
+  const u = await chiama(st, "/api/timbra", { method: "POST", body: { staffId: "a1", azione: "uscita" } });
+  assert.equal(u.status, 200); assert.ok(u.body.giorno.uscita);
+  const g = await chiama(st, "/api/timbra?staffId=a1");
+  assert.equal(g.body.giorno.uscita, u.body.giorno.uscita);
+  assert.ok(st.registro.some((r) => r.tipo === "personale" && /Giulia: timbrata entrata/.test(r.testo)));
+  // un operatore timbra solo per sé
+  st.sessione = { ...st.sessione, ruolo: "operatore", staff_id: "a1" };
+  assert.equal((await chiama(st, "/api/timbra", { method: "POST", body: { staffId: "a2", azione: "entrata" } })).status, 403);
 });

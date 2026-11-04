@@ -58,6 +58,10 @@ export function PosTab({ catalog, setCatalog, sales, setSales, clients, setClien
   const [cart, setCart] = useState([]);
   const [client, setClient] = useState(null);
   const [lastSale, setLastSale] = useState(null);
+  const CHIAVE_VENDITORE = "lc-cassa-venditore";
+  const [venditore, setVenditore] = useState(() => { try { return localStorage.getItem(CHIAVE_VENDITORE) || ""; } catch (e) { return ""; } });
+  const staffVendita = (config && config.staff) || [];
+  const scegliVenditore = (id) => { setVenditore(id); try { localStorage.setItem(CHIAVE_VENDITORE, id); } catch (e) {} };
 
   const products = catalog.products.filter((p) => (cat === "all" || (p.categoryId || "") === cat) && (!q || p.name.toLowerCase().includes(q.toLowerCase())));
   const inCart = (pid, fid) => { const it = cart.find((x) => x.productId === pid && x.formatId === fid); return it ? it.qty : 0; };
@@ -65,7 +69,7 @@ export function PosTab({ catalog, setCatalog, sales, setSales, clients, setClien
     const remaining = (Number(f.stock) || 0) - inCart(p.id, f.id);
     if (remaining <= 0) return;
     setLastSale(null);
-    setCart((c) => { const ex = c.find((x) => x.productId === p.id && x.formatId === f.id); if (ex) return c.map((x) => (x === ex ? { ...x, qty: x.qty + 1 } : x)); return [...c, { productId: p.id, formatId: f.id, name: p.name, label: f.label, price: Number(f.price) || 0, qty: 1 }]; });
+    setCart((c) => { const ex = c.find((x) => x.productId === p.id && x.formatId === f.id); if (ex) return c.map((x) => (x === ex ? { ...x, qty: x.qty + 1 } : x)); return [...c, { productId: p.id, formatId: f.id, name: p.name, label: f.label, price: Number(f.price) || 0, qty: 1, costo: f.costo != null && f.costo !== "" ? Number(f.costo) : null }]; });
   };
   const changeQty = (idx, delta) => setCart((c) => c.map((it, i) => { if (i !== idx || it.tipo === "servizio") return it; const prod = catalog.products.find((p) => p.id === it.productId); const fmt = prod && prod.formats.find((f) => f.id === it.formatId); const max = fmt ? (Number(fmt.stock) || 0) : it.qty; return { ...it, qty: Math.min(max, Math.max(0, it.qty + delta)) }; }).filter((it) => it.qty > 0));
   const removeItem = (idx) => setCart((c) => c.filter((_, i) => i !== idx));
@@ -76,7 +80,7 @@ export function PosTab({ catalog, setCatalog, sales, setSales, clients, setClien
   const confirm = async (partial, metodo) => {
     if (!cart.length || inStampa) return;
     for (const it of cart) { if (it.tipo === "servizio") continue; const prod = catalog.products.find((p) => p.id === it.productId); const fmt = prod && prod.formats.find((f) => f.id === it.formatId); if (!fmt || (Number(fmt.stock) || 0) < it.qty) { alert(`Giacenza insufficiente per ${it.name}.`); return; } }
-    const sale = { id: uid(), ts: Date.now(), type: "sale", partial: !!partial, clientCode: client ? client.code : null, clientName: client ? (client.name || "") : "", items: cart.map((it) => ({ productId: it.productId, formatId: it.formatId, serviceId: it.serviceId, bookingId: it.bookingId, tipo: it.tipo, name: it.name, label: it.label, price: it.price, qty: it.qty })), total };
+    const sale = { id: uid(), ts: Date.now(), type: "sale", partial: !!partial, clientCode: client ? client.code : null, clientName: client ? (client.name || "") : "", items: cart.map((it) => ({ productId: it.productId, formatId: it.formatId, serviceId: it.serviceId, bookingId: it.bookingId, tipo: it.tipo, name: it.name, label: it.label, price: it.price, qty: it.qty, ...(it.costo != null ? { costo: it.costo } : {}) })), total, ...(venditore && staffVendita.some((st) => st.id === venditore) ? { staffId: venditore } : {}) };
     // Col registratore: la vendita si registra SOLO dopo che lo scontrino è uscito; il parziale va sulla stampante non fiscale.
     if (cassaRt && cassaRt.cfg) {
       setInStampa(true);
@@ -191,6 +195,7 @@ export function PosTab({ catalog, setCatalog, sales, setSales, clients, setClien
               ))}</div>
               <div className="border-t border-stone-100 p-4 space-y-3 shrink-0 bg-white">
                 <ClientAssign clients={clients} setClients={setClients} client={client} setClient={setClient} canAddClient={canAddClient} />
+                {staffVendita.length > 1 ? <label className="flex items-center justify-between gap-2 text-sm"><span className="text-stone-500 shrink-0">Venduto da</span><select value={venditore} onChange={(e) => scegliVenditore(e.target.value)} className="flex-1 min-w-0 px-2 py-1.5 rounded-lg border border-stone-200 text-sm bg-white brand-ring"><option value="">—</option>{staffVendita.map((st) => <option key={st.id} value={st.id}>{st.name}</option>)}</select></label> : null}
                 {F.fidelity && loyalty && loyalty.fromSales ? <div className="flex items-center justify-between text-sm"><span className="flex items-center gap-1.5 text-stone-500"><Star size={14} className="brand-accent" /> Punti generati</span><span className="font-medium brand-accent">+{salePoints}{client ? "" : " (assegna un cliente)"}</span></div> : null}
                 <div className="flex items-baseline justify-between pt-1"><span className="text-sm font-medium text-stone-500">Totale</span><span className="text-2xl font-semibold tracking-tight tabular-nums text-stone-900">{eur(total)}</span></div>
                 {cassaRt ? <div className="space-y-2"><SceltaPagamento totale={total} disabled={inStampa} onScegli={(m) => confirm(false, m)} />{!hidePartial ? <button onClick={async () => { const m = await rtChiedi("Pagamento parziale", `Registro un acconto di ${eur(total)} con ricevuta non fiscale${stampanteNonFiscale(cassaRt.cfg) ? "" : " (stampante non configurata: solo registrazione)"}. Come paga la cliente?`, [{ label: "Contanti", value: "contanti" }, { label: "Carta / POS", value: "elettronico", soft: true }, { label: "Annulla", value: "no", soft: true }], "busy"); if (m === "contanti" || m === "elettronico") confirm(true, m); }} disabled={inStampa} className="w-full font-medium py-2 rounded-xl flex items-center justify-center gap-1.5 border border-amber-300 text-amber-700 hover:bg-amber-50 transition text-sm disabled:opacity-50"><Timer size={15} /> Parziale · ricevuta non fiscale</button> : null}</div> : (
@@ -281,7 +286,7 @@ export function SalesHistoryTab({ sales, setSales, catalog, setCatalog, branding
   };
   const [openId, setOpenId] = useState(null);
   const [q, setQ] = useState("");
-  const isLoad = (r) => r.type === "load" || r.type === "rettifica";
+  const isLoad = (r) => r.type === "load" || r.type === "rettifica" || r.type === "ordine";
   const isReso = (r) => r.type === "reso" || r.type === "annullo";
   const visible = (hidePartial ? sales.filter((r) => !r.partial) : sales).filter((r) => !isLoad(r));
   const startToday = new Date(); startToday.setHours(0, 0, 0, 0);

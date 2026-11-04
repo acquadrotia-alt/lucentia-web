@@ -11,8 +11,9 @@
 //   filtri, rettifiche d'inventario (record `type: "rettifica"`) ed esportazione.
 // ============================================================================
 import { useState, useMemo } from "react";
-import { Plus, Trash2, Check, ChevronRight, X, Image as ImageIcon, Search, Package, Tag, Minus, Boxes, Layers, PackagePlus, Truck, Warehouse, AlertTriangle, Download, FileText, ClipboardList, SlidersHorizontal } from "lucide-react";
-import { uid, eur, fmtDateTime, fileToSquareDataURL, todayStr, useMods, Field } from "./comuni.jsx";
+import { Plus, Trash2, Check, ChevronRight, X, Image as ImageIcon, Search, Package, Tag, Minus, Boxes, Layers, PackagePlus, Truck, Warehouse, AlertTriangle, Download, FileText, ClipboardList, SlidersHorizontal, ShoppingCart, Send, Printer, Wand2, Mail } from "lucide-react";
+import { uid, eur, fmtDateTime, fileToSquareDataURL, todayStr, useMods, Field, registraAttivita } from "./comuni.jsx";
+import { gmailApi } from "./google.jsx";
 
 // Carico magazzino: incrementa le giacenze (qty negativa = rettifica in meno).
 export function applyLoadToCatalog(catalog, items) {
@@ -27,7 +28,7 @@ export const TIPI_DOC_CARICO = [["ddt", "Bolla / DDT"], ["fattura", "Fattura"], 
 export const etichettaDocCarico = (r) => { const t = (TIPI_DOC_CARICO.find((x) => x[0] === r.docTipo) || [])[1]; return [t, r.docNumero ? `n. ${r.docNumero}` : "", r.docData ? `del ${String(r.docData).split("-").reverse().join("/")}` : ""].filter(Boolean).join(" "); };
 const scortaMinDi = (catalog, f) => (f.scortaMin != null && f.scortaMin !== "" ? Number(f.scortaMin) : Number(catalog.scortaMin != null ? catalog.scortaMin : 2)) || 0;
 
-export function ArticoliView({ catalog, setCatalog, sales, setSales, loyalty, acquisti, demo, sezione, setSezione }) {
+export function ArticoliView({ catalog, setCatalog, sales, setSales, loyalty, acquisti, demo, sezione, setSezione, branding = null }) {
   const lock = (node) => (
     <div>
       <div className="mb-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2"><AlertTriangle size={16} className="shrink-0 mt-0.5" /> In demo il magazzino è <b>visibile ma non modificabile</b>.</div>
@@ -40,6 +41,7 @@ export function ArticoliView({ catalog, setCatalog, sales, setSales, loyalty, ac
       {sezione === "catalogo" ? wrap(<CatalogTab catalog={catalog} setCatalog={setCatalog} loyalty={loyalty} />) : null}
       {sezione === "carichi" ? wrap(<CarichiTab catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} acquisti={acquisti} />) : null}
       {sezione === "magazzino" ? wrap(<MagazzinoTab catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} onVaiACarichi={() => setSezione("carichi")} />) : null}
+      {sezione === "ordini" ? wrap(<OrdiniTab catalog={catalog} setCatalog={setCatalog} sales={sales} setSales={setSales} branding={branding} />) : null}
     </>
   );
 }
@@ -390,5 +392,158 @@ export function MagazzinoTab({ catalog, setCatalog, sales, setSales, onVaiACaric
         </div>
       ) : null}
     </div>
+  );
+}
+
+// ---- Ordini ai fornitori ---------------------------------------------------------
+// Un ordine è un record `type: "ordine"` nello storico (`sales`): fornitore,
+// righe con quantità e costo, stato (bozza → inviato → ricevuto, o annullato).
+// Nasce a mano o dalla proposta «sotto scorta»; si manda per email (modulo
+// Google) o si stampa; «Ricevi la merce» registra il carico e alza le giacenze.
+export const STATI_ORDINE = { bozza: ["Bozza", "bg-stone-100 text-stone-600"], inviato: ["Inviato", "bg-sky-100 text-sky-700"], ricevuto: ["Ricevuto", "bg-green-100 text-green-700"], annullato: ["Annullato", "bg-stone-100 text-stone-400"] };
+// Cosa riordinare: i formati sotto scorta, con la quantità per tornare al doppio della soglia.
+export function propostaRiordino(catalog) {
+  const out = [];
+  for (const p of catalog.products || []) for (const f of p.formats || []) {
+    const stock = Number(f.stock) || 0, min = scortaMinDi(catalog, f);
+    if (stock > min) continue;
+    out.push({ productId: p.id, formatId: f.id, name: p.name, label: f.label, fornitore: p.fornitore || "", qty: Math.max(1, Math.max(min * 2, min + 1) - stock), costo: f.costo != null && f.costo !== "" ? Number(f.costo) : null });
+  }
+  return out;
+}
+export function testoOrdine(o, branding) {
+  const salone = (branding && branding.name) || "";
+  const righe = (o.items || []).map((it) => `· ${it.qty} × ${it.name}${it.label && it.label !== "Standard" ? ` (${it.label})` : ""}${it.codice ? ` · cod. ${it.codice}` : ""}`);
+  return `Buongiorno,\n\ncon la presente ordiniamo:\n\n${righe.join("\n")}\n${o.note ? `\nNote: ${o.note}\n` : ""}\nConsegna presso: ${salone}${branding && branding.address ? `, ${branding.address}` : ""}${branding && branding.phone ? ` · tel. ${branding.phone}` : ""}\n\nGrazie,\n${salone}`;
+}
+export const numeroOrdine = (o) => "ORD-" + String(o.id || "").slice(0, 6).toUpperCase();
+export function OrdiniTab({ catalog, setCatalog, sales, setSales, branding }) {
+  const F = useMods();
+  const [nuovo, setNuovo] = useState(null); // la bozza in modifica
+  const [openId, setOpenId] = useState(null);
+  const [msg, setMsg] = useState(null);
+  const [busy, setBusy] = useState("");
+  const ordini = useMemo(() => (sales || []).filter((r) => r.type === "ordine"), [sales]);
+  const fornitori = useMemo(() => { const m = {}; (sales || []).forEach((r) => { if ((r.type === "ordine" || r.type === "load") && r.fornitore) { const k = r.fornitore.trim(); if (!m[k]) m[k] = r.email || ""; else if (!m[k] && r.email) m[k] = r.email; } }); return m; }, [sales]);
+  const sotto = useMemo(() => propostaRiordino(catalog), [catalog]);
+  const salva = (o) => { const esiste = ordini.some((x) => x.id === o.id); setSales(esiste ? (sales || []).map((r) => (r.id === o.id ? o : r)) : [o, ...(sales || [])]); setNuovo(null); setOpenId(o.id); };
+  const patch = (id, p) => setSales((sales || []).map((r) => (r.id === id ? { ...r, ...p } : r)));
+  const invia = async (o) => {
+    if (!o.email) { setMsg({ ok: false, testo: "Scrivi l'email del fornitore nell'ordine." }); return; }
+    setBusy(o.id); setMsg(null);
+    const r = await gmailApi("invia", { a: o.email, copiaAMe: true, oggetto: `Ordine ${numeroOrdine(o)} · ${(branding && branding.name) || "salone"}`, testo: testoOrdine(o, branding) });
+    setBusy("");
+    if (!r.ok) { setMsg({ ok: false, testo: "Email non partita: " + r.error }); return; }
+    patch(o.id, { stato: "inviato", inviatoIl: Date.now(), inviatoA: o.email });
+    registraAttivita("dati", `Ordine ${numeroOrdine(o)} mandato a ${o.fornitore} (${o.email})`);
+    setMsg({ ok: true, testo: `Ordine mandato a ${o.email}.` });
+  };
+  const stampa = (o) => {
+    const esc = (x) => String(x == null ? "" : x).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    const html = `<!doctype html><html lang="it"><head><meta charset="utf-8"><title>Ordine ${numeroOrdine(o)}</title><style>body{font-family:Arial,sans-serif;color:#1c1917;font-size:13px;padding:24px}h1{font-size:20px;margin:0 0 4px}table{width:100%;border-collapse:collapse;margin-top:14px}th,td{border:1px solid #d6d3d1;padding:6px 8px;text-align:left}th{background:#f5f5f4;font-size:11px;text-transform:uppercase}td.n{text-align:right}.sub{color:#57534e}</style></head><body><h1>Ordine ${numeroOrdine(o)}</h1><div class="sub">${esc((branding && branding.name) || "")} · ${esc(fmtDateTime(o.ts))}</div><p><b>Fornitore:</b> ${esc(o.fornitore)}${o.email ? ` · ${esc(o.email)}` : ""}</p><table><thead><tr><th>Prodotto</th><th>Formato</th><th class="n">Quantità</th></tr></thead><tbody>${(o.items || []).map((it) => `<tr><td>${esc(it.name)}</td><td>${esc(it.label)}</td><td class="n">${it.qty}</td></tr>`).join("")}</tbody></table>${o.note ? `<p><b>Note:</b> ${esc(o.note)}</p>` : ""}<p class="sub">Consegna presso ${esc((branding && branding.name) || "")}${branding && branding.address ? `, ${esc(branding.address)}` : ""}${branding && branding.phone ? ` · tel. ${esc(branding.phone)}` : ""}</p></body></html>`;
+    const w = window.open("", "_blank"); if (!w) return; w.document.write(html); w.document.close(); setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 300);
+  };
+  const ricevi = (o) => {
+    if (!confirm(`Registrare l'arrivo della merce dell'ordine ${numeroOrdine(o)}? Le giacenze salgono delle quantità ordinate (puoi correggerle poi con una rettifica).`)) return;
+    const carico = { id: uid(), ts: Date.now(), type: "load", fornitore: o.fornitore, docTipo: "ddt", docNumero: "", docData: todayStr(), note: `Da ordine ${numeroOrdine(o)}`, ordineId: o.id, items: (o.items || []).map((it) => ({ productId: it.productId, formatId: it.formatId, name: it.name, label: it.label, qty: it.qty, costo: it.costo != null ? Number(it.costo) : null })), total: 0, costoTotale: Math.round((o.items || []).reduce((a, it) => a + (Number(it.costo) || 0) * it.qty, 0) * 100) / 100 };
+    setCatalog(applyLoadToCatalog(catalog, carico.items));
+    setSales([carico, ...(sales || []).map((r) => (r.id === o.id ? { ...r, stato: "ricevuto", ricevutoIl: Date.now(), caricoId: carico.id } : r))]);
+    setMsg({ ok: true, testo: "Merce ricevuta: carico registrato e giacenze aggiornate." });
+  };
+  const aperti = ordini.filter((o) => o.stato === "bozza" || o.stato === "inviato");
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div><h3 className="font-semibold flex items-center gap-2 text-stone-900 tracking-tight"><ShoppingCart size={16} className="brand-accent" /> Ordini ai fornitori</h3><p className="text-xs text-stone-400 mt-0.5">Dalla proposta «sotto scorta» o a mano; si mandano per email o si stampano, e all'arrivo della merce diventano un carico.</p></div>
+        <div className="flex gap-2">
+          {sotto.length ? <button onClick={() => setNuovo({ id: uid(), ts: Date.now(), type: "ordine", stato: "bozza", fornitore: "", email: "", note: "", items: sotto, total: 0 })} className="flex items-center gap-1.5 text-sm font-medium border brand-border brand-accent bg-white px-3.5 py-2 rounded-lg hover:brand-soft"><Wand2 size={15} /> Proponi dal sotto scorta ({sotto.length})</button> : null}
+          <button onClick={() => setNuovo(nuovo ? null : { id: uid(), ts: Date.now(), type: "ordine", stato: "bozza", fornitore: "", email: "", note: "", items: [], total: 0 })} className="flex items-center gap-1.5 text-sm font-medium brand-bg px-3.5 py-2 rounded-lg shadow-[var(--lc-shadow-xs)]">{nuovo ? <X size={15} /> : <Plus size={15} />} {nuovo ? "Chiudi" : "Nuovo ordine"}</button>
+        </div>
+      </div>
+      {msg ? <p className={`text-sm flex items-center gap-1.5 ${msg.ok ? "text-green-700" : "text-red-600"}`}>{msg.ok ? <Check size={15} /> : <AlertTriangle size={15} />} {msg.testo}</p> : null}
+      {nuovo ? <OrdineForm catalog={catalog} ordine={nuovo} fornitori={fornitori} onSave={salva} onClose={() => setNuovo(null)} /> : null}
+      {ordini.length === 0 ? <div className="lc-card p-10 text-center text-stone-400 text-sm">Nessun ordine. {sotto.length ? `Ci sono ${sotto.length} format${sotto.length === 1 ? "o" : "i"} sotto scorta: «Proponi dal sotto scorta» prepara l'ordine.` : "Le giacenze sono a posto."}</div> : (
+        <div className="space-y-2">{ordini.map((o) => { const open = openId === o.id; const st = STATI_ORDINE[o.stato] || STATI_ORDINE.bozza; const pezzi = (o.items || []).reduce((a, it) => a + it.qty, 0); return (
+          <div key={o.id} className={`bg-white rounded-xl border shadow-sm ${o.stato === "annullato" ? "border-stone-200/70 opacity-60" : "border-stone-200"}`}>
+            <button onClick={() => setOpenId(open ? null : o.id)} className="w-full flex items-center gap-3 p-3 text-left">
+              <ShoppingCart size={18} className="text-stone-400 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="font-medium truncate flex items-center gap-2 flex-wrap"><span>{numeroOrdine(o)} · {o.fornitore || "fornitore da indicare"}</span><span className="text-xs text-stone-400 font-normal">· {pezzi} pz</span><span className={`text-[10px] px-1.5 py-0.5 rounded-full ${st[1]}`}>{st[0]}</span></div>
+                <div className="text-xs text-stone-400 truncate">creato il {fmtDateTime(o.ts)}{o.inviatoIl ? ` · inviato il ${fmtDateTime(o.inviatoIl)}${o.inviatoA ? ` a ${o.inviatoA}` : ""}` : ""}{o.ricevutoIl ? ` · ricevuto il ${fmtDateTime(o.ricevutoIl)}` : ""}</div>
+              </div>
+              <ChevronRight size={18} className={`text-stone-300 shrink-0 transition-transform ${open ? "rotate-90" : ""}`} />
+            </button>
+            {open ? (
+              <div className="px-3 pb-3 border-t border-stone-100 pt-2 space-y-2">
+                <div className="space-y-1 text-sm">{(o.items || []).map((it, i) => <div key={i} className="flex justify-between gap-2"><span className="text-stone-600">{it.qty} × {it.name}{it.label ? ` (${it.label})` : ""}</span><span className="text-stone-500 shrink-0">{it.costo != null ? `${eur(it.costo)} × ${it.qty}` : ""}</span></div>)}</div>
+                {o.note ? <div className="text-xs text-stone-500">{o.note}</div> : null}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {o.stato === "bozza" || o.stato === "inviato" ? <button onClick={() => setNuovo({ ...o })} className="text-xs font-medium border border-stone-300 text-stone-600 px-3 py-1.5 rounded-lg hover:bg-stone-50">Modifica</button> : null}
+                  {o.stato !== "annullato" && o.stato !== "ricevuto" && F.has("google") ? <button onClick={() => invia(o)} disabled={busy === o.id} className="text-xs font-medium brand-bg px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 disabled:opacity-50"><Send size={13} /> {busy === o.id ? "Invio…" : o.stato === "inviato" ? "Rimanda per email" : "Invia per email"}</button> : null}
+                  {o.stato !== "annullato" && o.stato !== "ricevuto" && !F.has("google") && o.email ? <a href={`mailto:${o.email}?subject=${encodeURIComponent(`Ordine ${numeroOrdine(o)} · ${(branding && branding.name) || ""}`)}&body=${encodeURIComponent(testoOrdine(o, branding))}`} onClick={() => patch(o.id, { stato: "inviato", inviatoIl: Date.now(), inviatoA: o.email })} className="text-xs font-medium brand-bg px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5"><Mail size={13} /> Apri l'email</a> : null}
+                  <button onClick={() => stampa(o)} className="text-xs font-medium border border-stone-300 text-stone-600 px-3 py-1.5 rounded-lg hover:bg-stone-50 inline-flex items-center gap-1.5"><Printer size={13} /> Stampa</button>
+                  {o.stato === "bozza" && !F.has("google") && !o.email ? <button onClick={() => patch(o.id, { stato: "inviato", inviatoIl: Date.now() })} className="text-xs font-medium border border-stone-300 text-stone-600 px-3 py-1.5 rounded-lg hover:bg-stone-50">Segna come inviato</button> : null}
+                  {o.stato === "inviato" || o.stato === "bozza" ? <button onClick={() => ricevi(o)} className="text-xs font-medium bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 inline-flex items-center gap-1.5"><PackagePlus size={13} /> Ricevi la merce</button> : null}
+                  {o.stato !== "ricevuto" && o.stato !== "annullato" ? <button onClick={() => { if (confirm("Annullare questo ordine?")) patch(o.id, { stato: "annullato", annullatoIl: Date.now() }); }} className="text-xs text-stone-400 hover:text-red-600 px-3 py-1.5 inline-flex items-center gap-1 ml-auto"><Trash2 size={13} /> Annulla</button> : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ); })}</div>
+      )}
+      {aperti.length ? <p className="text-[11px] text-stone-400">{aperti.length} ordin{aperti.length === 1 ? "e" : "i"} in attesa di merce.</p> : null}
+    </div>
+  );
+}
+function OrdineForm({ catalog, ordine, fornitori, onSave, onClose }) {
+  const [o, setO] = useState(ordine);
+  const [q, setQ] = useState("");
+  const list = o.items || [];
+  const setList = (f) => setO((cur) => ({ ...cur, items: f(cur.items || []) }));
+  const products = catalog.products.filter((p) => !q || `${p.name} ${p.marca || ""}`.toLowerCase().includes(q.toLowerCase())).slice(0, 12);
+  const add = (p, f) => setList((c) => { const ex = c.find((x) => x.productId === p.id && x.formatId === f.id); if (ex) return c.map((x) => (x === ex ? { ...x, qty: x.qty + 1 } : x)); return [...c, { productId: p.id, formatId: f.id, name: p.name, label: f.label, qty: 1, costo: f.costo != null && f.costo !== "" ? Number(f.costo) : null }]; });
+  const setItem = (idx, patch) => setList((c) => c.map((it, i) => (i === idx ? { ...it, ...patch } : it)).filter((it) => it.qty > 0));
+  const pezzi = list.reduce((a, it) => a + it.qty, 0);
+  const costo = list.reduce((a, it) => a + (Number(it.costo) || 0) * it.qty, 0);
+  const inp = "w-full px-3 py-2 rounded-lg border border-stone-300 text-sm brand-ring";
+  return (
+    <section className="lc-card p-5 space-y-4">
+      <h3 className="font-semibold flex items-center gap-2 text-stone-900 tracking-tight"><ShoppingCart size={16} className="brand-accent" /> {ordine.items && ordine.items.length && !ordine.fornitore ? "Ordine proposto dal sotto scorta" : "Ordine al fornitore"} <span className="text-xs font-normal text-stone-400">· {numeroOrdine(o)}</span></h3>
+      <div className="grid sm:grid-cols-3 gap-3">
+        <Field label="Fornitore"><input list="lc-fornitori-ord" value={o.fornitore} onChange={(e) => setO({ ...o, fornitore: e.target.value, email: o.email || fornitori[e.target.value.trim()] || "" })} placeholder="Es. Cosmetici Nord" className={inp} /><datalist id="lc-fornitori-ord">{Object.keys(fornitori).map((f) => <option key={f} value={f} />)}</datalist></Field>
+        <Field label="Email del fornitore"><input type="email" value={o.email || ""} onChange={(e) => setO({ ...o, email: e.target.value })} placeholder="ordini@fornitore.it" className={inp} /></Field>
+        <Field label="Note"><input value={o.note || ""} onChange={(e) => setO({ ...o, note: e.target.value })} placeholder="Es. consegna entro venerdì" className={inp} /></Field>
+      </div>
+      <div className="flex flex-col lg:flex-row gap-4 items-start">
+        <div className="w-full lg:flex-1 lg:min-w-0 space-y-2">
+          <div className="flex items-center gap-2 border border-stone-300 rounded-lg px-3 py-2 bg-white brand-ring"><Search size={16} className="text-stone-400" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cerca il prodotto da ordinare" className="flex-1 text-sm focus:outline-none" /></div>
+          <div className="grid sm:grid-cols-2 gap-2">{products.map((p) => (
+            <div key={p.id} className="lc-card p-3"><div className="font-medium leading-tight text-sm">{p.name}</div>
+              <div className="space-y-1 mt-1.5">{p.formats.map((f) => { const min = scortaMinDi(catalog, f); const stock = Number(f.stock) || 0; return <button key={f.id} onClick={() => add(p, f)} className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border border-stone-200 brand-hover text-sm"><span className="truncate">{f.label}</span><span className={`text-xs ${stock <= min ? "text-amber-600 font-medium" : "text-stone-400"}`}>giac. {stock} · min {min}</span></button>; })}</div>
+            </div>))}</div>
+        </div>
+        <div className="w-full lg:w-96 lg:shrink-0">
+          <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-4">
+            <h4 className="font-semibold flex items-center gap-2 mb-3 text-sm"><ClipboardList size={15} className="brand-accent" /> Righe dell'ordine {pezzi ? <span className="text-xs font-normal text-stone-400">· {pezzi} pz</span> : null}</h4>
+            {list.length === 0 ? <p className="text-sm text-stone-400 text-center py-6">Tocca un formato per aggiungerlo.</p> : (
+              <>
+                <div>{list.map((it, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_6.5rem_5rem_1.5rem] gap-2 items-center py-2 border-b border-stone-100 last:border-0">
+                    <div className="min-w-0"><div className="text-sm font-medium truncate">{it.name}</div><div className="text-xs text-stone-400 truncate">{it.label}</div></div>
+                    <div className="flex items-center gap-1 justify-center"><button onClick={() => setItem(i, { qty: it.qty - 1 })} className="w-6 h-6 rounded-md border border-stone-300 flex items-center justify-center text-stone-500"><Minus size={13} /></button><input value={it.qty} onChange={(e) => setItem(i, { qty: Math.max(0, Math.round(Number(e.target.value) || 0)) })} className="w-10 text-center text-sm font-medium border border-stone-200 rounded-md py-0.5 brand-ring" /><button onClick={() => setItem(i, { qty: it.qty + 1 })} className="w-6 h-6 rounded-md border border-stone-300 flex items-center justify-center text-stone-500"><Plus size={13} /></button></div>
+                    <input type="number" min={0} step={0.01} value={it.costo != null ? it.costo : ""} placeholder="costo" onChange={(e) => setItem(i, { costo: e.target.value === "" ? null : Number(e.target.value) })} className="px-2 py-1 rounded-md border border-stone-200 text-sm text-right brand-ring" />
+                    <button onClick={() => setItem(i, { qty: 0 })} className="text-stone-300 hover:text-red-500"><X size={15} /></button>
+                  </div>))}</div>
+                <div className="border-t border-stone-200 pt-3 mt-2 space-y-2">
+                  {costo ? <div className="flex items-center justify-between text-sm"><span className="text-stone-500">Valore stimato</span><span className="font-semibold">{eur(costo)}</span></div> : null}
+                  <button onClick={() => { if (!o.fornitore.trim()) { alert("Scrivi il fornitore."); return; } onSave({ ...o, fornitore: o.fornitore.trim(), email: (o.email || "").trim(), total: 0 }); }} className="w-full brand-bg font-medium py-2.5 rounded-lg flex items-center justify-center gap-2"><Check size={16} /> Salva l'ordine</button>
+                  <button onClick={onClose} className="w-full text-sm text-stone-500 py-1.5 hover:text-stone-700">Annulla</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }

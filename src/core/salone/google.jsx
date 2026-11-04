@@ -486,6 +486,8 @@ export function GoogleImpostazioni({ config, saveConfig, esito, onEsitoVisto }) 
           {[["confermaAutomatica", "Conferma automatica a ogni nuovo appuntamento"], ["promemoriaGiornoPrima", "Promemoria alle 19 del giorno prima"], ["promemoriaOraPrima", "Promemoria un'ora prima"]].map(([k, l]) => (
             <label key={k} className="flex items-center gap-2.5 text-sm text-stone-700 cursor-pointer"><input type="checkbox" checked={g[k] !== false} onChange={(e) => salvaG({ [k]: e.target.checked })} /> {l}</label>
           ))}
+          <label className="flex items-center gap-2.5 text-sm text-stone-700 cursor-pointer"><input type="checkbox" checked={!!(g.recensioni && g.recensioni.attivo)} onChange={(e) => salvaG({ recensioni: { ...(g.recensioni || {}), attivo: e.target.checked } })} /> Richiesta di recensione dopo il <b>primo appuntamento svolto</b> (una volta sola per cliente)</label>
+          {g.recensioni && g.recensioni.attivo ? <Field label="Link dove lasciare la recensione (Google, Facebook…)"><input defaultValue={(g.recensioni || {}).link || ""} onBlur={(e) => salvaG({ recensioni: { ...(g.recensioni || {}), link: e.target.value.trim() } })} placeholder="https://g.page/r/…/review" className={inp} />{!(g.recensioni || {}).link ? <p className="text-[11px] text-amber-700 mt-1">Senza il link la richiesta non parte.</p> : null}</Field> : null}
           <p className="text-[11px] text-stone-400">Il giro delle email automatiche passa ogni 10 minuti circa.</p>
         </div>
         <div className="space-y-4">

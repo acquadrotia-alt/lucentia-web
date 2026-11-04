@@ -113,10 +113,11 @@ export async function prenota(ctx, segs, statoDi) {
     const staffSel = url.searchParams.get("staff") || "";
     const exclude = url.searchParams.get("exclude") || "";
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !serviceId) return json({ slots: [] });
-    const bookings = (await getCollezione(env, aid, "bookings")) || [];
+    const bookings = ((await getCollezione(env, aid, "bookings")) || []);
     const online = (await onlineBookingsOf(env, aid, date)).filter((b) => b.id !== exclude);
     const impegniEventi = eventiComeImpegni(await getCollezione(env, aid, "eventi"), date);
-    const slots = computeStarts(config, [...(Array.isArray(bookings) ? bookings : []), ...online, ...impegniEventi], date, serviceId, leadMin, mode, staffSel || undefined, { servizionline: services });
+    // `exclude` toglie dal conto anche un appuntamento dell'agenda: serve a spostarlo dall'area cliente
+    const slots = computeStarts(config, [...(Array.isArray(bookings) ? bookings : []).filter((b) => !b || b.id !== exclude), ...online, ...impegniEventi], date, serviceId, leadMin, mode, staffSel || undefined, { servizionline: services });
     return json({ slots: slots.map((s) => ({ start: s.start, label: `${pad2(Math.floor(s.start / 60))}:${pad2(s.start % 60)}` })) });
   }
 
